@@ -73,8 +73,11 @@ export class InstagramController {
 
       return res.redirect(`${frontend}/dashboard/instagram?connected=1`, 302);
     } catch (e: any) {
+      // Full technical detail stays in server logs only.
       this.log.warn(`IG callback failed: ${e.message}`);
-      return res.redirect(`${frontend}/dashboard/instagram?error=${encodeURIComponent(e.message ?? 'connect_failed')}`, 302);
+      // The user sees a clean, friendly message — never raw internals.
+      const friendly = 'We couldn\'t connect your Instagram account. Please try again, and make sure it\'s a professional (Business or Creator) account.';
+      return res.redirect(`${frontend}/dashboard/instagram?error=${encodeURIComponent(friendly)}`, 302);
     }
   }
 
