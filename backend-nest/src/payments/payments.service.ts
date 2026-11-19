@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,6 +10,7 @@ const PRO_DAYS = 30;
 
 @Injectable()
 export class PaymentsService {
+  private readonly log = new Logger(PaymentsService.name);
   private rzp: any = null;
   constructor(private config: ConfigService, private prisma: PrismaService) {
     const key_id = this.config.get<string>('RAZORPAY_KEY_ID');
@@ -31,13 +32,19 @@ export class PaymentsService {
   }
 
   async createOrder(userId: string) {
-    if (!this.rzp) throw new BadRequestException('Payments are not configured yet.');
-    const order = await this.rzp.orders.create({
-      amount: PRO_PRICE_PAISE, currency: 'INR',
-      receipt: `pro_${userId.slice(0, 8)}_${Date.now()}`,
-      notes: { userId, plan: 'pro' },
-    });
-    return { orderId: order.id, amount: order.amount, currency: order.currency, keyId: this.config.get<string>('RAZORPAY_KEY_ID') };
+    if (!this.rzp) throw new BadRequestException('Payments are not set up yet. Please contact support.');
+    try {
+      const order = await this.rzp.orders.create({
+        amount: PRO_PRICE_PAISE, currency: 'INR',
+        receipt: `pro_${userId.slice(0, 8)}_${Date.now()}`,
+        notes: { userId, plan: 'pro' },
+      });
+      return { orderId: order.id, amount: order.amount, currency: order.currency, keyId: this.config.get<string>('RAZORPAY_KEY_ID') };
+    } catch (err: any) {
+      const detail = err?.error?.description || err?.message || JSON.stringify(err);
+      this.log.error(`Razorpay order creation failed: ${detail}`);
+      throw new BadRequestException(`Couldn't start checkout: ${detail}`);
+    }
   }
 
   async verify(userId: string, orderId: string, paymentId: string, signature: string) {
