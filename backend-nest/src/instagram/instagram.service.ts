@@ -18,7 +18,7 @@ export class InstagramService {
 
   private get appId() { return this.config.getOrThrow<string>('META_APP_ID'); }
   private get appSecret() { return this.config.getOrThrow<string>('META_APP_SECRET'); }
-  private get redirectUri() { return `${this.config.getOrThrow<string>('PUBLIC_URL')}/api/instagram/callback`; }
+  private get redirectUri() { return `${this.config.getOrThrow<string>('PUBLIC_URL').trim().replace(/\/+$/, '')}/api/instagram/callback`; }
 
   buildAuthUrl(state: string): string {
     const scopes = [
