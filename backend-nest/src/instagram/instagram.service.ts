@@ -37,6 +37,7 @@ export class InstagramService {
   }
 
   async exchangeCodeForToken(code: string): Promise<IgTokenResult> {
+   try {
     // 1. code -> short-lived token
     const form = new URLSearchParams({
       client_id: this.appId,
@@ -64,6 +65,10 @@ export class InstagramService {
     });
 
     return { accessToken: longToken, igUserId, username: me.data.username, expiresInSec };
+   } catch (err: any) {
+     const detail = err?.response?.data ? JSON.stringify(err.response.data) : err?.message;
+     throw new Error(`IG OAuth exchange failed: ${detail}`);
+   }
   }
 
   async refreshLongLivedToken(currentToken: string): Promise<{ accessToken: string; expiresInSec: number }> {
