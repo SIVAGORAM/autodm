@@ -67,7 +67,7 @@ export class InstagramService {
     return { accessToken: longToken, igUserId, username: me.data.username, expiresInSec };
    } catch (err: any) {
      const detail = err?.response?.data ? JSON.stringify(err.response.data) : err?.message;
-     throw new Error(`IG OAuth exchange failed: ${detail}`);
+     throw new Error(`IG OAuth exchange failed [redirect_uri=${this.redirectUri}] [public_url=${this.config.get('PUBLIC_URL')}]: ${detail}`);
    }
   }
 
