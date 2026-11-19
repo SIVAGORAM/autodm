@@ -1,0 +1,74 @@
+# Render Blueprint — deploys the Relayo API + frontend.
+# The DM worker needs an always-on process (paid) — see DEPLOY.md for the worker options.
+services:
+  # ───── Backend API (NestJS) ─────
+  - type: web
+    name: relayo-api
+    runtime: node
+    rootDir: backend-nest
+    plan: free
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npx prisma migrate deploy && node dist/main.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: PORT
+        value: "4000"
+      - key: META_GRAPH_VERSION
+        value: v21.0
+      # ── secrets: set these in the Render dashboard (sync:false = not in repo) ──
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_WEBHOOK_VERIFY_TOKEN
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: PUBLIC_URL        # = this service's URL, e.g. https://relayo-api.onrender.com
+        sync: false
+      - key: CORS_ORIGIN       # = your frontend URL, e.g. https://relayo-frontend.onrender.com
+        sync: false
+
+  # ───── Frontend (Next.js) ─────
+  - type: web
+    name: relayo-frontend
+    runtime: node
+    rootDir: frontend
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL   # = your API URL, e.g. https://relayo-api.onrender.com
+        sync: false

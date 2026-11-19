@@ -1,0 +1,14 @@
+import { z } from 'zod';
+
+export const signupSchema = z.object({
+  name: z.string().min(2).max(100),
+  email: z.string().email().toLowerCase(),
+  password: z.string().min(8).max(128)
+    .regex(/[A-Z]/, 'Must contain an uppercase letter')
+    .regex(/[0-9]/, 'Must contain a number')
+    .regex(/[^A-Za-z0-9]/, 'Must contain a special character'),
+});
+export const loginSchema = z.object({
+  email: z.string().email().toLowerCase(),
+  password: z.string().min(1),
+});

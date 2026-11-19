@@ -1,0 +1,79 @@
+'use client';
+
+import Link from 'next/link';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { automationApi } from '../../../../services/api';
+import { RL, Card, Pill, Btn, Empty, Skel, PageHead } from '../../../../components/rl-kit';
+import { Plus, Send, AlertCircle, ArrowRight } from 'lucide-react';
+
+type Automation = {
+  id: string; name: string; triggerType: string; status: 'DRAFT' | 'LIVE' | 'PAUSED';
+  keywords: string[]; _count?: { runs: number }; health?: { level: string; label: string };
+};
+const triggerLabels: Record<string, string> = {
+  POST_COMMENT: 'Post / Reel comment', NEXT_POST: 'Next post', ANY_POST: 'Any post',
+  STORY_REPLY: 'Story reply', LIVE_COMMENT: 'Live comment', DM: 'Incoming DM',
+};
+const healthTone = (l?: string) => l === 'healthy' ? 'green' : l === 'needs_reconnect' ? 'coral' : l === 'at_risk' ? 'amber' : 'muted';
+const statusTone = (s: string) => s === 'LIVE' ? 'green' : s === 'PAUSED' ? 'amber' : 'muted';
+
+export default function AutomationsPage() {
+  const qc = useQueryClient();
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['automations'], queryFn: async () => (await automationApi.list()).data.data as Automation[],
+  });
+  const toggle = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: 'LIVE' | 'PAUSED' }) => automationApi.setStatus(id, status),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['automations'] }),
+  });
+
+  return (
+    <div>
+      <PageHead title="Automations" sub="Reply to comments, story replies and DMs automatically — every send tracked and logged."
+        action={<Link href="/dashboard/automations/new" style={{ textDecoration: 'none' }}><Btn variant="accent"><Plus style={{ width: 16, height: 16 }} /> New automation</Btn></Link>} />
+
+      {isLoading && <div style={{ display: 'grid', gap: 10 }}>{[0, 1, 2].map((i) => <Skel key={i} h={78} />)}</div>}
+
+      {isError && (
+        <Empty icon={<AlertCircle style={{ width: 24, height: 24 }} />} title="Couldn’t load your automations"
+          sub="Something went wrong talking to the server." action={<Btn variant="ghost" onClick={() => refetch()}>Try again</Btn>} />
+      )}
+
+      {data && data.length === 0 && (
+        <Empty icon={<Send style={{ width: 24, height: 24 }} />} title="No automations yet"
+          sub="Create one and every matching comment gets an instant DM with your link."
+          action={<Link href="/dashboard/automations/new" style={{ textDecoration: 'none' }}><Btn variant="accent"><Plus style={{ width: 16, height: 16 }} /> Create your first automation</Btn></Link>} />
+      )}
+
+      {data && data.length > 0 && (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {data.map((a) => (
+            <Card key={a.id} pad={16}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <Link href={`/dashboard/automations/${a.id}`} style={{ minWidth: 0, flex: 1, textDecoration: 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 15, fontWeight: 650, color: RL.ink }}>{a.name}</span>
+                    <Pill tone={statusTone(a.status)}>{a.status.toLowerCase()}</Pill>
+                    {a.health && <Pill tone={healthTone(a.health.level)} dot>{a.health.label}</Pill>}
+                  </div>
+                  <div style={{ fontSize: 13, color: RL.muted, marginTop: 4 }}>
+                    {triggerLabels[a.triggerType] ?? a.triggerType}{a.keywords.length > 0 && ` · ${a.keywords.join(', ')}`} · {a._count?.runs ?? 0} runs
+                  </div>
+                </Link>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {a.status !== 'DRAFT' && (
+                    <Btn variant="ghost" style={{ padding: '9px 14px' }} disabled={toggle.isPending}
+                      onClick={() => toggle.mutate({ id: a.id, status: a.status === 'LIVE' ? 'PAUSED' : 'LIVE' })}>
+                      {a.status === 'LIVE' ? 'Pause' : 'Resume'}
+                    </Btn>
+                  )}
+                  <Link href={`/dashboard/automations/${a.id}`} style={{ padding: 8, color: RL.faint }}><ArrowRight style={{ width: 18, height: 18 }} /></Link>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,80 @@
+﻿src/queues/index.ts(14,3): error TS2322: Type 'Redis' is not assignable to type 'ConnectionOptions'.
+  Type 'Redis' is not assignable to type 'ClusterOptions | Redis | Cluster'.
+    Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/Redis").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/Redis").default'.
+      Types of property 'options' are incompatible.
+        Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/redis/RedisOptions").RedisOptions' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/redis/RedisOptions").RedisOptions'.
+          Type 'RedisOptions' is not assignable to type 'CommonRedisOptions'.
+            Types of property 'Connector' are incompatible.
+              Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined'.
+                Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default'.
+                  Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/AbstractConnector").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/AbstractConnector").default'.
+                    Property 'connecting' is protected but type 'AbstractConnector' is not a class derived from 'AbstractConnector'.
+src/queues/index.ts(28,3): error TS2322: Type 'Redis' is not assignable to type 'ConnectionOptions'.
+  Type 'Redis' is not assignable to type 'ClusterOptions | Redis | Cluster'.
+    Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/Redis").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/Redis").default'.
+      Types of property 'options' are incompatible.
+        Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/redis/RedisOptions").RedisOptions' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/redis/RedisOptions").RedisOptions'.
+          Type 'RedisOptions' is not assignable to type 'CommonRedisOptions'.
+            Types of property 'Connector' are incompatible.
+              Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined'.
+                Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default'.
+                  Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/AbstractConnector").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/AbstractConnector").default'.
+                    Property 'connecting' is protected but type 'AbstractConnector' is not a class derived from 'AbstractConnector'.
+src/queues/index.ts(37,3): error TS2322: Type 'Redis' is not assignable to type 'ConnectionOptions'.
+  Type 'Redis' is not assignable to type 'ClusterOptions | Redis | Cluster'.
+    Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/Redis").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/Redis").default'.
+      Types of property 'options' are incompatible.
+        Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/redis/RedisOptions").RedisOptions' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/redis/RedisOptions").RedisOptions'.
+          Type 'RedisOptions' is not assignable to type 'CommonRedisOptions'.
+            Types of property 'Connector' are incompatible.
+              Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined'.
+                Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default'.
+                  Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/AbstractConnector").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/AbstractConnector").default'.
+                    Property 'connecting' is protected but type 'AbstractConnector' is not a class derived from 'AbstractConnector'.
+src/queues/index.ts(47,68): error TS2322: Type 'Redis' is not assignable to type 'ConnectionOptions'.
+  Type 'Redis' is not assignable to type 'ClusterOptions | Redis | Cluster'.
+    Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/Redis").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/Redis").default'.
+      Types of property 'options' are incompatible.
+        Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/redis/RedisOptions").RedisOptions' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/redis/RedisOptions").RedisOptions'.
+          Type 'RedisOptions' is not assignable to type 'CommonRedisOptions'.
+            Types of property 'Connector' are incompatible.
+              Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined'.
+                Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default'.
+                  Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/AbstractConnector").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/AbstractConnector").default'.
+                    Property 'connecting' is protected but type 'AbstractConnector' is not a class derived from 'AbstractConnector'.
+src/webhooks/instagram.webhook.ts(113,44): error TS7006: Parameter 'kw' implicitly has an 'any' type.
+src/workers/dm.worker.ts(47,72): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ username: string; }'.
+src/workers/dm.worker.ts(70,5): error TS2322: Type 'Redis' is not assignable to type 'ConnectionOptions'.
+  Type 'Redis' is not assignable to type 'ClusterOptions | Redis | Cluster'.
+    Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/Redis").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/Redis").default'.
+      Types of property 'options' are incompatible.
+        Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/redis/RedisOptions").RedisOptions' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/redis/RedisOptions").RedisOptions'.
+          Type 'RedisOptions' is not assignable to type 'CommonRedisOptions'.
+            Types of property 'Connector' are incompatible.
+              Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined'.
+                Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default'.
+                  Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/AbstractConnector").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/AbstractConnector").default'.
+                    Property 'connecting' is protected but type 'AbstractConnector' is not a class derived from 'AbstractConnector'.
+src/workers/token.worker.ts(58,5): error TS2322: Type 'Redis' is not assignable to type 'ConnectionOptions'.
+  Type 'Redis' is not assignable to type 'ClusterOptions | Redis | Cluster'.
+    Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/Redis").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/Redis").default'.
+      Types of property 'options' are incompatible.
+        Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/redis/RedisOptions").RedisOptions' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/redis/RedisOptions").RedisOptions'.
+          Type 'RedisOptions' is not assignable to type 'CommonRedisOptions'.
+            Types of property 'Connector' are incompatible.
+              Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined'.
+                Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default'.
+                  Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/AbstractConnector").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/AbstractConnector").default'.
+                    Property 'connecting' is protected but type 'AbstractConnector' is not a class derived from 'AbstractConnector'.
+src/workers/token.worker.ts(82,17): error TS2353: Object literal may only specify known properties, and 'cron' does not exist in type 'RepeatOptions'.
+src/workers/tokenRefresh.worker.ts(12,8): error TS2322: Type 'Redis' is not assignable to type 'ConnectionOptions'.
+  Type 'Redis' is not assignable to type 'ClusterOptions | Redis | Cluster'.
+    Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/Redis").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/Redis").default'.
+      Types of property 'options' are incompatible.
+        Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/redis/RedisOptions").RedisOptions' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/redis/RedisOptions").RedisOptions'.
+          Type 'RedisOptions' is not assignable to type 'CommonRedisOptions'.
+            Types of property 'Connector' are incompatible.
+              Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default | undefined'.
+                Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/ConnectorConstructor").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/ConnectorConstructor").default'.
+                  Type 'import("D:/Projects/instagram-automation/backend/node_modules/ioredis/built/connectors/AbstractConnector").default' is not assignable to type 'import("D:/Projects/instagram-automation/backend/node_modules/bullmq/node_modules/ioredis/built/connectors/AbstractConnector").default'.
+                    Property 'connecting' is protected but type 'AbstractConnector' is not a class derived from 'AbstractConnector'.

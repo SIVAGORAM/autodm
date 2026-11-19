@@ -1,0 +1,236 @@
+// Auto-DM SaaS — NestJS backend schema
+// Extends the original model with richer triggers, buttons, follow-ups,
+// contacts, runs and click tracking (from replica/recon.md).
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────── Accounts & auth ───────────────────────────
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String
+  name          String
+  profilePicUrl String?
+  role          UserRole @default(INFLUENCER)
+  isVerified    Boolean  @default(false)
+  otpCode       String?
+  otpExpires    DateTime?
+  plan          PlanTier @default(FREE)
+  planExpiresAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  igAccounts    IgAccount[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// Up to 5 per user (paid). Free = 1.
+model IgAccount {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  igUserId        String    @unique
+  username        String
+  pageId          String?   // Facebook Page id, for Messenger
+  accessTokenEnc  String    // AES-256 encrypted
+  tokenExpiresAt  DateTime?
+  isActive        Boolean   @default(true)
+  lastAlertAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  automations Automation[]
+  contacts    Contact[]
+  runs        Run[]
+
+  @@index([userId])
+  @@map("ig_accounts")
+}
+
+// ─────────────────────────── Automations ───────────────────────────
+model Automation {
+  id            String        @id @default(uuid())
+  igAccountId   String
+  igAccount     IgAccount     @relation(fields: [igAccountId], references: [id], onDelete: Cascade)
+  name          String
+  triggerType   TriggerType
+  mediaId       String?       // specific post/reel/story; null for any/next
+  matchMode     MatchMode     @default(KEYWORDS)
+  keywords      String[]      @default([])
+  publicReplies String[]      @default([]) // up to 3, rotated
+  replyToComment Boolean      @default(false)
+  askToFollow   Boolean       @default(false)
+  collectEmail  Boolean       @default(false)
+  trackClicks   Boolean       @default(true)
+  dmBlocks      Json          // ordered message blocks (text/image/video/buttons/card)
+  status        AutomationStatus @default(DRAFT)
+  dailyLimit    Int           @default(200)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  followUps    FollowUp[]
+  runs         Run[]
+  trackedLinks TrackedLink[]
+
+  @@index([igAccountId])
+  @@index([triggerType, status])
+  @@map("automations")
+}
+
+model FollowUp {
+  id           String       @id @default(uuid())
+  automationId String
+  automation   Automation   @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  order        Int
+  condition    FollowCond
+  delayMinutes Int          @default(0)
+  dmBlocks     Json
+
+  @@index([automationId])
+  @@map("follow_ups")
+}
+
+// ─────────────────────────── People & activity ───────────────────────────
+model Contact {
+  id               String   @id @default(uuid())
+  igAccountId      String
+  igAccount        IgAccount @relation(fields: [igAccountId], references: [id], onDelete: Cascade)
+  igScopedId       String   // IGSID of the commenter/sender
+  username         String?
+  name             String?
+  email            String?
+  follows          Boolean  @default(false)
+  dmsSent          Int      @default(0)
+  firstInteraction DateTime @default(now())
+  lastInteraction  DateTime @default(now())
+  lastReplyAt      DateTime?
+
+  runs Run[]
+
+  @@unique([igAccountId, igScopedId])
+  @@index([igAccountId])
+  @@map("contacts")
+}
+
+model Run {
+  id             String    @id @default(uuid())
+  automationId   String
+  automation     Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  igAccountId    String
+  igAccount      IgAccount  @relation(fields: [igAccountId], references: [id], onDelete: Cascade)
+  contactId      String?
+  contact        Contact?   @relation(fields: [contactId], references: [id])
+  triggerEventId String     @unique // IG comment/message id — idempotency key
+  status         RunStatus  @default(PENDING)
+  error          String?
+  createdAt      DateTime   @default(now())
+  sentAt         DateTime?
+
+  @@index([automationId])
+  @@index([igAccountId, createdAt])
+  @@map("runs")
+}
+
+model TrackedLink {
+  id           String      @id @default(uuid())
+  automationId String
+  automation   Automation  @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  slug         String      @unique
+  targetUrl    String
+  clicks       Int         @default(0)
+  createdAt    DateTime    @default(now())
+
+  clickEvents Click[]
+
+  @@index([automationId])
+  @@map("tracked_links")
+}
+
+model Click {
+  id            String      @id @default(uuid())
+  trackedLinkId String
+  trackedLink   TrackedLink @relation(fields: [trackedLinkId], references: [id], onDelete: Cascade)
+  contactIgsid  String?
+  clickedAt     DateTime    @default(now())
+
+  @@index([trackedLinkId])
+  @@map("clicks")
+}
+
+// Processed webhook ids, for cross-process idempotency safety net.
+model WebhookEvent {
+  id          String   @id @default(uuid())
+  eventId     String   @unique
+  processedAt DateTime @default(now())
+
+  @@map("webhook_events")
+}
+
+// ─────────────────────────── Enums ───────────────────────────
+enum UserRole {
+  INFLUENCER
+  ADMIN
+}
+
+enum PlanTier {
+  FREE
+  PAID
+}
+
+enum TriggerType {
+  POST_COMMENT    // specific post/reel
+  NEXT_POST
+  ANY_POST
+  STORY_REPLY
+  LIVE_COMMENT
+  DM
+}
+
+enum MatchMode {
+  KEYWORDS
+  ANY
+  AI_INTENT
+}
+
+enum AutomationStatus {
+  DRAFT
+  LIVE
+  PAUSED
+}
+
+enum FollowCond {
+  DELAY
+  LINK_NOT_CLICKED
+  NO_REPLY
+  BOUGHT
+  NOT_BOUGHT
+  FORM_NOT_SUBMITTED
+}
+
+enum RunStatus {
+  PENDING
+  SENT
+  SKIPPED
+  FAILED
+}

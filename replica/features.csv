@@ -1,0 +1,42 @@
+feature,area,priority,original,clone,notes
+Sign up with email or Google,onboarding,must,yes,partial,email done; Google OAuth pending
+Connect Instagram professional account via Meta OAuth,onboarding,must,yes,yes,Instagram Login API + signed state
+Comment trigger on a specific post or Reel,triggers,must,yes,yes,
+Next-post trigger,triggers,must,yes,yes,
+Single keyword match (case-insensitive),matching,must,yes,yes,whole-word emoji-safe matcher
+Public comment reply with up to 3 rotating replies,replies,must,yes,yes,
+DM with text and buttons,dm,must,yes,yes,button template via Graph API
+Personalization tags (first name),dm,must,yes,yes,{{name}}/{{first_name}}/{{username}} at send time
+Review step with phone preview,builder,must,yes,yes,phone preview in builder
+Pause / resume / delete automation,dashboard,must,yes,yes,status endpoint
+Runs and link clicks per automation,analytics,must,yes,yes,analytics endpoint
+Track link clicks toggle with redirect,analytics,must,yes,yes,/r/:slug redirect
+Webhook runtime with dedupe and retries,backend,must,yes,yes,BullMQ jobId + DB unique key
+Unlimited keywords per automation,matching,should,yes,yes,plan-gated
+Any-comment and all-posts triggers,triggers,should,yes,yes,plan-gated
+Story reply trigger (specific or any story),triggers,should,yes,partial,webhook handles DM/story path; story-media pick pending
+Incoming DM trigger (all or keywords),triggers,should,yes,yes,
+Live comment trigger,triggers,should,yes,yes,
+Ask-to-follow gate before link,dm,should,yes,yes,follower check in worker
+Email collection in DM,dm,should,yes,no,
+Follow-ups (delay / not clicked / no reply) within 24h,dm,should,yes,yes,delayed BullMQ jobs + condition checks + 24h window
+Image / video / audio / PDF / card DM blocks,dm,should,yes,partial,text+image+video+buttons blocks; audio/pdf/card pending
+Instagram contacts list with CSV export,audience,should,yes,no,Contact model ready
+Up to 5 Instagram accounts per subscription,accounts,should,yes,yes,multi-account schema
+Facebook Messenger automations,channels,could,yes,no,
+Kit / Mailchimp / Klaviyo sync,integrations,could,yes,no,
+AI intent matching without exact keyword,matching,could,yes,partial,matcher defers; LLM call pending
+Hide/delete spam and abusive comments,moderation,could,yes,no,
+Lead qualification Hot/Warm/Cold,ai,could,yes,no,
+Persistent DM menu and ice breakers,dm,could,yes,no,
+Story mention replies,triggers,could,yes,no,
+Bought / not-bought follow-up conditions,dm,could,yes,no,needs payment events
+Built-in storefront and T+1 payouts,commerce,could,yes,skip,separate product; link out
+Sent-via footer on free DMs,branding,could,yes,skip,their brand
+Claude/MCP connector,integrations,could,yes,skip,build your own later
+Locale-priced plans,billing,should,yes,no,Razorpay exists in old backend
+Automation health status + break alerts,reliability,should,no,yes,F1 — in-app status + email break alerts (deduped 24h)
+Delivery log (matched/sent/skipped/failed + reason),reliability,should,no,yes,F2 — detail page + paginated runs endpoint
+Flat no-contact-cap pricing,billing,should,no,no,F3 — table stakes vs ManyChat
+One-tap guided reconnect on token expiry,reliability,should,no,no,F4
+Public status / uptime signal,reliability,could,no,no,F6

@@ -1,0 +1,43 @@
+# ───── dependencies ─────
+node_modules/
+**/node_modules/
+
+# ───── secrets / env (NEVER commit) ─────
+.env
+.env.*
+**/.env
+**/.env.*
+*.env
+!.env.example
+!**/.env.example
+!**/.env.local.example
+
+# ───── build output ─────
+dist/
+**/dist/
+.next/
+**/.next/
+build/
+**/build/
+out/
+
+# ───── prisma generated client ─────
+**/node_modules/.prisma/
+
+# ───── logs / misc ─────
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# ───── project scratch / archives ─────
+*.tgz
+*.bak
+*.stale
+skills-lock.json.lock*
+replica/_to_delete/
+**/_to_delete/
+
+# ───── editor ─────
+.vscode/
+.idea/
