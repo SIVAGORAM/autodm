@@ -15,7 +15,10 @@ async function bootstrap() {
 
   await app.register(helmet as any, { contentSecurityPolicy: false });
   await app.register(cookie as any, {});
-  app.enableCors({ origin: process.env.CORS_ORIGIN?.split(',') ?? true, credentials: true });
+  // Fail CLOSED: with credentials:true, never fall back to allowing every origin.
+  // If CORS_ORIGIN is unset we restrict to localhost rather than "*".
+  const corsOrigins = process.env.CORS_ORIGIN?.split(',').map((o) => o.trim()).filter(Boolean) ?? ['http://localhost:3000'];
+  app.enableCors({ origin: corsOrigins, credentials: true });
 
   const port = Number(process.env.PORT ?? 4000);
   await app.listen(port, '0.0.0.0');

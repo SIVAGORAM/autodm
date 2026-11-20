@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Post, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { AuthService } from './auth.service';
 import { signupSchema, loginSchema } from './auth.dto';
@@ -10,6 +11,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 export class AuthController {
   constructor(private auth: AuthService, private config: ConfigService) {}
 
+  @Throttle({ default: { limit: 8, ttl: 60_000 } }) // brute-force protection
   @Post('signup')
   async signup(@Body() body: unknown, @Res({ passthrough: true }) res: FastifyReply) {
     const { name, email, password } = signupSchema.parse(body);
@@ -18,6 +20,7 @@ export class AuthController {
     return { success: true, data: { user, accessToken } };
   }
 
+  @Throttle({ default: { limit: 8, ttl: 60_000 } }) // brute-force protection
   @Post('login')
   async login(@Body() body: unknown, @Res({ passthrough: true }) res: FastifyReply) {
     const { email, password } = loginSchema.parse(body);

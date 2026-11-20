@@ -34,6 +34,7 @@ model User {
   igAccounts    IgAccount[]
   refreshTokens RefreshToken[]
 
+  @@index([trialEndsAt]) // speeds the trial-reminder sweep
   @@map("users")
 }
 
