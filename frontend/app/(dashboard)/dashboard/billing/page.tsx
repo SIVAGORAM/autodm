@@ -29,8 +29,8 @@ const FEATURES: Record<string, string[]> = {
 export default function BillingPage() {
   const { user, fetchMe } = useAuthStore();
   const [paying, setPaying] = useState(false);
-  const sub = useQuery({ queryKey: ['subscription'], queryFn: async () => (await paymentApi.getSubscription()).data.data as { plan: string; planExpiresAt: string | null; active: boolean } });
-  const current = sub.data?.plan ?? 'free';
+  const sub = useQuery({ queryKey: ['subscription'], queryFn: async () => (await paymentApi.getSubscription()).data.data as { plan: string; planExpiresAt: string | null; active: boolean; isPaid: boolean; trial: { active: boolean; endsAt: string | null } } });
+  const current = sub.data?.isPaid ? 'pro' : 'free';
 
   async function upgrade() {
     setPaying(true);
@@ -73,10 +73,15 @@ export default function BillingPage() {
   return (
     <div>
       <PageHead title="Billing" sub="One flat price, unlimited contacts. Your audience growing never makes Relayo cost more." />
-      {sub.data?.active && sub.data.planExpiresAt && (
+      {sub.data?.isPaid && sub.data.planExpiresAt && (
         <Card style={{ marginBottom: 18, maxWidth: 760, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 14.5, color: RL.ink }}><strong>Pro</strong> active until {new Date(sub.data.planExpiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
           <Btn variant="ghost" onClick={cancel}>Switch to Free</Btn>
+        </Card>
+      )}
+      {!sub.data?.isPaid && sub.data?.trial?.active && (
+        <Card style={{ marginBottom: 18, maxWidth: 760, borderColor: RL.tealSoft, background: `linear-gradient(90deg, ${RL.tealSoft}66, #fff 60%)` }}>
+          <div style={{ fontSize: 14.5, color: RL.ink }}>✨ You&rsquo;re on a <strong>free trial</strong> with full Pro access. Upgrade before it ends to keep every Pro feature.</div>
         </Card>
       )}
       {sub.isLoading ? (

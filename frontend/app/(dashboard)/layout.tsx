@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '../../store/authStore';
 import { RL, RLStyles, Spinner } from '../../components/rl-kit';
+import { TrialBanner } from '../../components/trial-banner';
 import { LayoutDashboard, Send, Instagram, BarChart2, FileText, CreditCard, Settings, Bell, HelpCircle, LogOut, ChevronRight } from 'lucide-react';
 
 const nav = [
@@ -111,6 +112,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </div>
         </header>
+        <TrialBanner />
         <main style={{ flex: 1, overflowY: 'auto', padding: '32px 36px', maxWidth: 1280, width: '100%', margin: '0 auto' }}>
           {children}
         </main>

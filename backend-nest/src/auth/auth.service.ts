@@ -24,8 +24,9 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(password, 12);
     const otpCode = this.genOtp();
     const otpExpires = new Date(Date.now() + 15 * 60 * 1000);
+    const trialEndsAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000); // 2-day full-Pro trial
     const user = await this.prisma.user.create({
-      data: { name, email, passwordHash, otpCode, otpExpires },
+      data: { name, email, passwordHash, otpCode, otpExpires, trialEndsAt },
       select: { id: true, name: true, email: true, role: true, plan: true },
     });
     this.log.log(`[OTP] verification code for ${email}: ${otpCode}`);

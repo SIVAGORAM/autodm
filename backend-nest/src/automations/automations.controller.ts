@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { effectivePlan } from '../common/plan.util';
 import { AutomationsService } from './automations.service';
 import { createAutomationSchema, updateAutomationSchema } from './automations.dto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -11,8 +12,8 @@ export class AutomationsController {
   constructor(private service: AutomationsService, private prisma: PrismaService) {}
 
   private async plan(userId: string) {
-    const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true } });
-    return u?.plan ?? 'FREE';
+    const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true, planExpiresAt: true, trialEndsAt: true } });
+    return effectivePlan(u);
   }
 
   @Post()

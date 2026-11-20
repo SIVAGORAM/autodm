@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EncryptionService } from '../common/encryption.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { effectivePlan } from '../common/plan.util';
 
 const PLAN_ACCOUNT_CAP: Record<string, number> = { FREE: 1, PAID: 5 };
 
@@ -59,8 +60,8 @@ export class InstagramController {
 
       if (!existing) {
         // Enforce the plan cap on NEW links.
-        const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true } });
-        const cap = PLAN_ACCOUNT_CAP[user?.plan ?? 'FREE'] ?? 1;
+        const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true, planExpiresAt: true, trialEndsAt: true } });
+        const cap = PLAN_ACCOUNT_CAP[effectivePlan(user)] ?? 1;
         const count = await this.prisma.igAccount.count({ where: { userId, isActive: true } });
         if (count >= cap) throw new BadRequestException(`Your plan allows ${cap} connected account(s)`);
       }

@@ -13,9 +13,6 @@
     "prisma:deploy": "prisma migrate deploy",
     "test": "jest"
   },
-  "prisma": {
-    "schema": "prisma/schema.prisma"
-  },
   "dependencies": {
     "@fastify/cookie": "^9.4.0",
     "@fastify/helmet": "^11.1.1",

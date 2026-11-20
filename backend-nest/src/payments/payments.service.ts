@@ -26,9 +26,18 @@ export class PaymentsService {
   }
 
   async subscription(userId: string) {
-    const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true, planExpiresAt: true } });
-    const active = u?.plan === 'PAID' && (!u.planExpiresAt || u.planExpiresAt > new Date());
-    return { plan: active ? 'pro' : 'free', planExpiresAt: u?.planExpiresAt ?? null, active: !!active };
+    const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true, planExpiresAt: true, trialEndsAt: true } });
+    const now = Date.now();
+    const paid = !!(u && u.plan === 'PAID' && (!u.planExpiresAt || u.planExpiresAt.getTime() > now));
+    const trialing = !!(u && u.trialEndsAt && u.trialEndsAt.getTime() > now);
+    const pro = paid || trialing;
+    return {
+      plan: pro ? 'pro' : 'free',
+      active: pro,
+      isPaid: paid,
+      trial: { active: trialing, endsAt: u?.trialEndsAt ?? null },
+      planExpiresAt: u?.planExpiresAt ?? null,
+    };
   }
 
   async createOrder(userId: string) {
