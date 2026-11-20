@@ -32,7 +32,7 @@ export default function InstagramPage() {
     queryKey: ['ig-accounts'], queryFn: async () => (await instagramApi.accounts()).data.data as IgAccount[],
   });
   const sub = useQuery({
-    queryKey: ['subscription'], queryFn: async () => (await paymentApi.getSubscription()).data.data as { plan: string; active: boolean },
+    queryKey: ['subscription'], queryFn: async () => (await paymentApi.getSubscription()).data.data as { plan: string; name: string; active: boolean; limits: { accountCap: number } },
   });
 
   const connect = useMutation({
@@ -47,13 +47,14 @@ export default function InstagramPage() {
   });
 
   const active = (data ?? []).filter((a) => a.isActive);
-  const isPro = sub.data?.plan === 'pro';
-  const cap = isPro ? 5 : 1;
+  const planName = sub.data?.name ?? 'Free';
+  const isPaidPlan = (sub.data?.plan ?? 'free') !== 'free';
+  const cap = sub.data?.limits?.accountCap ?? 1;
   const canAddMore = active.length < cap;
 
   return (
     <div style={{ maxWidth: 680 }}>
-      <PageHead title="Instagram" sub={`Connect the professional accounts your automations run on. ${isPro ? 'Pro: up to 5 accounts.' : 'Free: 1 account — upgrade to Pro for up to 5.'}`} />
+      <PageHead title="Instagram" sub={`Connect the professional accounts your automations run on. ${isPaidPlan ? `${planName}: up to ${cap} accounts.` : `Free: ${cap} account — upgrade for more.`}`} />
 
       {banner && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 18, padding: '12px 16px', borderRadius: 12,
@@ -92,23 +93,23 @@ export default function InstagramPage() {
           ))}
 
           {/* Plan-aware add-account area */}
-          <div style={{ fontSize: 12.5, color: RL.muted, marginTop: 2 }}>{active.length} of {cap} account{cap > 1 ? 's' : ''} used{isPro ? ' (Pro)' : ' (Free)'}</div>
+          <div style={{ fontSize: 12.5, color: RL.muted, marginTop: 2 }}>{active.length} of {cap} account{cap > 1 ? 's' : ''} used ({planName})</div>
 
           {canAddMore ? (
             <div><Btn variant="ghost" disabled={connect.isPending} onClick={() => connect.mutate()}><Plus style={{ width: 16, height: 16 }} /> {connect.isPending ? 'Opening…' : 'Connect another account'}</Btn></div>
-          ) : !isPro ? (
+          ) : !isPaidPlan || cap < 15 ? (
             <Card pad={18} style={{ borderColor: RL.tealSoft, background: `linear-gradient(90deg, ${RL.tealSoft}66, #fff 60%)`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ width: 38, height: 38, borderRadius: 11, background: '#fff', border: `1px solid ${RL.tealSoft}`, color: RL.teal, display: 'grid', placeItems: 'center' }}><Lock style={{ width: 18, height: 18 }} /></div>
                 <div>
-                  <div style={{ fontSize: 14.5, fontWeight: 650, color: RL.ink }}>Want to run more than one account?</div>
-                  <div style={{ fontSize: 13, color: RL.muted, marginTop: 2 }}>Free includes 1 account. Upgrade to Pro to connect up to 5.</div>
+                  <div style={{ fontSize: 14.5, fontWeight: 650, color: RL.ink }}>Need more connected accounts?</div>
+                  <div style={{ fontSize: 13, color: RL.muted, marginTop: 2 }}>Your {planName} plan includes {cap} account{cap > 1 ? 's' : ''}. Upgrade for more.</div>
                 </div>
               </div>
-              <Link href="/dashboard/billing" style={{ textDecoration: 'none' }}><Btn variant="accent"><Sparkles style={{ width: 15, height: 15 }} /> Upgrade to Pro</Btn></Link>
+              <Link href="/dashboard/billing" style={{ textDecoration: 'none' }}><Btn variant="accent"><Sparkles style={{ width: 15, height: 15 }} /> Upgrade</Btn></Link>
             </Card>
           ) : (
-            <div style={{ fontSize: 13, color: RL.muted }}>You’ve reached your Pro limit of 5 connected accounts.</div>
+            <div style={{ fontSize: 13, color: RL.muted }}>You’ve reached your {planName} limit of {cap} connected accounts.</div>
           )}
         </div>
       )}

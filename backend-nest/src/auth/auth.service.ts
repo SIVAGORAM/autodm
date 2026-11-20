@@ -104,6 +104,8 @@ export class AuthService {
       throw new BadRequestException('Invalid or expired code');
     }
     await this.prisma.user.update({ where: { id: userId }, data: { isVerified: true, otpCode: null, otpExpires: null } });
+    // Welcome them now that they're confirmed — the trial started at signup.
+    await this.mail.sendTrialWelcomeEmail(user.email, user.name);
     return { success: true };
   }
 

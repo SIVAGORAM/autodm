@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DM_QUEUE_TOKEN } from '../queue/queue.module';
 import { DmJob } from '../queue/queue.constants';
 import { matchComment, MatchMode } from '../automations/matcher';
+import { planFor } from '../common/plan.util';
 
 // Turns a raw Instagram webhook payload into DM jobs. Fast: it only reads
 // and enqueues, never calls Meta, so the webhook can return 200 immediately.
@@ -55,6 +56,7 @@ export class WebhookService {
       if (a.mediaId && a.mediaId !== mediaId) continue;
       const res = matchComment({ text, matchMode: a.matchMode as MatchMode, keywords: a.keywords });
       if (!res.matched) continue; // AI_INTENT deferral handled in a later pass
+      if (!(await this.consumeQuota(account.userId))) { this.log.warn(`DM quota reached for user ${account.userId} — comment skipped`); break; }
       await this.enqueue({
         automationId: a.id, igAccountId: account.id, triggerType: a.triggerType,
         commentId, recipientIgsid: fromId, recipientUsername: fromUser,
@@ -92,6 +94,7 @@ export class WebhookService {
     for (const a of automations) {
       const res = matchComment({ text, matchMode: a.matchMode as MatchMode, keywords: a.keywords });
       if (!res.matched) continue;
+      if (!(await this.consumeQuota(account.userId))) { this.log.warn(`DM quota reached for user ${account.userId} — message skipped`); break; }
       await this.enqueue({
         automationId: a.id, igAccountId: account.id, triggerType: kind,
         recipientIgsid: senderId, text: this.firstText(a.dmBlocks),
@@ -105,6 +108,28 @@ export class WebhookService {
     const blocks = Array.isArray(dmBlocks) ? dmBlocks : [];
     const t = (blocks as any[]).find(b => b?.type === 'text');
     return t?.text ?? 'Thanks for reaching out!';
+  }
+
+  // Monthly DM quota: atomically counts one DM against the user's plan limit.
+  // Returns false when they're over the limit (the trigger is then skipped).
+  // Counter resets lazily at the start of each calendar month — no cron needed.
+  private async consumeQuota(userId: string): Promise<boolean> {
+    const u = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { plan: true, planExpiresAt: true, trialEndsAt: true, dmCount: true, dmCountResetAt: true },
+    });
+    if (!u) return false;
+    const now = new Date();
+    let count = u.dmCount;
+    if (!u.dmCountResetAt || u.dmCountResetAt.getTime() <= now.getTime()) {
+      const reset = new Date(now.getFullYear(), now.getMonth() + 1, 1); // first of next month, local
+      await this.prisma.user.update({ where: { id: userId }, data: { dmCount: 0, dmCountResetAt: reset } });
+      count = 0;
+    }
+    const quota = planFor(u).dmQuota;
+    if (count >= quota) return false;
+    await this.prisma.user.update({ where: { id: userId }, data: { dmCount: { increment: 1 } } });
+    return true;
   }
 
   private async enqueue(job: DmJob) {

@@ -20,7 +20,7 @@ export class InstagramService {
   private get appSecret() { return this.config.getOrThrow<string>('META_APP_SECRET'); }
   private get redirectUri() { return `${this.config.getOrThrow<string>('PUBLIC_URL').trim().replace(/\/+$/, '')}/api/instagram/callback`; }
 
-  buildAuthUrl(state: string): string {
+  buildAuthUrl(state: string, forceReauth = false): string {
     const scopes = [
       'instagram_business_basic',
       'instagram_business_manage_messages',
@@ -33,6 +33,9 @@ export class InstagramService {
       scope: scopes,
       state,
     });
+    // When adding a DIFFERENT account, force Instagram to show the login/account
+    // chooser instead of silently reusing the browser's current IG session.
+    if (forceReauth) p.set('force_reauth', 'true');
     return `https://www.instagram.com/oauth/authorize?${p.toString()}`;
   }
 

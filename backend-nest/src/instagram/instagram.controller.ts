@@ -7,9 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EncryptionService } from '../common/encryption.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { effectivePlan } from '../common/plan.util';
-
-const PLAN_ACCOUNT_CAP: Record<string, number> = { FREE: 1, PAID: 5 };
+import { planFor } from '../common/plan.util';
 
 @Controller('api/instagram')
 export class InstagramController {
@@ -30,7 +28,10 @@ export class InstagramController {
       { sub: userId },
       { secret: this.config.getOrThrow('JWT_ACCESS_SECRET'), expiresIn: '10m', audience: 'ig-oauth', issuer: 'autodm' },
     );
-    return { success: true, data: { url: this.ig.buildAuthUrl(state) } };
+    // If they already have an account linked, they're adding another — force the
+    // IG login/account chooser so they can pick a different account (no Incognito).
+    const existing = await this.prisma.igAccount.count({ where: { userId } });
+    return { success: true, data: { url: this.ig.buildAuthUrl(state, existing > 0) } };
   }
 
   @Get('callback')
@@ -61,7 +62,7 @@ export class InstagramController {
       if (!existing) {
         // Enforce the plan cap on NEW links.
         const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true, planExpiresAt: true, trialEndsAt: true } });
-        const cap = PLAN_ACCOUNT_CAP[effectivePlan(user)] ?? 1;
+        const cap = planFor(user).accountCap;
         const count = await this.prisma.igAccount.count({ where: { userId, isActive: true } });
         if (count >= cap) throw new BadRequestException(`Your plan allows ${cap} connected account(s)`);
       }

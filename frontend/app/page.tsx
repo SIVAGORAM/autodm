@@ -73,7 +73,7 @@ export default function Home() {
                 <a href="#how" className="rl-b" style={{ background: '#fff', border: `1px solid ${C.line}`, color: C.ink, padding: '15px 28px', borderRadius: 12, fontWeight: 600, fontSize: 16.5, textDecoration: 'none' }}>See how it works</a>
               </div>
               <div style={{ display: 'flex', gap: 30, marginTop: 40, flexWrap: 'wrap' }}>
-                {[['Free', 'to start'], ['0', 'DMs lost to silent failures'], ['₹499', 'flat · unlimited contacts']].map(([a, b]) => (
+                {[['Free', 'to start'], ['0', 'DMs lost to silent failures'], ['₹299', 'plans start here']].map(([a, b]) => (
                   <div key={b}><div style={{ fontSize: 27, fontWeight: 700, letterSpacing: '-.8px' }}>{a}</div><div style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>{b}</div></div>
                 ))}
               </div>
@@ -212,34 +212,32 @@ export default function Home() {
 
       {/* ───── pricing ───── */}
       <section id="pricing">
-        <div style={{ maxWidth: 940, margin: '0 auto', padding: '92px 32px' }}>
+        <div style={{ maxWidth: 1120, margin: '0 auto', padding: '92px 32px' }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 13.5, fontWeight: 700, color: C.teal }}>Pricing</div>
-            <h2 style={{ fontSize: 'clamp(30px,4vw,44px)', letterSpacing: '-1.4px', fontWeight: 800, marginTop: 12 }}>One flat price. No growth tax.</h2>
-            <p style={{ color: C.muted, fontSize: 17.5, maxWidth: 520, margin: '14px auto 0', lineHeight: 1.6 }}>Unlimited contacts on every plan. Your audience growing never makes Relayo more expensive.</p>
+            <h2 style={{ fontSize: 'clamp(30px,4vw,44px)', letterSpacing: '-1.4px', fontWeight: 800, marginTop: 12 }}>Simple plans that scale with you.</h2>
+            <p style={{ color: C.muted, fontSize: 17.5, maxWidth: 540, margin: '14px auto 0', lineHeight: 1.6 }}>Start free. Every paid plan begins with a 2-day full-Pro trial — upgrade when you&rsquo;re ready.</p>
           </div>
-          <div className="rl-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginTop: 52 }}>
-            <div style={{ background: '#fff', border: `1px solid ${C.line}`, borderRadius: 20, padding: 34 }}>
-              <div style={{ fontSize: 17, fontWeight: 700 }}>Free</div>
-              <div style={{ fontSize: 46, fontWeight: 800, letterSpacing: '-1.8px', margin: '8px 0' }}>&#8377;0</div>
-              <div style={{ color: C.muted, fontSize: 14, marginBottom: 20 }}>For getting started.</div>
-              <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 28px', display: 'grid', gap: 12 }}>
-                {['Auto-DM on posts & Reels', '1 keyword per automation', 'Live status + delivery log', 'Unlimited contacts', '1 Instagram account'].map((x) => (<li key={x} style={{ color: C.ink, fontSize: 15, display: 'flex', gap: 10 }}><span style={{ color: C.teal, fontWeight: 700 }}>&#10003;</span>{x}</li>))}
-              </ul>
-              <Link href="/signup" className="rl-b" style={{ display: 'block', textAlign: 'center', border: `1px solid ${C.line}`, color: C.ink, padding: '14px', borderRadius: 12, fontWeight: 600, textDecoration: 'none' }}>Start free</Link>
-            </div>
-            <div style={{ background: '#fff', border: `2px solid ${C.teal}`, borderRadius: 20, padding: 34, position: 'relative', boxShadow: '0 28px 56px -26px rgba(18,128,122,.4)' }}>
-              <span style={{ position: 'absolute', top: -13, left: 34, background: C.teal, color: '#fff', fontSize: 12, fontWeight: 700, padding: '5px 13px', borderRadius: 999 }}>Most popular</span>
-              <div style={{ fontSize: 17, fontWeight: 700 }}>Pro</div>
-              <div style={{ fontSize: 46, fontWeight: 800, letterSpacing: '-1.8px', margin: '8px 0' }}>&#8377;499<span style={{ fontSize: 16, color: C.muted, fontWeight: 500 }}> /mo</span></div>
-              <div style={{ color: C.muted, fontSize: 14, marginBottom: 20 }}>For creators who sell. 14-day trial.</div>
-              <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 28px', display: 'grid', gap: 12 }}>
-                {['Everything in Free', 'Unlimited keywords', 'Stories, Lives & incoming DMs', 'Follow-ups & ask-to-follow', 'Break alerts & auto-reconnect', 'Up to 5 Instagram accounts'].map((x) => (<li key={x} style={{ color: C.ink, fontSize: 15, display: 'flex', gap: 10 }}><span style={{ color: C.teal, fontWeight: 700 }}>&#10003;</span>{x}</li>))}
-              </ul>
-              <Link href="/signup" className="rl-b" style={{ display: 'block', textAlign: 'center', background: C.teal, color: '#fff', padding: '14px', borderRadius: 12, fontWeight: 600, textDecoration: 'none' }}>Start 14-day trial</Link>
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 18, marginTop: 52 }}>
+            {[
+              { name: 'Free', price: '₹0', per: '', sub: 'For getting started.', popular: false, cta: 'Start free', items: ['1 Instagram account', '1 keyword per automation', '150 DMs / month', 'Post & Reel triggers', 'Live status + delivery log'] },
+              { name: 'Creator', price: '₹299', per: ' /mo', sub: 'For growing creators.', popular: false, cta: 'Start free trial', items: ['2 Instagram accounts', 'Up to 5 keywords', '2,000 DMs / month', 'Stories, Lives & DMs', 'Follow-ups & ask-to-follow'] },
+              { name: 'Pro', price: '₹599', per: ' /mo', sub: 'For serious businesses.', popular: true, cta: 'Start free trial', items: ['5 Instagram accounts', 'Unlimited keywords', '10,000 DMs / month', 'Advanced workflows', 'Lead collection & export'] },
+              { name: 'Agency', price: '₹1,499', per: ' /mo', sub: 'For teams & agencies.', popular: false, cta: 'Start free trial', items: ['15 Instagram accounts', 'Unlimited keywords', '50,000 DMs / month', 'Client workspaces', 'Team access & reports'] },
+            ].map((p) => (
+              <div key={p.name} style={{ background: '#fff', border: p.popular ? `2px solid ${C.teal}` : `1px solid ${C.line}`, borderRadius: 20, padding: 28, position: 'relative', boxShadow: p.popular ? '0 28px 56px -26px rgba(18,128,122,.4)' : undefined }}>
+                {p.popular && <span style={{ position: 'absolute', top: -13, left: 28, background: C.teal, color: '#fff', fontSize: 12, fontWeight: 700, padding: '5px 13px', borderRadius: 999 }}>Most popular</span>}
+                <div style={{ fontSize: 16, fontWeight: 700 }}>{p.name}</div>
+                <div style={{ fontSize: 38, fontWeight: 800, letterSpacing: '-1.6px', margin: '8px 0' }}>{p.price}<span style={{ fontSize: 15, color: C.muted, fontWeight: 500 }}>{p.per}</span></div>
+                <div style={{ color: C.muted, fontSize: 13.5, marginBottom: 18 }}>{p.sub}</div>
+                <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 26px', display: 'grid', gap: 10 }}>
+                  {p.items.map((x) => (<li key={x} style={{ color: C.ink, fontSize: 14, display: 'flex', gap: 9 }}><span style={{ color: C.teal, fontWeight: 700 }}>&#10003;</span>{x}</li>))}
+                </ul>
+                <Link href="/signup" className="rl-b" style={{ display: 'block', textAlign: 'center', background: p.popular ? C.teal : '#fff', color: p.popular ? '#fff' : C.ink, border: p.popular ? 'none' : `1px solid ${C.line}`, padding: '13px', borderRadius: 12, fontWeight: 600, textDecoration: 'none' }}>{p.cta}</Link>
+              </div>
+            ))}
           </div>
-          <p style={{ color: C.muted, fontSize: 13, textAlign: 'center', marginTop: 24 }}>Prices in INR &middot; No per-contact fees, ever &middot; Cancel anytime</p>
+          <p style={{ color: C.muted, fontSize: 13, textAlign: 'center', marginTop: 24 }}>Prices in INR &middot; 2-day free trial on every plan &middot; Cancel anytime</p>
         </div>
       </section>
 
@@ -250,9 +248,9 @@ export default function Home() {
           {[
             ['Is this safe for my Instagram account?', 'Yes. Relayo uses Instagram’s official Meta API with proper login — no password sharing and no browser bots. Your access token is encrypted at rest with AES-256.'],
             ['What makes Relayo different from ManyChat or SuperProfile?', 'Reliability you can see. Other tools fail silently; Relayo shows live status on every automation, logs every DM, and emails you the moment a connection drops — before you lose leads.'],
-            ['Does pricing go up as my audience grows?', 'No. Relayo is a flat price with unlimited contacts. A viral reel that floods you with comments never increases your bill.'],
+            ['Does pricing go up as my audience grows?', 'Your price depends on the plan you pick, not your follower count. Each plan includes a monthly DM volume — upgrade only when you outgrow it.'],
             ['Which triggers are supported?', 'Comments on posts and Reels, Story replies, Live comments, and incoming DMs — with keyword or any-comment matching.'],
-            ['Can I run multiple accounts or clients?', 'Yes. Pro connects up to 5 Instagram accounts under one login, built for creators and agencies.'],
+            ['Can I run multiple accounts or clients?', 'Yes. Plans scale from 2 accounts on Creator up to 15 on Agency, all under one login — built for creators and agencies.'],
           ].map(([q, a]) => (
             <details key={q} className="rl-faq"><summary>{q}<span className="rl-plus">+</span></summary><p>{a}</p></details>
           ))}

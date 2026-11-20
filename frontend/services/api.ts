@@ -97,7 +97,7 @@ export const campaignApi = {
 export const paymentApi = {
   getPlans: () => api.get('/payments/plans'),
   getSubscription: () => api.get('/payments/subscription'),
-  createOrder: () => api.post('/payments/order'),
+  createOrder: (plan: string) => api.post('/payments/order', { plan }),
   verify: (data: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) =>
     api.post('/payments/verify', data),
   cancel: () => api.post('/payments/cancel'),

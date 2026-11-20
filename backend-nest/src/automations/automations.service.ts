@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAutomationDto } from './automations.dto';
 import { computeHealth } from './health';
+import { PLANS, Tier } from '../common/plan.config';
 
 @Injectable()
 export class AutomationsService {
@@ -22,14 +23,21 @@ export class AutomationsService {
     return a;
   }
 
-  // Free plan: one keyword, no paid triggers. Enforced server-side, not just UI.
+  // Per-tier feature gating. Enforced server-side on every create/update, not just in the UI.
   private enforcePlan(plan: string, dto: Partial<CreateAutomationDto>) {
-    if (plan === 'FREE') {
-      if ((dto.keywords?.length ?? 0) > 1) throw new BadRequestException('Free plan allows one keyword per automation');
-      const paidTriggers = ['STORY_REPLY', 'LIVE_COMMENT', 'DM', 'ANY_POST'];
-      if (dto.triggerType && paidTriggers.includes(dto.triggerType)) throw new BadRequestException('This trigger needs a paid plan');
-      if (dto.askToFollow || dto.collectEmail) throw new BadRequestException('Ask-to-follow and email collection need a paid plan');
-      if (dto.followUps?.length) throw new BadRequestException('Follow-ups need a paid plan');
+    const f = (PLANS[plan as Tier] ?? PLANS.FREE).features;
+    if ((dto.keywords?.length ?? 0) > f.keywordsPerAutomation) {
+      throw new BadRequestException(`Your plan allows ${f.keywordsPerAutomation} keyword(s) per automation`);
+    }
+    const paidTriggers = ['STORY_REPLY', 'LIVE_COMMENT', 'DM', 'ANY_POST'];
+    if (dto.triggerType && paidTriggers.includes(dto.triggerType) && !f.paidTriggers) {
+      throw new BadRequestException('This trigger needs a higher plan');
+    }
+    if ((dto.askToFollow && !f.askToFollow) || (dto.collectEmail && !f.collectEmail)) {
+      throw new BadRequestException('Ask-to-follow and email collection need a higher plan');
+    }
+    if (dto.followUps?.length && !f.followUps) {
+      throw new BadRequestException('Follow-ups need a higher plan');
     }
   }
 

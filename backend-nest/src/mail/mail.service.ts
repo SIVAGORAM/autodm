@@ -61,4 +61,39 @@ export class MailService {
       </div>`;
     await this.send(to, `Action needed: reconnect @${username}`, html);
   }
+
+  // Trial-ending nudge — the conversion driver.
+  async sendTrialEndingEmail(to: string, name: string, hoursLeft: number) {
+    const link = `${this.frontend}/dashboard/billing`;
+    const hrs = Math.max(1, Math.round(hoursLeft));
+    const firstName = (name || 'there').split(' ')[0];
+    const html = `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:460px;margin:auto;padding:24px;border:1px solid #e2eaed;border-radius:14px">
+        <h2 style="color:#17827E;margin:0 0 8px">Your Pro trial ends in ${hrs} hour${hrs === 1 ? '' : 's'}</h2>
+        <p style="color:#152024;font-size:15px">Hi ${firstName}, your free Relayo Pro trial is almost up.</p>
+        <p style="color:#5E707A;font-size:14px">Upgrade now to keep your automations running, multiple connected accounts, and every Pro feature. If you don't upgrade, your account will switch to the Free plan automatically — no charge, no surprises.</p>
+        <a href="${link}" style="display:inline-block;background:#F46034;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:600;margin-top:8px">Upgrade to Pro</a>
+        <p style="color:#9aa8ad;font-size:12px;margin-top:16px">You're receiving this because you started a Relayo Pro trial.</p>
+      </div>`;
+    await this.send(to, `Your Relayo Pro trial ends in ${hrs} hour${hrs === 1 ? '' : 's'}`, html);
+  }
+
+  // Welcome — sent once the user verifies, setting expectations for the trial.
+  async sendTrialWelcomeEmail(to: string, name: string) {
+    const link = `${this.frontend}/dashboard`;
+    const firstName = (name || 'there').split(' ')[0];
+    const html = `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:460px;margin:auto;padding:24px;border:1px solid #e2eaed;border-radius:14px">
+        <h2 style="color:#17827E;margin:0 0 8px">Welcome to Relayo, ${firstName} 🎉</h2>
+        <p style="color:#152024;font-size:15px">Your <b>2-day Pro trial</b> is live — every feature unlocked, starting now.</p>
+        <ul style="color:#5E707A;font-size:14px;padding-left:18px;margin:12px 0">
+          <li>Connect multiple Instagram accounts</li>
+          <li>Unlimited comment-to-DM automations</li>
+          <li>Full analytics and delivery tracking</li>
+        </ul>
+        <p style="color:#5E707A;font-size:14px">After 2 days your account switches to Free automatically — no charge unless you choose to upgrade.</p>
+        <a href="${link}" style="display:inline-block;background:#F46034;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:600;margin-top:8px">Open your dashboard</a>
+      </div>`;
+    await this.send(to, `Welcome to Relayo — your 2-day Pro trial is live`, html);
+  }
 }

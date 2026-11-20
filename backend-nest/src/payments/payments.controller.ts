@@ -17,12 +17,15 @@ export class PaymentsController {
   }
 
   @Post('order')
-  async order(@CurrentUser('userId') userId: string) {
-    return { success: true, data: await this.service.createOrder(userId) };
+  async order(@CurrentUser('userId') userId: string, @Body() body: { plan?: string }) {
+    return { success: true, data: await this.service.createOrder(userId, body?.plan) };
   }
 
   @Post('verify')
-  async verify(@CurrentUser('userId') userId: string, @Body() body: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) {
+  async verify(
+    @CurrentUser('userId') userId: string,
+    @Body() body: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string },
+  ) {
     return { success: true, data: await this.service.verify(userId, body?.razorpay_order_id, body?.razorpay_payment_id, body?.razorpay_signature) };
   }
 
