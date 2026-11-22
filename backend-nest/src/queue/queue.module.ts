@@ -1,10 +1,18 @@
-import { Global, Module } from '@nestjs/common';
+import { Global, Inject, Injectable, Module, OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
-import { DM_QUEUE } from './queue.constants';
+import { DM_QUEUE, DM_QUEUE_TOKEN } from './queue.constants';
 import { createRedis } from './redis';
+import { DashboardEventsService } from './dashboard-events.service';
 
-export const DM_QUEUE_TOKEN = 'DM_QUEUE_TOKEN';
+@Injectable()
+export class QueueShutdown implements OnApplicationShutdown {
+  constructor(@Inject(DM_QUEUE_TOKEN) private readonly queue: Queue) {}
+
+  async onApplicationShutdown() {
+    await this.queue.close();
+  }
+}
 
 @Global()
 @Module({
@@ -25,7 +33,9 @@ export const DM_QUEUE_TOKEN = 'DM_QUEUE_TOKEN';
         });
       },
     },
+    QueueShutdown,
+    DashboardEventsService,
   ],
-  exports: [DM_QUEUE_TOKEN],
+  exports: [DM_QUEUE_TOKEN, DashboardEventsService],
 })
 export class QueueModule {}

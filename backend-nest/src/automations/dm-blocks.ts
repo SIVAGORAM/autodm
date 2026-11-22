@@ -1,5 +1,6 @@
 // Pure helpers for turning stored dmBlocks into outgoing buttons, and for
 // swapping button URLs for click-tracking redirects. No I/O — unit-tested.
+import { signClickAttribution } from '../tracking/click-attribution';
 
 export interface RawButton { title: string; url: string; }
 export interface TrackedLinkRef { slug: string; targetUrl: string; }
@@ -32,6 +33,7 @@ export function applyTracking(
   trackClicks: boolean,
   publicUrl: string,
   contactIgsid?: string,
+  attributionSecret?: string,
 ): RawButton[] {
   const capped = buttons.slice(0, 3);
   if (!trackClicks) return capped;
@@ -40,7 +42,12 @@ export function applyTracking(
     if (isUnwrappable(b.url)) return b;
     const link = links.find((l) => l.targetUrl === b.url);
     if (!link) return b;
-    const q = contactIgsid ? `?c=${encodeURIComponent(contactIgsid)}` : '';
+    const signature = contactIgsid && attributionSecret
+      ? signClickAttribution(link.slug, contactIgsid, attributionSecret)
+      : null;
+    const q = contactIgsid && signature
+      ? `?c=${encodeURIComponent(contactIgsid)}&s=${signature}`
+      : '';
     return { title: b.title, url: `${base}/r/${link.slug}${q}` };
   });
 }

@@ -1,14 +1,22 @@
-import Redis from "ioredis";
+const Redis = require("ioredis");
 
-const redis = new Redis(
-  "rediss://default:gQAAAAAAATG5AAIncDJkMjM4ZmJkYjg3ZDk0MWU4YmU0ZDJiMzY3YThjNWViMXAyNzgyNjU@allowing-grackle-78265.upstash.io:6379"
-);
-
-async function test() {
-  await redis.set("test", "hello");
-  const value = await redis.get("test");
-  console.log("Redis Value:", value);
-  process.exit(0);
+const redisUrl = process.env.REDIS_URL;
+if (!redisUrl) {
+  throw new Error("Set REDIS_URL before running this connectivity check.");
 }
 
-test();
+const redis = new Redis(redisUrl, { lazyConnect: true, maxRetriesPerRequest: 1 });
+
+async function test() {
+  try {
+    await redis.connect();
+    console.log("Redis ping:", await redis.ping());
+  } finally {
+    await redis.quit();
+  }
+}
+
+test().catch((error) => {
+  console.error("Redis connectivity check failed:", error.message);
+  process.exitCode = 1;
+});

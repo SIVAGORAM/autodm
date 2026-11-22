@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
+import { safeErrorLabel } from '../common/safe-error-label';
 
 // Sends a one-time "your Pro trial is ending" email ~6h before expiry.
 // Runs in-process (web dyno), so it works even though the BullMQ worker
@@ -41,7 +42,13 @@ export class TrialService {
       for (const u of candidates) {
         // Atomically claim this user so no second tick / instance double-sends.
         const claim = await this.prisma.user.updateMany({
-          where: { id: u.id, trialReminderSent: false },
+          where: {
+            id: u.id,
+            plan: 'FREE',
+            deletionRequestedAt: null,
+            trialReminderSent: false,
+            trialEndsAt: { gt: now, lte: windowEnd },
+          },
           data: { trialReminderSent: true },
         });
         if (claim.count !== 1) continue; // someone else got it
@@ -49,12 +56,27 @@ export class TrialService {
         const hoursLeft = u.trialEndsAt
           ? (u.trialEndsAt.getTime() - Date.now()) / (60 * 60 * 1000)
           : 1;
-        await this.mail.sendTrialEndingEmail(u.email, u.name, hoursLeft);
-        this.log.log(`Trial-ending email sent to ${u.email} (${hoursLeft.toFixed(1)}h left)`);
+        const sent = await this.mail.sendTrialEndingEmail(u.email, u.name, hoursLeft);
+        if (!sent) {
+          // The claim prevents duplicate mail, but restore it when delivery
+          // fails so the next scheduler tick can retry instead of losing the
+          // only reminder permanently.
+          await this.prisma.user.updateMany({
+            where: {
+              id: u.id,
+              plan: 'FREE',
+              trialReminderSent: true,
+              trialEndsAt: { gt: now, lte: windowEnd },
+            },
+            data: { trialReminderSent: false },
+          });
+          continue;
+        }
+        this.log.log(`Trial-ending reminder sent (${hoursLeft.toFixed(1)}h left)`);
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       // Never let a scheduled run throw — just log and move on.
-      this.log.warn(`trial reminder sweep failed: ${e?.message ?? e}`);
+      this.log.warn(`trial reminder sweep failed (${safeErrorLabel(e)})`);
     }
   }
 }

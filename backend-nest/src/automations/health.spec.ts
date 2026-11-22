@@ -16,6 +16,20 @@ describe('computeHealth', () => {
   it('many failures -> at risk', () => {
     expect(computeHealth({ status: 'LIVE', tokenExpiresAt: d(30), recentFailures: 5, now }).level).toBe('at_risk');
   });
+  it('shows plan restrictions instead of a healthy state', () => {
+    const health = computeHealth({ status: 'LIVE', tokenExpiresAt: d(30), recentFailures: 0, planRestriction: 'This trigger needs a higher plan.', now });
+    expect(health.level).toBe('at_risk');
+    expect(health.label).toBe('Plan limited');
+    expect(health.reason).toContain('higher plan');
+  });
+  it('marks a live automation at risk when its required Meta webhooks are not confirmed', () => {
+    expect(computeHealth({ status: 'LIVE', tokenExpiresAt: d(30), recentFailures: 0, webhookSubscriptionMissing: true, now }))
+      .toMatchObject({ level: 'at_risk', label: 'Webhooks needed' });
+  });
+  it('marks a live automation at risk when the delivery worker is offline', () => {
+    expect(computeHealth({ status: 'LIVE', tokenExpiresAt: d(30), recentFailures: 0, deliveryWorkerUnavailable: true, now }))
+      .toMatchObject({ level: 'at_risk', label: 'Delivery offline' });
+  });
   it('all good -> healthy', () => {
     expect(computeHealth({ status: 'LIVE', tokenExpiresAt: d(30), recentFailures: 0, now }).level).toBe('healthy');
   });

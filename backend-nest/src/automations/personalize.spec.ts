@@ -18,4 +18,8 @@ describe('personalize', () => {
   it('leaves unknown tags untouched', () => {
     expect(personalize('Order {{order_id}}', { name: 'Asha' })).toBe('Order {{order_id}}');
   });
+  it('leaves inherited object property names untouched', () => {
+    expect(personalize('{{constructor}} {{__proto__}} {{toString}}', { name: 'Asha' }))
+      .toBe('{{constructor}} {{__proto__}} {{toString}}');
+  });
 });

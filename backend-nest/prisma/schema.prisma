@@ -3,6 +3,7 @@
 // contacts, runs and click tracking (from replica/recon.md).
 generator client {
   provider = "prisma-client-js"
+  engineType = "client"
 }
 
 datasource db {
@@ -13,34 +14,66 @@ datasource db {
 
 // ─────────────────────────── Accounts & auth ───────────────────────────
 model User {
-  id            String   @id @default(uuid())
-  email         String   @unique
-  passwordHash  String
-  name          String
-  profilePicUrl String?
-  role          UserRole @default(INFLUENCER)
-  isVerified    Boolean  @default(false)
-  otpCode       String?
-  otpExpires    DateTime?
-  plan          PlanTier @default(FREE)
-  planExpiresAt DateTime?
-  trialEndsAt   DateTime?
-  trialReminderSent Boolean @default(false)
-  dmCount        Int      @default(0)   // DMs triggered in the current quota window
-  dmCountResetAt DateTime?              // when dmCount rolls back to 0 (start of next month)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                     String    @id @default(uuid())
+  email                  String    @unique
+  passwordHash           String
+  name                   String
+  profilePicUrl          String?
+  role                   UserRole  @default(INFLUENCER)
+  adminPermissions       String[]  @default([])
+  sessionVersion         Int       @default(0)
+  adminMfaEnabledAt      DateTime?
+  adminMfaSecretEnc      String?
+  adminMfaPendingSecretEnc String?
+  adminMfaRecoveryCodeHashes String[] @default([])
+  adminMfaChallengeHash  String?
+  adminMfaChallengeExpiresAt DateTime?
+  adminMfaLastUsedStep   BigInt?
+  isVerified             Boolean   @default(false)
+  otpCode                String?
+  otpExpires             DateTime?
+  otpAttempts            Int       @default(0)
+  passwordResetTokenHash String?
+  passwordResetExpiresAt DateTime?
+  termsVersion          String?
+  termsAcceptedAt       DateTime?
+  privacyVersion        String?
+  privacyAcknowledgedAt DateTime?
+  ageConfirmedAt        DateTime?
+  plan                   PlanTier  @default(FREE)
+  planExpiresAt          DateTime?
+  trialEndsAt            DateTime?
+  trialReminderSent      Boolean   @default(false)
+  deletionRequestedAt    DateTime?
+  suspendedAt            DateTime?
+  suspensionReason       String?
+  dmCount                Int       @default(0) // DMs triggered in the current quota window
+  dmCountResetAt         DateTime? // when dmCount rolls back to 0 (start of next month)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
-  igAccounts    IgAccount[]
-  refreshTokens RefreshToken[]
+  igAccounts      IgAccount[]
+  refreshTokens   RefreshToken[]
+  payments        Payment[]
+  mailOutbox      MailOutbox[]
+  supportRequests SupportRequest[]
+  supportMessages SupportMessage[]
+  adminAuditEvents AdminAuditEvent[]
+  assignedContactEnquiries ContactEnquiry[] @relation("ContactEnquiryAssignee")
+  authoredContactEnquiryMessages ContactEnquiryMessage[] @relation("ContactEnquiryAdminAuthor")
+  sentAdminInvitations AdminInvitation[] @relation("AdminInvitationInviter")
+  acceptedAdminInvitations AdminInvitation[] @relation("AdminInvitationAcceptedBy")
+  publicProfile    PublicProfile?
 
   @@index([trialEndsAt]) // speeds the trial-reminder sweep
+  @@index([deletionRequestedAt])
+  @@index([suspendedAt, createdAt])
   @@map("users")
 }
 
 model RefreshToken {
   id        String   @id @default(uuid())
-  token     String   @unique
+  tokenHash String   @unique
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
@@ -50,24 +83,63 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+model Payment {
+  id        String   @id @default(uuid())
+  orderId   String   @unique
+  paymentId String   @unique
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  plan      PlanTier
+  amount    Int
+  currency  String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("payments")
+}
+
+model MetaDataDeletionRequest {
+  id               String   @id @default(uuid())
+  requestHash      String   @unique
+  confirmationCode String   @unique
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("meta_data_deletion_requests")
+}
+
+model MetaDeauthorizationReceipt {
+  id          String   @id @default(uuid())
+  requestHash String   @unique
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("meta_deauthorization_receipts")
+}
+
 // Up to 5 per user (paid). Free = 1.
 model IgAccount {
-  id              String    @id @default(uuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  igUserId        String    @unique
-  username        String
-  pageId          String?   // Facebook Page id, for Messenger
-  accessTokenEnc  String    // AES-256 encrypted
-  tokenExpiresAt  DateTime?
-  isActive        Boolean   @default(true)
-  lastAlertAt     DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  igUserId       String    @unique
+  username       String
+  loginMode      InstagramLoginMode @default(INSTAGRAM_LOGIN)
+  clientBusinessId String?
+  unifiedConfigId String?
+  pageId         String? // Facebook Page id, for Messenger
+  accessTokenEnc String // AES-256 encrypted
+  tokenExpiresAt DateTime?
+  webhookSubscribedAt DateTime?
+  isActive       Boolean   @default(true)
+  lastAlertAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  automations Automation[]
-  contacts    Contact[]
-  runs        Run[]
+  automations   Automation[]
+  contacts      Contact[]
+  runs          Run[]
+  webhookEvents WebhookEvent[]
 
   @@index([userId])
   @@map("ig_accounts")
@@ -75,24 +147,26 @@ model IgAccount {
 
 // ─────────────────────────── Automations ───────────────────────────
 model Automation {
-  id            String        @id @default(uuid())
-  igAccountId   String
-  igAccount     IgAccount     @relation(fields: [igAccountId], references: [id], onDelete: Cascade)
-  name          String
-  triggerType   TriggerType
-  mediaId       String?       // specific post/reel/story; null for any/next
-  matchMode     MatchMode     @default(KEYWORDS)
-  keywords      String[]      @default([])
-  publicReplies String[]      @default([]) // up to 3, rotated
-  replyToComment Boolean      @default(false)
-  askToFollow   Boolean       @default(false)
-  collectEmail  Boolean       @default(false)
-  trackClicks   Boolean       @default(true)
-  dmBlocks      Json          // ordered message blocks (text/image/video/buttons/card)
-  status        AutomationStatus @default(DRAFT)
-  dailyLimit    Int           @default(200)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id                String           @id @default(uuid())
+  igAccountId       String
+  igAccount         IgAccount        @relation(fields: [igAccountId], references: [id], onDelete: Cascade)
+  name              String
+  triggerType       TriggerType
+  mediaId           String? // specific post/reel/story; null for any/next
+  matchMode         MatchMode        @default(KEYWORDS)
+  keywords          String[]         @default([])
+  publicReplies     String[]         @default([]) // up to 3, rotated
+  replyToComment    Boolean          @default(false)
+  askToFollow       Boolean          @default(false)
+  collectEmail      Boolean          @default(false)
+  trackClicks       Boolean          @default(true)
+  dmBlocks          Json // ordered message blocks (text/image/video/buttons/card)
+  status            AutomationStatus @default(DRAFT)
+  dailyLimit        Int              @default(200)
+  dailyCount        Int              @default(0)
+  dailyCountResetAt DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   followUps    FollowUp[]
   runs         Run[]
@@ -104,12 +178,12 @@ model Automation {
 }
 
 model FollowUp {
-  id           String       @id @default(uuid())
+  id           String     @id @default(uuid())
   automationId String
-  automation   Automation   @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  automation   Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
   order        Int
   condition    FollowCond
-  delayMinutes Int          @default(0)
+  delayMinutes Int        @default(0)
   dmBlocks     Json
 
   @@index([automationId])
@@ -118,17 +192,19 @@ model FollowUp {
 
 // ─────────────────────────── People & activity ───────────────────────────
 model Contact {
-  id               String   @id @default(uuid())
+  id               String    @id @default(uuid())
   igAccountId      String
   igAccount        IgAccount @relation(fields: [igAccountId], references: [id], onDelete: Cascade)
-  igScopedId       String   // IGSID of the commenter/sender
+  igScopedId       String // IGSID of the commenter/sender
   username         String?
   name             String?
   email            String?
-  follows          Boolean  @default(false)
-  dmsSent          Int      @default(0)
-  firstInteraction DateTime @default(now())
-  lastInteraction  DateTime @default(now())
+  notes            String    @default("")
+  tags             String[]  @default([])
+  follows          Boolean   @default(false)
+  dmsSent          Int       @default(0)
+  firstInteraction DateTime  @default(now())
+  lastInteraction  DateTime  @default(now())
   lastReplyAt      DateTime?
 
   runs Run[]
@@ -139,18 +215,21 @@ model Contact {
 }
 
 model Run {
-  id             String    @id @default(uuid())
-  automationId   String
-  automation     Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
-  igAccountId    String
-  igAccount      IgAccount  @relation(fields: [igAccountId], references: [id], onDelete: Cascade)
-  contactId      String?
-  contact        Contact?   @relation(fields: [contactId], references: [id])
-  triggerEventId String     @unique // IG comment/message id — idempotency key
-  status         RunStatus  @default(PENDING)
-  error          String?
-  createdAt      DateTime   @default(now())
-  sentAt         DateTime?
+  id                     String     @id @default(uuid())
+  automationId           String
+  automation             Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  igAccountId            String
+  igAccount              IgAccount  @relation(fields: [igAccountId], references: [id], onDelete: Cascade)
+  contactId              String?
+  contact                Contact?   @relation(fields: [contactId], references: [id])
+  triggerEventId         String     @unique // IG comment/message id — idempotency key
+  followUpOrder          Int? // snapshot of the follow-up step for customer run history
+  status                 RunStatus  @default(PENDING)
+  error                  String?
+  publicReplyAttemptedAt DateTime?
+  publicReplyError       String?
+  createdAt              DateTime   @default(now())
+  sentAt                 DateTime?
 
   @@index([automationId])
   @@index([igAccountId, createdAt])
@@ -158,13 +237,13 @@ model Run {
 }
 
 model TrackedLink {
-  id           String      @id @default(uuid())
+  id           String     @id @default(uuid())
   automationId String
-  automation   Automation  @relation(fields: [automationId], references: [id], onDelete: Cascade)
-  slug         String      @unique
+  automation   Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  slug         String     @unique
   targetUrl    String
-  clicks       Int         @default(0)
-  createdAt    DateTime    @default(now())
+  clicks       Int        @default(0)
+  createdAt    DateTime   @default(now())
 
   clickEvents Click[]
 
@@ -185,17 +264,254 @@ model Click {
 
 // Processed webhook ids, for cross-process idempotency safety net.
 model WebhookEvent {
-  id          String   @id @default(uuid())
-  eventId     String   @unique
-  processedAt DateTime @default(now())
+  id              String     @id @default(uuid())
+  eventId         String     @unique
+  igUserId        String?
+  igAccountId     String?
+  igAccount       IgAccount? @relation(fields: [igAccountId], references: [id], onDelete: Cascade)
+  payload         Json?
+  attempts        Int        @default(0)
+  lastError       String?
+  nextAttemptAt   DateTime?
+  deadLetterAt    DateTime?
+  redriveCount    Int        @default(0)
+  lastRedrivenAt  DateTime?
+  lastRedrivenBy  String?
+  payloadPurgedAt DateTime?
+  processedAt     DateTime?
+  createdAt       DateTime   @default(now())
 
+  @@index([processedAt, createdAt])
+  @@index([igUserId, createdAt])
+  @@index([deadLetterAt, createdAt])
   @@map("webhook_events")
+}
+
+model DmQuotaReservation {
+  id                 String                    @id @default(uuid())
+  triggerEventId     String                    @unique
+  userId             String
+  automationId       String
+  status             DmQuotaReservationStatus  @default(CONSUMED)
+  monthWindowEndsAt  DateTime?
+  dayWindowEndsAt    DateTime?
+  settledAt          DateTime?
+  createdAt          DateTime                  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([automationId, createdAt])
+  @@map("dm_quota_reservations")
+}
+
+// Authentication and lifecycle email content is encrypted at rest and expires
+// with the action it represents (OTP/reset token or welcome window).
+model MailOutbox {
+  id            String    @id @default(uuid())
+  userId        String?
+  user          User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contactEnquiryMessageId String? @unique
+  contactEnquiryMessage ContactEnquiryMessage? @relation(fields: [contactEnquiryMessageId], references: [id], onDelete: SetNull)
+  dedupeKey     String    @unique
+  payloadEnc    String
+  status        String    @default("PENDING")
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now())
+  lockedAt      DateTime?
+  expiresAt     DateTime
+  sentAt        DateTime?
+  failedAt      DateTime?
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([userId, createdAt])
+  @@index([status, expiresAt])
+  @@map("mail_outbox")
+}
+
+model SupportRequest {
+  id        String               @id @default(uuid())
+  userId    String
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      SupportRequestType
+  status    SupportRequestStatus @default(OPEN)
+  subject   String
+  rating    Int?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  messages  SupportMessage[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("support_requests")
+}
+
+model SupportMessage {
+  id         String               @id @default(uuid())
+  requestId  String
+  request    SupportRequest       @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  authorId   String?
+  author     User?                @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  senderType SupportMessageSender
+  body       String
+  createdAt  DateTime             @default(now())
+
+  @@index([requestId, createdAt])
+  @@index([authorId, createdAt])
+  @@map("support_messages")
+}
+
+model ContactEnquiry {
+  id                 String                 @id @default(uuid())
+  name               String
+  email              String
+  subject            String
+  status             ContactEnquiryStatus   @default(NEW)
+  priority           ContactEnquiryPriority  @default(NORMAL)
+  assignedAdminId    String?
+  assignedAdmin      User?                  @relation("ContactEnquiryAssignee", fields: [assignedAdminId], references: [id], onDelete: SetNull)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  messages           ContactEnquiryMessage[]
+
+  @@index([status, priority, updatedAt])
+  @@index([assignedAdminId, status, updatedAt])
+  @@index([email, createdAt])
+  @@map("contact_enquiries")
+}
+
+model ContactEnquiryMessage {
+  id                 String                     @id @default(uuid())
+  enquiryId          String
+  enquiry            ContactEnquiry             @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  authorAdminId      String?
+  authorAdmin        User?                      @relation("ContactEnquiryAdminAuthor", fields: [authorAdminId], references: [id], onDelete: SetNull)
+  kind               ContactEnquiryMessageKind
+  body               String
+  emailDeliveryStatus ContactEmailDeliveryStatus @default(NOT_APPLICABLE)
+  createdAt          DateTime                   @default(now())
+  mailOutbox         MailOutbox?
+
+  @@index([enquiryId, createdAt, id])
+  @@index([authorAdminId, createdAt])
+  @@map("contact_enquiry_messages")
+}
+
+// Append-only from application code: stores metadata for privileged actions,
+// never authentication secrets or customer message bodies.
+model AdminAuditEvent {
+  id         String   @id @default(uuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action     String
+  targetType String
+  targetId   String?
+  reason     String
+  requestId  String
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt, id])
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId, createdAt])
+  @@map("admin_audit_events")
+}
+
+model AdminInvitation {
+  id           String   @id @default(uuid())
+  email        String
+  permissions  String[] @default([])
+  tokenHash    String   @unique
+  invitedById  String
+  invitedBy    User     @relation("AdminInvitationInviter", fields: [invitedById], references: [id], onDelete: Restrict)
+  acceptedById String?
+  acceptedBy   User?    @relation("AdminInvitationAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+  acceptedAt   DateTime?
+  revokedAt    DateTime?
+
+  @@index([email, acceptedAt, revokedAt, expiresAt])
+  @@index([invitedById, createdAt])
+  @@map("admin_invitations")
+}
+
+model PublicProfile {
+  id              String                  @id @default(uuid())
+  userId          String                  @unique
+  user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentHandleId String?                 @unique
+  currentHandle   ProfileHandle?          @relation("CurrentProfileHandle", fields: [currentHandleId], references: [id], onDelete: SetNull)
+  handles         ProfileHandle[]         @relation("ProfileHandleOwner")
+  displayName     String                  @db.VarChar(80)
+  bio             String?                 @db.VarChar(160)
+  avatarAssetId   String?
+  avatarDeliveryUrl String?                @db.Text
+  visibility      PublicProfileVisibility @default(PRIVATE)
+  appearance      ProfileAppearance       @default(NEUTRAL)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  links           ProfileLink[]
+
+  @@index([visibility, updatedAt])
+  @@map("public_profiles")
+}
+
+model ProfileHandle {
+  id          String        @id @default(uuid())
+  profileId   String
+  profile     PublicProfile @relation("ProfileHandleOwner", fields: [profileId], references: [id], onDelete: Cascade)
+  username    String        @db.VarChar(30)
+  isCurrent   Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  retiredAt   DateTime?
+  currentFor  PublicProfile? @relation("CurrentProfileHandle")
+
+  @@index([profileId, isCurrent])
+  @@map("profile_handles")
+}
+
+model ProfileLink {
+  id          String          @id @default(uuid())
+  profileId   String
+  profile     PublicProfile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  kind        ProfileLinkKind
+  platform    String?         @db.VarChar(24)
+  title       String          @db.VarChar(80)
+  url         String          @db.VarChar(2048)
+  description String?         @db.VarChar(200)
+  sortOrder   Int             @default(0)
+  isVisible   Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([profileId, kind, sortOrder])
+  @@map("profile_links")
+}
+
+model ProfileAssetDeletion {
+  id            String   @id @default(uuid())
+  assetId       String   @unique
+  attempts      Int      @default(0)
+  nextAttemptAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@index([nextAttemptAt, createdAt])
+  @@map("profile_asset_deletions")
 }
 
 // ─────────────────────────── Enums ───────────────────────────
 enum UserRole {
   INFLUENCER
   ADMIN
+  SUPER_ADMIN
+}
+
+enum InstagramLoginMode {
+  INSTAGRAM_LOGIN
+  UNIFIED_LOGIN
 }
 
 enum PlanTier {
@@ -207,7 +523,7 @@ enum PlanTier {
 }
 
 enum TriggerType {
-  POST_COMMENT    // specific post/reel
+  POST_COMMENT // specific post/reel
   NEXT_POST
   ANY_POST
   STORY_REPLY
@@ -241,4 +557,73 @@ enum RunStatus {
   SENT
   SKIPPED
   FAILED
+  UNKNOWN
+}
+
+enum DmQuotaReservationStatus {
+  RESERVED
+  CONSUMED
+  RELEASED
+}
+
+enum SupportRequestType {
+  SUPPORT
+  FEEDBACK
+}
+
+enum SupportRequestStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum SupportMessageSender {
+  CUSTOMER
+  ADMIN
+}
+
+enum ContactEnquiryStatus {
+  NEW
+  IN_PROGRESS
+  WAITING_FOR_CUSTOMER
+  RESOLVED
+  CLOSED
+  SPAM
+}
+
+enum ContactEnquiryPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum ContactEnquiryMessageKind {
+  SUBMISSION
+  ADMIN_REPLY
+  INTERNAL_NOTE
+}
+
+enum ContactEmailDeliveryStatus {
+  NOT_APPLICABLE
+  QUEUED
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum PublicProfileVisibility {
+  PRIVATE
+  PUBLIC
+}
+
+enum ProfileAppearance {
+  LIGHT
+  DARK
+  NEUTRAL
+}
+
+enum ProfileLinkKind {
+  SOCIAL
+  CUSTOM
 }

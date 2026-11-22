@@ -1,15 +1,28 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { VerifiedEmailGuard } from '../common/guards/verified-email.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { effectivePlan } from '../common/plan.util';
 import { AutomationsService } from './automations.service';
 import { createAutomationSchema, updateAutomationSchema } from './automations.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { DashboardEventsService } from '../queue/dashboard-events.service';
+import { z } from 'zod';
 
 @Controller('api/automations')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, VerifiedEmailGuard)
 export class AutomationsController {
-  constructor(private service: AutomationsService, private prisma: PrismaService) {}
+  constructor(
+    private service: AutomationsService,
+    private prisma: PrismaService,
+    private dashboardEvents: DashboardEventsService,
+  ) {}
+
+  private publishAutomationUpdate(userId: string) {
+    // The mutation has already committed. Keep SSE advisory and never delay or
+    // fail the user's successful save if the Redis Pub/Sub path is unavailable.
+    void this.dashboardEvents.publish(userId, 'automation');
+  }
 
   private async plan(userId: string) {
     const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true, planExpiresAt: true, trialEndsAt: true } });
@@ -19,7 +32,9 @@ export class AutomationsController {
   @Post()
   async create(@CurrentUser('userId') userId: string, @Body() body: unknown) {
     const dto = createAutomationSchema.parse(body);
-    return { success: true, data: await this.service.create(userId, await this.plan(userId), dto) };
+    const data = await this.service.create(userId, await this.plan(userId), dto);
+    this.publishAutomationUpdate(userId);
+    return { success: true, data };
   }
 
   @Get()
@@ -35,12 +50,17 @@ export class AutomationsController {
   @Patch(':id')
   async update(@CurrentUser('userId') userId: string, @Param('id') id: string, @Body() body: unknown) {
     const dto = updateAutomationSchema.parse(body);
-    return { success: true, data: await this.service.update(userId, await this.plan(userId), id, dto) };
+    const data = await this.service.update(userId, await this.plan(userId), id, dto);
+    this.publishAutomationUpdate(userId);
+    return { success: true, data };
   }
 
   @Patch(':id/status')
-  async status(@CurrentUser('userId') userId: string, @Param('id') id: string, @Body() body: { status: 'DRAFT' | 'LIVE' | 'PAUSED' }) {
-    return { success: true, data: await this.service.setStatus(userId, id, body.status) };
+  async status(@CurrentUser('userId') userId: string, @Param('id') id: string, @Body() body: unknown) {
+    const { status } = z.object({ status: z.enum(['DRAFT', 'LIVE', 'PAUSED']) }).parse(body);
+    const data = await this.service.setStatus(userId, await this.plan(userId), id, status);
+    this.publishAutomationUpdate(userId);
+    return { success: true, data };
   }
 
   @Get(':id/analytics')
@@ -55,6 +75,8 @@ export class AutomationsController {
 
   @Delete(':id')
   async remove(@CurrentUser('userId') userId: string, @Param('id') id: string) {
-    return this.service.remove(userId, id);
+    const data = await this.service.remove(userId, id);
+    this.publishAutomationUpdate(userId);
+    return data;
   }
 }

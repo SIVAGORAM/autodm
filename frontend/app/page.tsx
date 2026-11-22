@@ -1,296 +1,313 @@
+import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
+import {
+  ArrowDownRight,
+  ArrowRight,
+  ArrowUpRight,
+  Check,
+  ChevronDown,
+  CheckCircle2,
+  Instagram,
+  MessageCircle,
+  ShieldCheck,
+} from 'lucide-react';
+import { LEGAL_POLICIES_APPROVED } from '../lib/legal-policy';
+import styles from './page.module.css';
 
-export const metadata = {
-  title: 'Relayo — Instagram auto-DM you can actually trust',
-  description: 'Reply to every comment with a DM automatically — with live status, a delivery log, and an alert the moment a connection drops. Reliable Instagram automation for creators and brands.',
+const signupCtaHref = LEGAL_POLICIES_APPROVED ? '/signup' : '/contact';
+const signupCtaLabel = LEGAL_POLICIES_APPROVED ? 'Start free' : 'Contact us';
+
+export const metadata: Metadata = {
+  title: 'HeyLaunch — Thoughtful Instagram comment automation',
+  description:
+    'Prepare private replies for comments on supported Instagram photo and carousel posts, then review recorded delivery outcomes in one workspace.',
+  openGraph: {
+    title: 'HeyLaunch — Thoughtful Instagram comment automation',
+    description:
+      'Choose a supported post, match a comment, prepare an eligible private reply, and see what happened.',
+    type: 'website',
+    siteName: 'HeyLaunch',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'HeyLaunch — Thoughtful Instagram comment automation',
+    description: 'Prepare a reply for supported Instagram comment workflows and review delivery outcomes.',
+  },
 };
 
-const C = {
-  bg: '#ffffff', soft: '#F5F9F8', softer: '#ECF3F1', line: '#E4ECEA', lineSoft: '#EEF3F2',
-  ink: '#0C1D1A', ink2: '#15302B', muted: '#5C7872', faint: '#8AA39D',
-  teal: '#12807A', tealD: '#0C5F5A', tealSoft: '#E1F1EF', coral: '#F15F2C', coralSoft: '#FDECE4',
-  green: '#16936A', amber: '#C9820C',
-};
+const plans = [
+  {
+    name: 'Free',
+    price: '₹0',
+    cadence: '',
+    note: 'A simple place to begin.',
+    features: ['1 Instagram account', '150 DMs / month', '1 keyword per automation', 'Supported post comment triggers', 'Live status + delivery log'],
+  },
+  {
+    name: 'Creator',
+    price: '₹299',
+    cadence: '/ 30 days',
+    note: 'For a growing creator workflow.',
+    features: ['2 Instagram accounts', '2,000 DMs / month', 'Up to 5 keywords per automation', 'Supported post comment triggers', 'Follow-ups'],
+  },
+  {
+    name: 'Pro',
+    price: '₹599',
+    cadence: '/ 30 days',
+    note: 'For a busy business account.',
+    features: ['5 Instagram accounts', '10,000 DMs / month', 'Unlimited keywords', 'Supported post comment triggers', 'Follow-ups and click tracking'],
+    featured: true,
+  },
+  {
+    name: 'Agency',
+    price: '₹1,499',
+    cadence: '/ 30 days',
+    note: 'For managing several accounts.',
+    features: ['15 Instagram accounts', '50,000 DMs / month', 'Unlimited keywords', 'Supported post comment triggers', 'Follow-ups and click tracking'],
+  },
+];
 
-const S = { wrap: { maxWidth: 1180, margin: '0 auto', padding: '0 32px' } as const };
+const faqs = [
+  {
+    question: 'Which Instagram posts can I automate?',
+    answer:
+      'The current workflow supports comment automations on eligible Instagram photo and carousel posts. Reliable Reel-specific automation has not been verified in staging, so HeyLaunch does not advertise it as available.',
+  },
+  {
+    question: 'Does HeyLaunch send a private reply for every comment?',
+    answer:
+      'No. A matching comment can qualify for a private reply when the connected professional account, granted permissions, Meta messaging rules, and applicable reply window allow it. HeyLaunch records sent, skipped, and failed outcomes for review.',
+  },
+  {
+    question: 'Do I share my Instagram password?',
+    answer:
+      'No. Account connections use Meta’s official authorization flow. HeyLaunch does not ask for your Instagram password or use browser bots.',
+  },
+  {
+    question: 'What happens if my connection needs attention?',
+    answer:
+      'The dashboard shows connection health and recorded automation outcomes. If access expires or a required permission is unavailable, reconnect the account before expecting new automations to run.',
+  },
+  {
+    question: 'Do paid plans renew automatically?',
+    answer:
+      'No. Each payment provides 30 days of access. Renew manually when you want to continue.',
+  },
+  {
+    question: 'Can an agency give each client a separate workspace?',
+    answer:
+      'Not yet. The Agency plan can connect multiple Instagram accounts under one HeyLaunch login. Separate client workspaces and team permissions are not available.',
+  },
+];
+
+function Brand() {
+  return (
+    <Link href="/" className={styles.brand} aria-label="HeyLaunch home">
+      <Image src="/heylaunch-logo.png" alt="HeyLaunch" width={130} height={37} priority />
+    </Link>
+  );
+}
+
+function ReplyPathDemo() {
+  return (
+    <div className={styles.replyPath} aria-label="Illustrative comment automation workflow">
+      <div className={styles.demoHeader}>
+        <span><Instagram size={15} aria-hidden="true" /> A supported post</span>
+        <span className={styles.exampleTag}>Illustrative example</span>
+      </div>
+
+      <div className={styles.pathBody}>
+        <div className={styles.pathRail} aria-hidden="true"><span /><span /><span /></div>
+        <article className={styles.pathStep}>
+          <span className={styles.pathIndex}>01</span>
+          <div className={styles.commentCard}>
+            <div className={styles.commentAvatar} aria-hidden="true">M</div>
+            <div className={styles.commentText}><small>COMMENT · @mira</small><p>Could you share the guide?</p></div>
+            <MessageCircle size={17} aria-hidden="true" />
+          </div>
+        </article>
+        <article className={styles.pathStep}>
+          <span className={styles.pathIndex}>02</span>
+          <div className={styles.matchCard}>
+            <div className={styles.matchMark}><Check size={16} aria-hidden="true" /></div>
+            <div><small>YOUR KEYWORD RULE</small><p>“guide” found in comment</p></div>
+            <span className={styles.matchState}>MATCH</span>
+          </div>
+        </article>
+        <article className={styles.pathStep}>
+          <span className={styles.pathIndex}>03</span>
+          <div className={styles.replyCard}>
+            <div className={styles.replyLabel}><MessageCircle size={15} aria-hidden="true" /><small>PREPARED PRIVATE REPLY</small></div>
+            <p>Thanks for asking. Here’s the guide you wanted.</p>
+            <div className={styles.replyFooter}><span>Sent only when eligible</span><ArrowUpRight size={14} aria-hidden="true" /></div>
+          </div>
+        </article>
+      </div>
+      <div className={styles.demoFoot}><ShieldCheck size={14} aria-hidden="true" /><span>Meta permissions, account eligibility, and messaging limits apply</span></div>
+    </div>
+  );
+}
 
 export default function Home() {
   return (
-    <main style={{ background: C.bg, color: C.ink, fontFamily: 'Inter, system-ui, sans-serif', WebkitFontSmoothing: 'antialiased' }}>
-      <style>{`
-        @keyframes rlp{0%,100%{opacity:.4}50%{opacity:1}}
-        .rl-live{animation:rlp 2.4s ease-in-out infinite}
-        .rl-l{transition:color .15s}.rl-l:hover{color:${C.ink} !important}
-        .rl-b{transition:transform .14s ease, box-shadow .18s ease, filter .14s}
-        .rl-b:hover{filter:brightness(1.05);transform:translateY(-1px)}
-        .rl-card{transition:transform .2s ease, box-shadow .2s ease}
-        .rl-card:hover{transform:translateY(-4px);box-shadow:0 22px 48px -20px rgba(12,29,26,.18)}
-        details.rl-faq{border-bottom:1px solid ${C.line}}
-        details.rl-faq summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:22px 2px;font-size:17px;font-weight:600;color:${C.ink}}
-        details.rl-faq summary::-webkit-details-marker{display:none}
-        details.rl-faq summary .rl-plus{color:${C.teal};font-size:22px;font-weight:400;transition:transform .2s}
-        details.rl-faq[open] summary .rl-plus{transform:rotate(45deg)}
-        details.rl-faq p{padding:0 2px 22px;color:${C.muted};font-size:15.5px;line-height:1.65;max-width:720px}
-        @media(max-width:920px){.rl-hero{grid-template-columns:1fr !important;gap:44px !important}.rl-3{grid-template-columns:1fr !important}.rl-2{grid-template-columns:1fr !important}.rl-split{grid-template-columns:1fr !important}.rl-navlinks{display:none !important}}
-      `}</style>
-
-      {/* ───── nav ───── */}
-      <nav style={{ position: 'sticky', top: 0, zIndex: 40, background: '#ffffffcc', backdropFilter: 'blur(12px)', borderBottom: `1px solid ${C.line}` }}>
-        <div style={{ ...S.wrap, height: 72, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 11, fontWeight: 700, fontSize: 21, letterSpacing: '-.5px', color: C.teal }}>
-            <span style={{ width: 23, height: 23, borderRadius: '50%', border: `2.5px solid ${C.teal}`, display: 'grid', placeItems: 'center' }}>
-              <span className="rl-live" style={{ width: 8, height: 8, borderRadius: '50%', background: C.coral }} />
-            </span>relayo
+    <main className={styles.site} id="top">
+      <header className={styles.header}>
+        <div className={styles.headerInner}>
+          <Brand />
+          <nav aria-label="Main navigation" className={styles.desktopNav}>
+            <a href="#how-it-works">How it works</a>
+            <a href="#plans">Plans</a>
+            <a href="#questions">Questions</a>
+          </nav>
+          <div className={styles.headerActions}>
+            <Link href="/login" className={styles.login}>Log in</Link>
+            <Link href={signupCtaHref} className={styles.headerCta}>{signupCtaLabel}<ArrowUpRight size={16} aria-hidden="true" /></Link>
           </div>
-          <div className="rl-navlinks" style={{ display: 'flex', alignItems: 'center', gap: 32, fontSize: 15, color: C.muted }}>
-            <a href="#why" className="rl-l" style={{ color: C.muted, textDecoration: 'none' }}>Why Relayo</a>
-            <a href="#features" className="rl-l" style={{ color: C.muted, textDecoration: 'none' }}>Features</a>
-            <a href="#how" className="rl-l" style={{ color: C.muted, textDecoration: 'none' }}>How it works</a>
-            <a href="#pricing" className="rl-l" style={{ color: C.muted, textDecoration: 'none' }}>Pricing</a>
-            <Link href="/login" className="rl-l" style={{ color: C.muted, textDecoration: 'none' }}>Log in</Link>
-            <Link href="/signup" className="rl-b" style={{ background: C.ink, color: '#fff', padding: '10px 18px', borderRadius: 10, fontWeight: 600, textDecoration: 'none' }}>Start free</Link>
-          </div>
-          <Link href="/signup" className="rl-navlinks" style={{ display: 'none' }}>&nbsp;</Link>
+          <details className={styles.mobileNav}>
+            <summary aria-label="Open navigation"><span /><span /></summary>
+            <nav aria-label="Mobile navigation">
+              <a href="#how-it-works">How it works</a>
+              <a href="#plans">Plans</a>
+              <a href="#questions">Questions</a>
+              <Link href="/login">Log in</Link>
+              <Link href={signupCtaHref}>{signupCtaLabel}</Link>
+            </nav>
+          </details>
         </div>
-      </nav>
+      </header>
 
-      {/* ───── hero ───── */}
-      <section style={{ background: `radial-gradient(900px 480px at 82% -10%, ${C.tealSoft} 0%, transparent 58%), radial-gradient(700px 400px at -5% 10%, ${C.coralSoft}66 0%, transparent 50%)`, borderBottom: `1px solid ${C.line}` }}>
-        <div style={{ ...S.wrap, padding: '72px 32px 88px' }}>
-          <div className="rl-hero" style={{ display: 'grid', gridTemplateColumns: '1.02fr .98fr', gap: 64, alignItems: 'center' }}>
-            <div>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#fff', border: `1px solid ${C.line}`, borderRadius: 999, padding: '7px 14px', fontSize: 13, fontWeight: 600, color: C.teal, boxShadow: '0 1px 3px rgba(12,29,26,.05)' }}>
-                <span className="rl-live" style={{ width: 7, height: 7, borderRadius: '50%', background: C.green }} /> Built on Instagram&rsquo;s official API
-              </div>
-              <h1 style={{ fontSize: 'clamp(44px,5.6vw,68px)', lineHeight: 1.03, letterSpacing: '-2.4px', fontWeight: 800, margin: '24px 0 0' }}>
-                The auto-DM<br />creators actually <span style={{ color: C.teal }}>trust.</span>
-              </h1>
-              <p style={{ color: C.muted, fontSize: 19.5, lineHeight: 1.6, maxWidth: 500, margin: '24px 0 34px' }}>
-                Relayo DMs everyone who comments your keyword &mdash; and shows you every send, flags every failure, and alerts you the second a connection drops. No more guessing if it&rsquo;s working.
-              </p>
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <Link href="/signup" className="rl-b" style={{ background: C.coral, color: '#fff', padding: '15px 28px', borderRadius: 12, fontWeight: 600, fontSize: 16.5, textDecoration: 'none', boxShadow: '0 12px 28px -10px rgba(241,95,44,.55)' }}>Start free &rarr;</Link>
-                <a href="#how" className="rl-b" style={{ background: '#fff', border: `1px solid ${C.line}`, color: C.ink, padding: '15px 28px', borderRadius: 12, fontWeight: 600, fontSize: 16.5, textDecoration: 'none' }}>See how it works</a>
-              </div>
-              <div style={{ display: 'flex', gap: 30, marginTop: 40, flexWrap: 'wrap' }}>
-                {[['Free', 'to start'], ['0', 'DMs lost to silent failures'], ['₹299', 'plans start here']].map(([a, b]) => (
-                  <div key={b}><div style={{ fontSize: 27, fontWeight: 700, letterSpacing: '-.8px' }}>{a}</div><div style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>{b}</div></div>
-                ))}
-              </div>
+      {!LEGAL_POLICIES_APPROVED && (
+        <div className={styles.previewNotice} role="status">
+          <span className={styles.noticeMark} aria-hidden="true" />
+          <span><strong>Launch preview</strong> Sign-up and checkout are paused while draft policies are reviewed.</span>
+          <a href="#plans">See plan details <ArrowRight size={14} aria-hidden="true" /></a>
+        </div>
+      )}
+
+      <section className={styles.hero} aria-labelledby="hero-title">
+        <div className={styles.heroInner}>
+          <div className={styles.heroCopy}>
+            <p className={styles.eyebrow}><span className={styles.eyebrowRule} />Instagram comment automation for creators</p>
+            <h1 id="hero-title">Someone asked.<br /><span>Reply with care.</span></h1>
+            <p className={styles.heroLead}>Prepare a thoughtful private reply for comments on supported photo and carousel posts. Then see what happened, all from one calm workspace.</p>
+            <div className={styles.heroActions}>
+              <Link href={signupCtaHref} className={styles.primaryButton}>{signupCtaLabel}<ArrowUpRight size={17} aria-hidden="true" /></Link>
+              <a href="#how-it-works" className={styles.secondaryButton}>See the reply path<ArrowDownRight size={16} aria-hidden="true" /></a>
             </div>
-            {/* hero product card */}
-            <div style={{ background: '#fff', border: `1px solid ${C.line}`, borderRadius: 22, overflow: 'hidden', boxShadow: '0 50px 100px -40px rgba(12,29,26,.32), 0 2px 10px rgba(12,29,26,.05)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: `1px solid ${C.line}`, background: C.soft }}>
-                <span style={{ fontSize: 13.5, fontWeight: 600, color: C.muted }}>Your automations</span>
-                <span style={{ fontSize: 12.5, color: C.green, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}><span className="rl-live" style={{ width: 7, height: 7, borderRadius: '50%', background: C.green }} />1,284 sent today</span>
-              </div>
-              {[
-                { n: 'Free guide on my Reel', m: '312 sent · 0 failed · fired 2 min ago', l: 'Healthy', c: C.green, bg: '#E7F5EE' },
-                { n: 'Price drop → DM', m: 'Instagram token expired', l: 'Needs reconnect', c: C.coral, bg: C.coralSoft },
-                { n: 'Webinar waitlist', m: 'Paused by you', l: 'Paused', c: C.muted, bg: '#EEF2F1' },
-              ].map((r) => (
-                <div key={r.n} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: `1px solid ${C.line}`, gap: 12 }}>
-                  <div style={{ minWidth: 0 }}><div style={{ fontSize: 15, fontWeight: 600 }}>{r.n}</div><div style={{ fontSize: 12.5, color: C.muted, marginTop: 3 }}>{r.m}</div></div>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: r.c, background: r.bg, padding: '5px 11px', borderRadius: 999, whiteSpace: 'nowrap' }}>{r.l}</span>
-                </div>
-              ))}
-              <div style={{ padding: '18px 20px' }}>
-                <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, fontWeight: 500 }}>DMs sent &middot; last 15 min</div>
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 48 }}>
-                  {[40, 55, 44, 66, 50, 72, 60, 68, 46, 70, 78, 63, 74, 60, 86].map((b, i, a) => (<div key={i} style={{ flex: 1, height: `${b}%`, borderRadius: 3, background: i === a.length - 1 ? C.teal : C.tealSoft }} />))}
-                </div>
-              </div>
+            <p className={styles.heroTrust}><ShieldCheck size={16} aria-hidden="true" />Official Meta authorization · No password sharing</p>
+          </div>
+          <ReplyPathDemo />
+        </div>
+        <div className={styles.audienceLine}>
+          <span>For the people behind the posts</span>
+          <div><span>Independent creators</span><span>Small businesses</span><span>Marketing teams</span></div>
+        </div>
+      </section>
+
+      <section className={styles.storySection} aria-labelledby="story-title">
+        <div className={styles.storyInner}>
+          <p className={styles.sectionNumber}><span>01</span> The reason we built HeyLaunch</p>
+          <div className={styles.storyContent}>
+            <h2 id="story-title">A comment is a person asking for the <em>next step.</em></h2>
+            <div className={styles.storyAside}>
+              <p>When you publish often, the same helpful answer can be easy to miss. Set up the reply once, choose the comment rule, and keep the outcome visible.</p>
+              <a href="#how-it-works">See how it works <ArrowRight size={15} aria-hidden="true" /></a>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ───── trust strip ───── */}
-      <section style={{ background: C.ink, color: '#fff' }}>
-        <div style={{ ...S.wrap, padding: '28px 32px', display: 'flex', flexWrap: 'wrap', gap: 28, alignItems: 'center', justifyContent: 'center', fontSize: 14.5, color: '#A6C4BE' }}>
-          {['Meta-verified official API', 'AES-256 encrypted tokens', 'No password sharing', 'T+1 India payouts', 'No per-contact pricing'].map((t, i) => (
-            <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-              {i > 0 && <span style={{ color: '#2F4A45' }}>|</span>}
-              <span style={{ color: C.coral }}>&#10003;</span>{t}
-            </span>
-          ))}
+      <section className={styles.workflowSection} id="how-it-works" aria-labelledby="workflow-title">
+        <div className={styles.workflowHeader}>
+          <div><p className={styles.eyebrow}><span className={styles.eyebrowRule} />A clear path from comment to response</p><h2 id="workflow-title">Set the rule.<br />Stay in the loop.</h2></div>
+          <p>Choose an eligible photo or carousel post. Decide what counts as a match. Write the reply in your own words.</p>
+        </div>
+        <div className={styles.workflowSteps}>
+          <article className={styles.workflowStep}>
+            <span className={styles.stepNumber}>01</span><span className={styles.stepRule} aria-hidden="true" />
+            <h3>Choose a post</h3><p>Select an Instagram photo or carousel from the connected professional account.</p>
+          </article>
+          <article className={styles.workflowStep}>
+            <span className={styles.stepNumber}>02</span><span className={styles.stepRule} aria-hidden="true" />
+            <h3>Match a comment</h3><p>Use a keyword rule or respond to any comment that meets the configured trigger.</p>
+          </article>
+          <article className={styles.workflowStep}>
+            <span className={styles.stepNumber}>03</span><span className={styles.stepRule} aria-hidden="true" />
+            <h3>Review the outcome</h3><p>Check whether a reply was sent, skipped, or failed and reconnect if access needs attention.</p>
+          </article>
+        </div>
+        <div className={styles.activityPanel} aria-label="Illustrative HeyLaunch activity log">
+          <div className={styles.activityHeading}><div><span className={styles.activityDot} /><strong>Activity, with context</strong></div><span>Illustrative interface</span></div>
+          <div className={styles.activityEntry}><span className={styles.activityGlyph}><MessageCircle size={17} aria-hidden="true" /></span><div><strong>Comment matched</strong><small>Keyword · “guide”</small></div><span className={styles.activityStatus}>MATCHED</span></div>
+          <div className={styles.activityEntry}><span className={styles.activityGlyph}><ArrowUpRight size={17} aria-hidden="true" /></span><div><strong>Private reply outcome</strong><small>See the recorded delivery status</small></div><span className={styles.activityStatus}>RECORDED</span></div>
+          <p className={styles.activityNote}>Example view only. This is not connected to a live Instagram account.</p>
         </div>
       </section>
 
-      {/* ───── problem ───── */}
-      <section id="why" style={{ background: C.soft, borderBottom: `1px solid ${C.line}` }}>
-        <div style={{ ...S.wrap, padding: '92px 32px' }}>
-          <div className="rl-split" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 56, alignItems: 'center' }}>
-            <div>
-              <div style={{ fontSize: 13.5, fontWeight: 700, color: C.coral, letterSpacing: '.2px' }}>The problem nobody fixes</div>
-              <h2 style={{ fontSize: 'clamp(30px,4vw,44px)', letterSpacing: '-1.4px', fontWeight: 800, lineHeight: 1.1, margin: '14px 0 0' }}>
-                Most auto-DM tools fail in silence.
-              </h2>
-              <p style={{ color: C.muted, fontSize: 18.5, lineHeight: 1.62, maxWidth: 520, marginTop: 18 }}>
-                A token expires. Meta pauses you. A webhook drops. The automation still shows &ldquo;live&rdquo; &mdash; but nothing goes out, and you only notice when the leads stop and the viral moment is gone.
-              </p>
-              <p style={{ color: C.ink, fontSize: 18.5, fontWeight: 600, marginTop: 18, maxWidth: 520 }}>Relayo is the only one built so that never happens to you quietly.</p>
-            </div>
-            {/* broken-state mock */}
-            <div style={{ background: '#fff', border: `1px solid ${C.coralSoft}`, borderRadius: 18, padding: 22, boxShadow: '0 20px 50px -24px rgba(241,95,44,.22)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, color: C.coral, fontWeight: 600, fontSize: 14 }}>
-                <span style={{ width: 9, height: 9, borderRadius: '50%', background: C.coral }} /> Break detected &middot; just now
-              </div>
-              <div style={{ fontSize: 15.5, fontWeight: 600 }}>Your automation on @yourbrand stopped sending.</div>
-              <div style={{ background: C.coralSoft, color: '#B4411F', borderRadius: 10, padding: '11px 14px', fontSize: 13.5, margin: '14px 0' }}>Instagram token expired &mdash; reconnect to resume.</div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <span style={{ background: C.coral, color: '#fff', padding: '9px 16px', borderRadius: 9, fontSize: 13.5, fontWeight: 600 }}>Reconnect @yourbrand</span>
-                <span style={{ border: `1px solid ${C.line}`, color: C.muted, padding: '9px 16px', borderRadius: 9, fontSize: 13.5 }}>View log</span>
-              </div>
-              <div style={{ fontSize: 12.5, color: C.faint, marginTop: 14 }}>Sent to you by email, the second it broke.</div>
-            </div>
-          </div>
+      <section className={styles.useCases} aria-labelledby="usecases-title">
+        <div className={styles.useCaseIntro}>
+          <p className={styles.sectionNumber}><span>02</span> Built for a real working day</p>
+          <h2 id="usecases-title">A little more room to be present.</h2>
+          <p>Use a prepared response for the moments when people ask for the same resource, detail, or next step.</p>
+        </div>
+        <div className={styles.useCaseList}>
+          <article><span>Creators & educators</span><h3>Share the guide, class, or resource they came for.</h3><p>Set up a reply for a supported post so a familiar question has a useful next step ready.</p></article>
+          <article><span>Small businesses</span><h3>Make product questions easier to answer.</h3><p>Prepare the detail or destination your audience asks for, and review what the workflow delivered.</p></article>
+          <article><span>Marketing teams</span><h3>Keep several account workflows in view.</h3><p>Connect accounts within your plan and review recent automation activity from one login.</p></article>
         </div>
       </section>
 
-      {/* ───── features ───── */}
-      <section id="features">
-        <div style={{ ...S.wrap, padding: '92px 32px' }}>
-          <div style={{ textAlign: 'center', maxWidth: 640, margin: '0 auto 56px' }}>
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: C.teal }}>What you get</div>
-            <h2 style={{ fontSize: 'clamp(30px,4vw,44px)', letterSpacing: '-1.4px', fontWeight: 800, marginTop: 12, lineHeight: 1.1 }}>Everything that proves it&rsquo;s working</h2>
-          </div>
-          <div className="rl-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 22 }}>
-            {[
-              { k: 'Live status', dot: C.green, d: 'Every automation reads Healthy, Needs reconnect, or Paused. Green means a comment right now gets its DM. No more wondering.' },
-              { k: 'Delivery log', dot: C.teal, d: 'A receipt for every run &mdash; matched, sent, skipped or failed, with the exact reason. Full visibility into every DM.' },
-              { k: 'Instant break alerts', dot: C.coral, d: 'The moment a token expires or Meta pauses you, we email you with a one-tap reconnect &mdash; before a single lead is lost.' },
-            ].map((f) => (
-              <div key={f.k} className="rl-card" style={{ background: '#fff', border: `1px solid ${C.line}`, borderRadius: 18, padding: 30, boxShadow: '0 1px 3px rgba(12,29,26,.04)' }}>
-                <span style={{ width: 12, height: 12, borderRadius: '50%', background: f.dot, display: 'inline-block' }} />
-                <h3 style={{ fontSize: 21, fontWeight: 700, margin: '18px 0 10px', letterSpacing: '-.4px' }}>{f.k}</h3>
-                <p style={{ color: C.muted, fontSize: 15.5, lineHeight: 1.62 }} dangerouslySetInnerHTML={{ __html: f.d }} />
-              </div>
+      <section className={styles.pricingSection} id="plans" aria-labelledby="plans-title">
+        <div className={styles.pricingInner}>
+          <div className={styles.pricingHead}><div><p className={styles.eyebrow}><span className={styles.eyebrowRule} />Plans with clear limits</p><h2 id="plans-title">Start with one.<br />Grow at your pace.</h2></div><p>{LEGAL_POLICIES_APPROVED ? 'Start with a 2-day Pro trial after verified sign-up. No card is required.' : 'Plan details are available for review. Sign-up and checkout are paused while draft policies are reviewed.'}</p></div>
+          <div className={styles.planGrid}>
+            {plans.map((plan) => (
+              <article key={plan.name} className={`${styles.plan} ${plan.featured ? styles.planFeatured : ''}`}>
+                {plan.featured && <span className={styles.planFlag}>Most room to grow</span>}
+                <h3>{plan.name}</h3><p className={styles.planNote}>{plan.note}</p>
+                <p className={styles.planPrice}>{plan.price}<span>{plan.cadence}</span></p>
+                <ul>{plan.features.map((feature) => <li key={feature}><CheckCircle2 size={16} aria-hidden="true" />{feature}</li>)}</ul>
+                <Link className={styles.planCta} href={signupCtaHref}>{LEGAL_POLICIES_APPROVED && plan.name !== 'Free' ? 'Start free trial' : signupCtaLabel}<ArrowUpRight size={15} aria-hidden="true" /></Link>
+              </article>
             ))}
           </div>
-          {/* secondary features row */}
-          <div className="rl-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 22, marginTop: 22 }}>
-            {[
-              ['Comment, Story, Live & DM triggers', 'Fire on any surface Instagram offers.'],
-              ['Follow-ups within 24h', 'Nudge people who didn’t click or reply.'],
-              ['Personalized DMs', 'Drop in the commenter’s name automatically.'],
-              ['Public reply + button cards', 'Reply under the comment and send rich buttons.'],
-              ['Up to 5 accounts', 'Run agencies and multiple brands from one login.'],
-              ['Flat, honest pricing', 'Unlimited contacts. Your viral reel never spikes the bill.'],
-            ].map(([t, d]) => (
-              <div key={t} style={{ display: 'flex', gap: 12, padding: '8px 4px' }}>
-                <span style={{ color: C.teal, fontSize: 18, lineHeight: '24px' }}>&#10003;</span>
-                <div><div style={{ fontWeight: 600, fontSize: 15.5 }}>{t}</div><div style={{ color: C.muted, fontSize: 14, marginTop: 3 }}>{d}</div></div>
-              </div>
-            ))}
+          <p className={styles.planCaveat}>Each paid plan provides 30 days of access. Paid access does not renew automatically. Reel-specific automation, story replies, and incoming DM triggers are not verified for reliable staging use. Agency accounts currently share one login; client workspaces and team permissions are not available.</p>
+        </div>
+      </section>
+
+      <section className={styles.scopeSection} aria-labelledby="scope-title">
+        <div className={styles.scopeTop}>
+          <p className={styles.sectionNumber}><span>03</span> Clear about what works today</p>
+          <h2 id="scope-title">Trust starts with <em>the truth.</em></h2>
+        </div>
+        <div className={styles.scopeBody}>
+          <p>The product is built around Instagram photo and carousel comment automations. A live staging account still needs to confirm end-to-end delivery across connected accounts.</p>
+          <div className={styles.scopeRows}>
+            <div><Check size={16} aria-hidden="true" /><strong>Photo & carousel comment automations</strong><span>Implemented · staging verification pending</span></div>
+            <div><span className={styles.scopeHollow} aria-hidden="true" /><strong>Unified inbox</strong><span>In development</span></div>
+            <div><span className={styles.scopeHollow} aria-hidden="true" /><strong>Public creator profiles</strong><span>In development</span></div>
           </div>
         </div>
       </section>
 
-      {/* ───── how ───── */}
-      <section id="how" style={{ background: C.soft, borderTop: `1px solid ${C.line}`, borderBottom: `1px solid ${C.line}` }}>
-        <div style={{ ...S.wrap, padding: '92px 32px' }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: C.teal }}>How it works</div>
-            <h2 style={{ fontSize: 'clamp(30px,4vw,44px)', letterSpacing: '-1.4px', fontWeight: 800, marginTop: 12 }}>Live in under a minute</h2>
-          </div>
-          <div className="rl-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 28, marginTop: 56 }}>
-            {[
-              ['Connect Instagram', 'Link your professional account through Meta. No password sharing, official API only.'],
-              ['Set a trigger & keyword', 'Pick a post or Reel, choose the keyword, write the DM and buttons in a 3-step builder.'],
-              ['Go live & watch it work', 'Every matching comment gets your DM instantly — and you watch each one land, live.'],
-            ].map(([t, d], i) => (
-              <div key={t} style={{ background: '#fff', border: `1px solid ${C.line}`, borderRadius: 18, padding: 30 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 13, background: C.tealSoft, color: C.teal, display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 18 }}>{i + 1}</div>
-                <h3 style={{ fontSize: 19, fontWeight: 700, marginTop: 18, letterSpacing: '-.3px' }}>{t}</h3>
-                <p style={{ color: C.muted, fontSize: 15.5, marginTop: 8, lineHeight: 1.6 }}>{d}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+      <section className={styles.faqSection} id="questions" aria-labelledby="faq-title">
+        <div className={styles.faqTitle}><p className={styles.eyebrow}><span className={styles.eyebrowRule} />Before you get started</p><h2 id="faq-title">Good questions.<br />Straight answers.</h2></div>
+        <div className={styles.faqList}>{faqs.map((faq, index) => <details key={faq.question} className={styles.faq}><summary><span><small>{String(index + 1).padStart(2, '0')}</small>{faq.question}</span><ChevronDown size={19} aria-hidden="true" /></summary><p>{faq.answer}</p></details>)}</div>
       </section>
 
-      {/* ───── pricing ───── */}
-      <section id="pricing">
-        <div style={{ maxWidth: 1120, margin: '0 auto', padding: '92px 32px' }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: C.teal }}>Pricing</div>
-            <h2 style={{ fontSize: 'clamp(30px,4vw,44px)', letterSpacing: '-1.4px', fontWeight: 800, marginTop: 12 }}>Simple plans that scale with you.</h2>
-            <p style={{ color: C.muted, fontSize: 17.5, maxWidth: 540, margin: '14px auto 0', lineHeight: 1.6 }}>Start free. Every paid plan begins with a 2-day full-Pro trial — upgrade when you&rsquo;re ready.</p>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 18, marginTop: 52 }}>
-            {[
-              { name: 'Free', price: '₹0', per: '', sub: 'For getting started.', popular: false, cta: 'Start free', items: ['1 Instagram account', '1 keyword per automation', '150 DMs / month', 'Post & Reel triggers', 'Live status + delivery log'] },
-              { name: 'Creator', price: '₹299', per: ' /mo', sub: 'For growing creators.', popular: false, cta: 'Start free trial', items: ['2 Instagram accounts', 'Up to 5 keywords', '2,000 DMs / month', 'Stories, Lives & DMs', 'Follow-ups & ask-to-follow'] },
-              { name: 'Pro', price: '₹599', per: ' /mo', sub: 'For serious businesses.', popular: true, cta: 'Start free trial', items: ['5 Instagram accounts', 'Unlimited keywords', '10,000 DMs / month', 'Advanced workflows', 'Lead collection & export'] },
-              { name: 'Agency', price: '₹1,499', per: ' /mo', sub: 'For teams & agencies.', popular: false, cta: 'Start free trial', items: ['15 Instagram accounts', 'Unlimited keywords', '50,000 DMs / month', 'Client workspaces', 'Team access & reports'] },
-            ].map((p) => (
-              <div key={p.name} style={{ background: '#fff', border: p.popular ? `2px solid ${C.teal}` : `1px solid ${C.line}`, borderRadius: 20, padding: 28, position: 'relative', boxShadow: p.popular ? '0 28px 56px -26px rgba(18,128,122,.4)' : undefined }}>
-                {p.popular && <span style={{ position: 'absolute', top: -13, left: 28, background: C.teal, color: '#fff', fontSize: 12, fontWeight: 700, padding: '5px 13px', borderRadius: 999 }}>Most popular</span>}
-                <div style={{ fontSize: 16, fontWeight: 700 }}>{p.name}</div>
-                <div style={{ fontSize: 38, fontWeight: 800, letterSpacing: '-1.6px', margin: '8px 0' }}>{p.price}<span style={{ fontSize: 15, color: C.muted, fontWeight: 500 }}>{p.per}</span></div>
-                <div style={{ color: C.muted, fontSize: 13.5, marginBottom: 18 }}>{p.sub}</div>
-                <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 26px', display: 'grid', gap: 10 }}>
-                  {p.items.map((x) => (<li key={x} style={{ color: C.ink, fontSize: 14, display: 'flex', gap: 9 }}><span style={{ color: C.teal, fontWeight: 700 }}>&#10003;</span>{x}</li>))}
-                </ul>
-                <Link href="/signup" className="rl-b" style={{ display: 'block', textAlign: 'center', background: p.popular ? C.teal : '#fff', color: p.popular ? '#fff' : C.ink, border: p.popular ? 'none' : `1px solid ${C.line}`, padding: '13px', borderRadius: 12, fontWeight: 600, textDecoration: 'none' }}>{p.cta}</Link>
-              </div>
-            ))}
-          </div>
-          <p style={{ color: C.muted, fontSize: 13, textAlign: 'center', marginTop: 24 }}>Prices in INR &middot; 2-day free trial on every plan &middot; Cancel anytime</p>
-        </div>
+      <section className={styles.lastCall}>
+        <div className={styles.lastCallInner}><div><p className={styles.eyebrowLight}><span className={styles.eyebrowRule} />Every message is someone reaching out</p><h2>Make room<br />to <em>reach back.</em></h2></div><div className={styles.lastCallAction}><p>Start with a supported post and a reply you’re proud to send.</p><Link href={signupCtaHref} className={styles.lastButton}>{LEGAL_POLICIES_APPROVED ? 'Start free' : 'Contact us for launch updates'}<ArrowUpRight size={17} aria-hidden="true" /></Link></div></div>
       </section>
 
-      {/* ───── faq ───── */}
-      <section style={{ background: C.soft, borderTop: `1px solid ${C.line}` }}>
-        <div style={{ maxWidth: 820, margin: '0 auto', padding: '92px 32px' }}>
-          <h2 style={{ fontSize: 'clamp(28px,3.6vw,40px)', letterSpacing: '-1.2px', fontWeight: 800, textAlign: 'center', marginBottom: 40 }}>Questions, answered</h2>
-          {[
-            ['Is this safe for my Instagram account?', 'Yes. Relayo uses Instagram’s official Meta API with proper login — no password sharing and no browser bots. Your access token is encrypted at rest with AES-256.'],
-            ['What makes Relayo different from ManyChat or SuperProfile?', 'Reliability you can see. Other tools fail silently; Relayo shows live status on every automation, logs every DM, and emails you the moment a connection drops — before you lose leads.'],
-            ['Does pricing go up as my audience grows?', 'Your price depends on the plan you pick, not your follower count. Each plan includes a monthly DM volume — upgrade only when you outgrow it.'],
-            ['Which triggers are supported?', 'Comments on posts and Reels, Story replies, Live comments, and incoming DMs — with keyword or any-comment matching.'],
-            ['Can I run multiple accounts or clients?', 'Yes. Plans scale from 2 accounts on Creator up to 15 on Agency, all under one login — built for creators and agencies.'],
-          ].map(([q, a]) => (
-            <details key={q} className="rl-faq"><summary>{q}<span className="rl-plus">+</span></summary><p>{a}</p></details>
-          ))}
+      <footer className={styles.footer}>
+        <div className={styles.footerMain}>
+          <div className={styles.footerBrand}><Brand /><p>Thoughtful Instagram comment automation for creators and small teams.</p><span>Independent product. Not affiliated with or endorsed by Instagram or Meta.</span></div>
+          <div className={styles.footerColumn}><h2>Explore</h2><a href="#how-it-works">How it works</a><a href="#plans">Plans</a><a href="#questions">Questions</a></div>
+          <div className={styles.footerColumn}><h2>HeyLaunch</h2><Link href="/contact">Contact</Link><Link href="/login">Log in</Link><Link href={signupCtaHref}>{signupCtaLabel}</Link></div>
+          <div className={styles.footerColumn}><h2>Legal</h2><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/refunds">Refunds</Link></div>
         </div>
-      </section>
-
-      {/* ───── final cta ───── */}
-      <section>
-        <div style={{ ...S.wrap, padding: '36px 32px 64px' }}>
-          <div style={{ background: `linear-gradient(150deg, ${C.ink} 0%, ${C.ink2} 100%)`, borderRadius: 30, padding: '80px 32px', textAlign: 'center', color: '#fff', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: -80, right: -40, width: 280, height: 280, borderRadius: '50%', background: 'rgba(18,128,122,.3)', filter: 'blur(100px)' }} />
-            <h2 style={{ fontSize: 'clamp(32px,4.6vw,52px)', letterSpacing: '-1.6px', fontWeight: 800, lineHeight: 1.08, position: 'relative' }}>Stop guessing. Start knowing.</h2>
-            <p style={{ color: '#A6C4BE', fontSize: 18.5, margin: '16px auto 32px', maxWidth: 480, position: 'relative' }}>Set up your first automation free, and never wonder if your auto-DM fired again.</p>
-            <Link href="/signup" className="rl-b" style={{ display: 'inline-block', background: C.coral, color: '#fff', padding: '16px 34px', borderRadius: 14, fontWeight: 600, fontSize: 17, textDecoration: 'none', position: 'relative' }}>Start free &rarr;</Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ───── footer ───── */}
-      <footer style={{ borderTop: `1px solid ${C.line}`, background: C.bg }}>
-        <div style={{ ...S.wrap, padding: '56px 32px 40px' }}>
-          <div className="rl-split" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr', gap: 32 }}>
-            <div>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, color: C.teal, fontWeight: 700, fontSize: 19 }}>
-                <span style={{ width: 20, height: 20, borderRadius: '50%', border: `2.5px solid ${C.teal}`, display: 'grid', placeItems: 'center' }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: C.coral }} /></span>relayo
-              </div>
-              <p style={{ color: C.muted, fontSize: 14.5, marginTop: 12, maxWidth: 260, lineHeight: 1.6 }}>Reliable Instagram auto-DM for creators and brands who can&rsquo;t afford to miss a lead.</p>
-            </div>
-            {[['Product', ['Features', 'Pricing', 'How it works']], ['Company', ['About', 'Blog', 'Contact']], ['Legal', ['Privacy', 'Terms', 'Refunds']]].map(([h, items]) => (
-              <div key={h as string}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, textTransform: 'none', marginBottom: 14 }}>{h as string}</div>
-                {(items as string[]).map((it) => (<div key={it} style={{ fontSize: 14.5, color: C.muted, marginBottom: 10 }}>{it}</div>))}
-              </div>
-            ))}
-          </div>
-          <div style={{ borderTop: `1px solid ${C.line}`, marginTop: 40, paddingTop: 24, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, fontSize: 13, color: C.faint }}>
-            <span>&copy; 2026 Relayo. All rights reserved.</span>
-            <span style={{ maxWidth: 560, textAlign: 'right' }}>Relayo is an independent product, not affiliated with or endorsed by Instagram or Meta. Instagram is a trademark of Meta Platforms, Inc.</span>
-          </div>
-        </div>
+        <div className={styles.footerBottom}><span>© 2026 HeyLaunch. All rights reserved.</span><a href="#top">Back to top <ArrowUpRight size={14} aria-hidden="true" /></a></div>
       </footer>
     </main>
   );

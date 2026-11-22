@@ -21,15 +21,18 @@ export class TokenRefreshService {
     if (account.lastAlertAt && Date.now() - account.lastAlertAt.getTime() < 86400000) return;
     const user = await this.prisma.user.findUnique({ where: { id: account.userId }, select: { email: true } });
     if (user?.email) {
-      await this.mail.sendBreakAlert(user.email, account.username, reason);
-      await this.prisma.igAccount.update({ where: { id: account.id }, data: { lastAlertAt: new Date() } });
+      const sent = await this.mail.sendBreakAlert(user.email, account.username, reason);
+      if (sent) await this.prisma.igAccount.update({ where: { id: account.id }, data: { lastAlertAt: new Date() } });
     }
   }
 
   async refreshExpiring(withinDays = 7): Promise<{ checked: number; refreshed: number }> {
     const cutoff = new Date(Date.now() + withinDays * 86400000);
     const accounts = await this.prisma.igAccount.findMany({
-      where: { isActive: true, tokenExpiresAt: { lte: cutoff } },
+      where: { isActive: true, loginMode: 'INSTAGRAM_LOGIN', tokenExpiresAt: { lte: cutoff }, user: { suspendedAt: null, deletionRequestedAt: null } },
+    });
+    const unifiedExpiring = await this.prisma.igAccount.findMany({
+      where: { isActive: true, loginMode: 'UNIFIED_LOGIN', tokenExpiresAt: { lte: cutoff }, user: { suspendedAt: null, deletionRequestedAt: null } },
     });
     let refreshed = 0;
     for (const a of accounts) {
@@ -42,11 +45,21 @@ export class TokenRefreshService {
         });
         refreshed++;
       } catch (e: any) {
-        this.log.warn(`Token refresh failed for @${a.username}: ${e?.response?.data?.error?.message ?? e.message}`);
+        const status = Number.isInteger(e?.response?.status) ? e.response.status : 'network';
+        const rawCode = e?.response?.data?.error?.code;
+        const code = Number.isInteger(rawCode) || (typeof rawCode === 'string' && /^\d{1,6}$/.test(rawCode))
+          ? String(rawCode)
+          : 'unknown';
+        this.log.warn(`Token refresh failed status=${status} providerCode=${code}`);
         await this.alert(a, 'Instagram connection expired — reconnect to resume sending.');
       }
     }
-    if (accounts.length) this.log.log(`Token refresh: ${refreshed}/${accounts.length} refreshed`);
-    return { checked: accounts.length, refreshed };
+    for (const a of unifiedExpiring) {
+      await this.alert(a, 'Unified Instagram connection is nearing token expiry. Reconnect the account to keep automation running.');
+    }
+    if (accounts.length || unifiedExpiring.length) {
+      this.log.log(`Token maintenance: ${refreshed}/${accounts.length} legacy tokens refreshed; ${unifiedExpiring.length} Unified Login token(s) need reconnection`);
+    }
+    return { checked: accounts.length + unifiedExpiring.length, refreshed };
   }
 }

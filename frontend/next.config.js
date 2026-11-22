@@ -1,9 +1,17 @@
+const path = require('path');
+const { PHASE_DEVELOPMENT_SERVER } = require('next/constants');
+
 /** @type {import('next').NextConfig} */
-const nextConfig = {
+const createNextConfig = (phase) => ({
+  // `next dev` and `next build` must not share manifests or chunks. A build
+  // during local development otherwise replaces `.next` files that the dev
+  // server still references, producing missing chunk/CSS responses.
+  distDir: phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next',
   output: 'standalone',
-  images: {
-    domains: ['graph.instagram.com', 'cdninstagram.com'],
-  },
+  outputFileTracingRoot: path.join(__dirname, '..'),
+  // The build script runs ESLint directly; Next 15's embedded lint wrapper
+  // currently misreads this ESLint 9 flat config.
+  eslint: { ignoreDuringBuilds: true },
   async headers() {
     return [
       {
@@ -17,6 +25,6 @@ const nextConfig = {
       },
     ];
   },
-};
+});
 
-module.exports = nextConfig;
+module.exports = createNextConfig;

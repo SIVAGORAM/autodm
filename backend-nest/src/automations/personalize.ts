@@ -16,6 +16,6 @@ export function personalize(text: string, ctx: PersonalizeCtx): string {
   };
   return text.replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (whole, key: string) => {
     const k = key.toLowerCase();
-    return k in map ? map[k] : whole;
+    return Object.prototype.hasOwnProperty.call(map, k) ? map[k] : whole;
   });
 }

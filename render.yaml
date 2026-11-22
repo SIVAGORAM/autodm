@@ -7,19 +7,29 @@ services:
     runtime: node
     rootDir: backend-nest
     plan: free
-    buildCommand: npm install && npx prisma generate && npm run build
+    buildCommand: npm ci && npx prisma generate && npm run build
     startCommand: npx prisma migrate deploy && node dist/main.js
-    healthCheckPath: /health
-    autoDeploy: true
+    healthCheckPath: /ready
+    autoDeploy: false
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: 24.22.1
       - key: COOKIE_SECURE
         value: "true"
       - key: PORT
         value: "4000"
       - key: META_GRAPH_VERSION
-        value: v21.0
+        value: v26.0
+      - key: META_UNIFIED_LOGIN_ENABLED
+        value: "false"
+      - key: WEBHOOK_PAYLOAD_RETENTION_DAYS
+        value: "30"
+      - key: UNVERIFIED_ACCOUNT_RETENTION_DAYS
+        value: "30"
+      - key: LEGAL_POLICY_STATUS
+        value: DRAFT
       # ── secrets: set these in the Render dashboard (sync:false = not in repo) ──
       - key: DATABASE_URL
         sync: false
@@ -39,9 +49,21 @@ services:
         sync: false
       - key: META_WEBHOOK_VERIFY_TOKEN
         sync: false
+      - key: META_UNIFIED_LOGIN_CONFIG_ID
+        value: ""
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CLOUDINARY_AVATAR_FOLDER
+        value: heylaunch/avatars
       - key: RAZORPAY_KEY_ID
         sync: false
       - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
         sync: false
       - key: SMTP_HOST
         sync: false
@@ -53,10 +75,152 @@ services:
         sync: false
       - key: MAIL_FROM
         sync: false
+      - key: SUPPORT_NOTIFICATION_EMAIL
+        sync: false
       - key: PUBLIC_URL        # = this service's URL, e.g. https://relayo-api.onrender.com
         sync: false
       - key: CORS_ORIGIN       # = your frontend URL, e.g. https://relayo-frontend.onrender.com
         sync: false
+
+  # The API only enqueues work. This always-on process sends DMs and refreshes
+  # Instagram tokens; without it the queue will grow while users see no sends.
+  - type: worker
+    name: relayo-worker
+    runtime: node
+    rootDir: backend-nest
+    plan: 0.5c-512mb
+    buildCommand: npm ci && npx prisma generate && npm run build
+    startCommand: npm run start:worker
+    autoDeploy: false
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 24.22.1
+      - key: DATABASE_URL
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: DATABASE_URL
+      - key: DIRECT_URL
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: DIRECT_URL
+      - key: REDIS_URL
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: REDIS_URL
+      - key: JWT_ACCESS_SECRET
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: JWT_ACCESS_SECRET
+      - key: JWT_REFRESH_SECRET
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: JWT_REFRESH_SECRET
+      - key: ENCRYPTION_KEY
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: ENCRYPTION_KEY
+      - key: META_APP_ID
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: META_APP_ID
+      - key: META_APP_SECRET
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: META_APP_SECRET
+      - key: META_WEBHOOK_VERIFY_TOKEN
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: META_WEBHOOK_VERIFY_TOKEN
+      - key: META_GRAPH_VERSION
+        value: v26.0
+      - key: META_UNIFIED_LOGIN_ENABLED
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: META_UNIFIED_LOGIN_ENABLED
+      - key: META_UNIFIED_LOGIN_CONFIG_ID
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: META_UNIFIED_LOGIN_CONFIG_ID
+      - key: WEBHOOK_PAYLOAD_RETENTION_DAYS
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: WEBHOOK_PAYLOAD_RETENTION_DAYS
+      - key: UNVERIFIED_ACCOUNT_RETENTION_DAYS
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: UNVERIFIED_ACCOUNT_RETENTION_DAYS
+      - key: RAZORPAY_KEY_ID
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: RAZORPAY_KEY_ID
+      - key: RAZORPAY_KEY_SECRET
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: RAZORPAY_KEY_SECRET
+      - key: RAZORPAY_WEBHOOK_SECRET
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: RAZORPAY_WEBHOOK_SECRET
+      - key: SMTP_HOST
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: SMTP_HOST
+      - key: SMTP_PORT
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: SMTP_PORT
+      - key: SMTP_USER
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: SMTP_USER
+      - key: SMTP_PASS
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: SMTP_PASS
+      - key: MAIL_FROM
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: MAIL_FROM
+      - key: SUPPORT_NOTIFICATION_EMAIL
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: SUPPORT_NOTIFICATION_EMAIL
+      - key: PUBLIC_URL
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: PUBLIC_URL
+      - key: CORS_ORIGIN
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: CORS_ORIGIN
+      - key: COOKIE_SECURE
+        value: "true"
 
   # ───── Frontend (Next.js) ─────
   - type: web
@@ -64,11 +228,17 @@ services:
     runtime: node
     rootDir: frontend
     plan: free
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     startCommand: npm start
-    autoDeploy: true
+    autoDeploy: false
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: 24.22.1
       - key: NEXT_PUBLIC_API_URL   # = your API URL, e.g. https://relayo-api.onrender.com
         sync: false
+      - key: NEXT_PUBLIC_SITE_URL # = the canonical public site origin, including your custom domain
+        sync: false
+      - key: NEXT_PUBLIC_LEGAL_POLICY_STATUS
+        value: DRAFT

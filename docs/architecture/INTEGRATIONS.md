@@ -1,0 +1,57 @@
+# Integrations and background services
+
+## Meta / Instagram
+
+**Purpose:** Instagram professional account connection, media listing, signed webhook events, private replies, direct messages, comment replies, and long-lived token refresh.
+
+**Configuration:** `META_APP_ID`, `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`, `META_GRAPH_VERSION`, optional `META_HTTPS_PROXY`, and HTTPS `PUBLIC_URL`; see `backend-nest/src/config/env.ts` and `render.yaml`. Meta API calls bypass generic process proxy variables by default; an explicit HTTP(S) proxy can be supplied when the hosting network requires one. HeyLaunch subscribes to the app's `comments` and `messages` webhook fields. Meta's [field/permission matrix](https://developers.facebook.com/documentation/instagram-platform/webhooks/fields) maps those fields to `instagram_manage_comments` and `instagram_manage_messages` for Unified Login, and the corresponding `instagram_business_manage_comments` / `instagram_business_manage_messages` permissions for Instagram Login; the setup guide additionally lists the basic account permission (`instagram_basic` or `instagram_business_basic`).
+
+The configured default is Graph API `v26.0`, the newest release with a release date in Meta's version table as of this audit (July 29, 2026). Meta's versioning guide identifies `v27.0` as latest, but its versions table does not yet list a release date; do not switch until the Instagram Login endpoints used here are verified against that version. The previous default `v21.0` is scheduled to expire January 21, 2027. Confirm OAuth, media listing, webhook delivery, and messaging behavior in a Meta test app before production rollout.
+
+**Code:** OAuth URL/code exchange, media, and `/subscribed_apps` setup in `instagram/instagram.service.ts`; callback/account ownership, webhook confirmation and retry, and signed Business Login deauthorization in `instagram.controller.ts`; form parsing and HMAC claim verification in `instagram/meta-signed-request.ts`; raw-body HMAC verification and durable event intake in `webhook/`; sends in `meta/meta.service.ts`; token refresh in `instagram/token-refresh.service.ts`. The additive `webhookSubscribedAt` migration records successful per-account subscription. Comment automation activation fails closed until this confirmation is stored. OAuth attempts per-account subscription; if unsuccessful, existing accounts have a retry action on the Instagram page. Configure the app callback URL and fields once in Meta Developers, then subscribe each connected account separately through OAuth or the retry action.
+
+**Reels:** Meta's current [webhook setup guide](https://developers.facebook.com/documentation/instagram-platform/webhooks/setup) and [private-reply guide](https://developers.facebook.com/documentation/instagram-platform/private-replies) describe Reel comment events for Unified Login, Instagram Login, and Facebook Login; current [webhook examples](https://developers.facebook.com/documentation/instagram-platform/webhooks/examples) include Reel surfaces. An older Facebook Login-specific [Webhooks page](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-facebook-login/webhooks) still says Reels are unsupported, so retain that mode-specific documentation caveat. HeyLaunch now allows owned `VIDEO` media in specific-post automation; Instagram Login may not distinguish Reels from other videos in the picker. The webhook and private-reply paths have code-level tests, but no authorized real Reel event or message delivery has passed staging acceptance. Verify permissions, subscriptions, event payload, commenter ID, private reply, duplicates, eligibility window, rate limits, and recovery before claiming provider-level reliability. See `META_LOGIN_MIGRATION.md`.
+
+**Reliability/security:** OAuth state is signed, issuer/audience-bound, short-lived, and browser-bound. Access tokens are encrypted; new writes use AES-256-GCM and legacy ciphertext remains decryptable. The Business Login deauthorization callback accepts only a bounded, recent HMAC-SHA256 `signed_request`, deduplicates callback retries, then pauses matching automations and clears the local credential; dashboard registration and live delivery remain unverified. A separate signed data-deletion callback disables the Instagram account, drains its work, deletes its account-owned data, and returns an opaque confirmation code plus status URL; only a hashed request receipt and code are retained for 90 days. Callback configuration, deletion scope, and live status checks remain unverified. Webhook event HMAC is checked before receipt persistence. Durable receipts retry with backoff and dead-letter after eight attempts; an admin-only API/dashboard page lists limited metadata and can redrive a receipt. Dead-letter payloads are purged after the configurable retention period (default 30 days), while the deduplication receipt remains. An operator runbook exists, but automated alerts are not configured. Send jobs retry five times; Meta error `80002` uses this backoff path. A shared Redis rolling window caps post/reel private replies at 700 per Instagram account per hour, below Meta's documented 750 per hour, and saturated jobs defer without consuming retries ([Meta rate-limit guidance](https://developers.facebook.com/docs/graph-api/overview/rate-limiting/)). Provider idempotency for message sends, provider-side token-grant revocation on account deletion, and live Meta acceptance proof are absent or unverified. App Review, selected API product/version, account eligibility, scopes, and subscribed webhook fields remain external launch gates.
+
+## Cloudinary
+
+**Purpose:** Store creator profile avatars outside PostgreSQL. The API validates, rotates, resizes, and re-encodes JPEG/PNG/WebP uploads with Sharp before sending normalized bytes to Cloudinary.
+
+**Configuration:** `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, and optional `CLOUDINARY_AVATAR_FOLDER`. The API secret is backend-only; `.env` is Git-ignored. Local backend credentials are configured, but Render credentials and real-account upload acceptance remain outstanding.
+
+**Access model:** Uploads use Cloudinary `type: private`, keep the original signed-only, and synchronously generate one 512px WebP derivative used by public profile pages. Cloudinary documents that derived versions of private assets are publicly accessible by default, while Strict Transformations can restrict them; verify the product environment?s Strict Transformations settings before launch. See [Cloudinary private assets](https://cloudinary.com/documentation/upload_parameters#private_assets) and [media access control](https://cloudinary.com/documentation/control_access_to_media). Removal/replacement is persisted to a retry queue; no image binary is stored in Postgres. Tests mock the provider; no upload or provider API call was performed during this review.
+
+## Razorpay
+
+**Purpose:** One-time INR plan checkout for a fixed 30-day access period.
+
+**Configuration:** `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`.
+
+**Code:** `payments/payments.service.ts` creates orders and verifies the checkout HMAC, fetches order/payment status, checks ownership and exact amount/currency, stores unique records, then grants access. The public `POST /api/payments/webhook` endpoint verifies Razorpay's HMAC over Fastify's raw request body and handles `payment.captured` by fetching provider state and using the same idempotent transaction. Configure that endpoint and its secret in Razorpay before relying on automatic post-checkout plan activation.
+
+**Reliability/security:** The server owns plan price and tier; browser callbacks and signed capture events share a unique order/payment ledger and grant access idempotently. Refund/chargeback handling, periodic provider reconciliation, recurring subscriptions, renewal automation, and live transaction tests are not implemented. Do not claim recurring billing.
+
+## SMTP / Nodemailer
+
+**Purpose:** Email verification, password reset, trial welcome/reminder, connection-break alerts, and support request/reply notifications.
+
+**Configuration:** `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`, and optional `SUPPORT_NOTIFICATION_EMAIL` for operator alerts; templates and transport are in `mail/mail.service.ts`.
+
+**Reliability/security:** User-supplied HTML values are escaped. Verification, reset, welcome, and support notifications are stored as AES-GCM encrypted outbox payloads in the same transaction as the associated state change. Support emails contain the request subject and a dashboard link, not message bodies. Optional operator alerts are sent only to the currently configured `SUPPORT_NOTIFICATION_EMAIL` and only while the submitting user remains verified. A worker validates that OTP/reset credentials remain current, leases rows, retries failures with bounded backoff, and purges terminal records after 30 days. SMTP uses implicit TLS on 465 and requires STARTTLS on 587; logs omit recipient, subject, OTP, and reset URL. The user verification flow exposes current OTP mail status, and admins have a paginated, redacted outbox view; there is no bounce/suppression handling or external alert routing. Staging delivery remains unverified.
+
+## PostgreSQL / Prisma
+
+Stores user, account, automation, event, run, quota, link/click, and payment data. Runtime access is through Prisma; migration deployment runs during API startup in the Render Blueprint. No remote database state was inspected or modified.
+
+## Redis / BullMQ
+
+**Purpose:** Asynchronous queueing for webhook work, DMs, delayed follow-ups, token refresh, account deletion, and maintenance.
+
+**Configuration:** `REDIS_URL`; queue defaults and retry settings are in `queue/queue.module.ts` and `worker.ts`.
+
+**Reliability:** PostgreSQL webhook receipts can repopulate the work queue after transient Redis loss. Send IDs use prefixed hashes to avoid BullMQ's colon separator; account deletion removes deterministic account jobs after a grace period and waits for active account jobs. Migration and multi-worker behavior still need staging verification. Redis remains required for worker delivery. A verified-admin operations page shows worker heartbeat freshness and queue counts, but queue-age metrics and external alerts are absent. The previous repository contained an exposed Redis credential in a test script; the source was changed to use environment configuration and ping only, but the provider credential still needs rotation.
+
+## Hosting
+
+Render Blueprint defines an API web service, persistent worker, and Next.js web service; all are pinned to Node 24.22.1. Render plan availability, proxy hop behavior, service env references, cold starts, worker cost, migration-on-start behavior, and production health have not been validated against the live account.

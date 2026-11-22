@@ -1,13 +1,20 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
+import { Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { MetaService, DmButton } from '../meta/meta.service';
 import { EncryptionService } from '../common/encryption.service';
-import { DmJob } from './queue.constants';
-import { DM_QUEUE_TOKEN } from './queue.module';
+import { COMMENT_FOLLOWUP_REPLY_REQUIRED, DmJob, dmQueueJobId, runEventId } from './queue.constants';
+import { DM_QUEUE_TOKEN } from './queue.constants';
 import { extractButtons, applyTracking } from '../automations/dm-blocks';
 import { personalize } from '../automations/personalize';
+import { accountPlanRestriction, planFor } from '../common/plan.util';
+import { automationRestriction } from '../common/automation-entitlement';
+import { DmQuotaService } from '../common/dm-quota.service';
+import { reserveCommentPrivateReply } from './instagram-rate-limiter';
+import { DashboardEventsService } from './dashboard-events.service';
+import { safeErrorLabel } from '../common/safe-error-label';
 
 const WINDOW_MS = 24 * 60 * 60 * 1000; // Meta 24h messaging window
 
@@ -20,27 +27,109 @@ export class DmProcessorService {
     private meta: MetaService,
     private enc: EncryptionService,
     private config: ConfigService,
+    private quota: DmQuotaService,
     @Inject(DM_QUEUE_TOKEN) private dmQueue: Queue,
+    private dashboardEvents: DashboardEventsService,
   ) {}
 
-  async process(job: DmJob): Promise<void> {
+  async process(job: DmJob, queueJob?: Job<DmJob>): Promise<void> {
     if (job.followUpId) return this.processFollowUp(job);
-    return this.processPrimary(job);
+    return this.processPrimary(job, queueJob);
+  }
+
+  async markDeliveryUnknown(job: DmJob, reason: string): Promise<void> {
+    if (!job.triggerEventId) return;
+    const updated = await this.prisma.run.updateMany({
+      where: { triggerEventId: runEventId(job), status: 'PENDING' },
+      data: {
+        status: 'UNKNOWN',
+        error: `Delivery could not be confirmed after worker retries. Check Instagram before retrying. ${reason}`.slice(0, 500),
+      },
+    });
+    if (updated?.count > 0) await this.publishDeliveryUpdate(job);
+  }
+
+  async markStalePendingRunsUnknown(): Promise<number> {
+    // A run is created only after a worker begins processing it. Messages
+    // normally finish in seconds; 15 minutes leaves room for transient API
+    // issues while recovering runs stranded by a worker crash or lost queue job.
+    const cutoff = new Date(Date.now() - 15 * 60_000);
+    const result = await this.prisma.run.updateMany({
+      where: { status: 'PENDING', createdAt: { lt: cutoff } },
+      data: {
+        status: 'UNKNOWN',
+        error: 'Worker processing did not finish. Delivery could not be confirmed; check Instagram before retrying.',
+      },
+    });
+    return result.count;
   }
 
   // ---------- primary DM ----------
-  private async processPrimary(job: DmJob): Promise<void> {
+  private async processPrimary(job: DmJob, queueJob?: Job<DmJob>): Promise<void> {
     const existing = await this.prisma.run.findUnique({ where: { triggerEventId: job.triggerEventId } });
-    if (existing && existing.status === 'SENT') return;
+    if (existing?.status === 'SENT') {
+      // Repair the rare crash window where the run was marked sent but its
+      // quota reservation was not yet finalized.
+      await this.quota.settle(job.triggerEventId, true);
+      // The Meta send may have succeeded before follow-up enqueue failed. The
+      // deterministic follow-up job IDs make this safe to reconcile on retry.
+      const automation = await this.prisma.automation.findUnique({
+        where: { id: job.automationId },
+        include: {
+          followUps: { orderBy: { order: 'asc' }, select: { id: true, order: true, delayMinutes: true } },
+          igAccount: { include: { user: { select: { id: true, plan: true, planExpiresAt: true, trialEndsAt: true } } } },
+        },
+      });
+      if (existing.sentAt && automation) {
+        const activeAccounts = await this.activeAccountIds(automation.igAccount.user.id);
+        const restriction = accountPlanRestriction(planFor(automation.igAccount.user), activeAccounts, automation.igAccount.id)
+          ?? automationRestriction(planFor(automation.igAccount.user), {
+          ...automation,
+          followUpCount: automation.followUps.length,
+        });
+        if (restriction) {
+          await this.prisma.run.update({ where: { id: existing.id }, data: { error: `The primary DM was sent. ${restriction} No follow-ups were scheduled.` } });
+        } else if (!job.commentId) {
+          await this.scheduleFollowUps(automation.followUps, { ...job, primarySentAt: existing.sentAt.toISOString() });
+        }
+      }
+      return;
+    }
+    if (existing && ['SKIPPED', 'FAILED', 'UNKNOWN'].includes(existing.status)) {
+      // Never replay a terminal event from a duplicate webhook delivery. In
+      // particular UNKNOWN may already have reached Meta and must not be sent twice.
+      if (existing.status === 'SKIPPED' || existing.status === 'FAILED') {
+        await this.quota.settle(job.triggerEventId, false);
+      }
+      return;
+    }
 
     const automation = await this.prisma.automation.findUnique({
       where: { id: job.automationId },
-      include: { igAccount: true, trackedLinks: true, followUps: { orderBy: { order: 'asc' } } },
+      include: {
+        igAccount: { include: { user: { select: { id: true, plan: true, planExpiresAt: true, trialEndsAt: true } } } },
+        trackedLinks: true,
+        followUps: { orderBy: { order: 'asc' } },
+      },
     });
-    if (!automation || automation.status !== 'LIVE') return;
+    if (!automation) return;
+    const plan = planFor(automation.igAccount.user);
+    const activeAccounts = await this.activeAccountIds(automation.igAccount.user.id);
+    const restriction = accountPlanRestriction(plan, activeAccounts, automation.igAccount.id)
+      ?? automationRestriction(plan, automation, { includeFollowUps: false });
+    if (restriction) {
+      await this.recordRun(job, null, 'SKIPPED', restriction);
+      return;
+    }
+    if (automation.status !== 'LIVE' || !automation.igAccount.isActive) {
+      await this.recordRun(job, null, 'SKIPPED', automation.status !== 'LIVE' ? 'automation is not live' : 'Instagram account is disconnected');
+      return;
+    }
+    await this.recordRun(job, null, 'PENDING');
 
     const token = this.enc.decrypt(automation.igAccount.accessTokenEnc);
     const igUserId = automation.igAccount.igUserId;
+    const loginMode = automation.igAccount.loginMode;
 
     const contact = await this.prisma.contact.upsert({
       where: { igAccountId_igScopedId: { igAccountId: job.igAccountId, igScopedId: job.recipientIgsid } },
@@ -48,80 +137,242 @@ export class DmProcessorService {
       update: { lastInteraction: new Date(), username: job.recipientUsername ?? undefined },
     });
 
+    // Persist a visible run before calling Meta so in-flight and interrupted
+    // deliveries do not disappear from the customer log.
+    await this.recordRun(job, contact.id, 'PENDING');
+    let publicReplyFailure = existing?.publicReplyError
+      ? 'The public comment reply failed; the direct message was still sent.'
+      : undefined;
+
     if (automation.askToFollow) {
-      const { isFollower } = await this.meta.getFollowerInfo(igUserId, token, job.recipientIgsid);
+      const { isFollower } = await this.meta.getFollowerInfo(igUserId, token, job.recipientIgsid, loginMode);
       await this.prisma.contact.update({ where: { id: contact.id }, data: { follows: isFollower } });
       if (!isFollower) { await this.recordRun(job, contact.id, 'SKIPPED', 'not a follower'); return; }
     }
 
-    if (automation.replyToComment && job.commentId && automation.publicReplies.length) {
-      const reply = automation.publicReplies[Math.floor(Math.random() * automation.publicReplies.length)];
-      await this.meta.replyToComment(token, job.commentId, reply);
-    }
-
-    const text = personalize(job.text, { username: job.recipientUsername, name: contact.name });
-    const buttons = applyTracking(extractButtons(automation.dmBlocks), automation.trackedLinks, automation.trackClicks, this.publicUrl(), job.recipientIgsid);
-
-    const result = job.commentId
-      ? await this.meta.sendCommentDm(igUserId, token, job.commentId, text, buttons)
-      : await this.meta.sendDirectMessage(igUserId, token, job.recipientIgsid, text, buttons);
-
-    if (!result.ok) {
-      await this.recordRun(job, contact.id, 'FAILED', result.error);
-      if (result.retryable) throw new Error(`Retryable Meta error: ${result.error}`);
+    if (!(await this.accountMaySend(job.igAccountId))) {
+      await this.recordRun(job, contact.id, 'SKIPPED', 'This Instagram account is disconnected or being deleted.');
       return;
     }
 
-    await this.recordRun(job, contact.id, 'SENT');
+    if (job.commentId) {
+      if (!queueJob) throw new Error('Cannot reserve a comment reply without its BullMQ job.');
+      await reserveCommentPrivateReply(this.dmQueue, queueJob, queueJob.token);
+    }
+
+    if (automation.replyToComment && job.commentId && automation.publicReplies.length && !existing?.publicReplyAttemptedAt) {
+      const currentStatus = await this.currentAutomationStatus(job.automationId);
+      if (currentStatus !== 'LIVE') {
+        if (currentStatus) await this.recordRun(job, contact.id, 'SKIPPED', 'Automation is not live.');
+        return;
+      }
+      if (!(await this.accountMaySend(job.igAccountId))) {
+        await this.recordRun(job, contact.id, 'SKIPPED', 'This Instagram account is disconnected or being deleted.');
+        return;
+      }
+      const reply = automation.publicReplies[Math.floor(Math.random() * automation.publicReplies.length)];
+      const result = await this.meta.replyToComment(token, job.commentId, reply, loginMode);
+      if (!result.ok) {
+        if (result.retryable) throw new Error(`Retryable Meta error: ${result.error}`);
+        publicReplyFailure = 'The public comment reply failed; the direct message was still sent.';
+      }
+      await this.prisma.run.update({
+        where: { triggerEventId: runEventId(job) },
+        data: {
+          publicReplyAttemptedAt: new Date(),
+          publicReplyError: result.ok ? null : result.error,
+        },
+      });
+    }
+
+    const text = personalize(job.text, { username: job.recipientUsername, name: contact.name });
+    const attributionSecret = automation.trackClicks && automation.trackedLinks.length > 0
+      ? this.config.getOrThrow<string>('ENCRYPTION_KEY')
+      : undefined;
+    const buttons = applyTracking(
+      extractButtons(automation.dmBlocks), automation.trackedLinks, automation.trackClicks,
+      this.publicUrl(), job.recipientIgsid, attributionSecret,
+    );
+
+    const currentStatus = await this.currentAutomationStatus(job.automationId);
+    if (currentStatus !== 'LIVE') {
+      if (currentStatus) await this.recordRun(job, contact.id, 'SKIPPED', 'Automation is not live.');
+      return;
+    }
+    if (!(await this.accountMaySend(job.igAccountId))) {
+      await this.recordRun(job, contact.id, 'SKIPPED', 'This Instagram account is disconnected or being deleted.');
+      return;
+    }
+
+    const result = job.commentId
+      ? await this.meta.sendCommentDm(igUserId, token, job.commentId, text, buttons, loginMode)
+      : await this.meta.sendDirectMessage(igUserId, token, job.recipientIgsid, text, buttons, loginMode);
+
+    if (!result.ok) {
+      if (result.retryable) throw new Error(`Retryable Meta error: ${result.error}`);
+      await this.recordRun(job, contact.id, 'FAILED', result.error);
+      return;
+    }
+
+    const followUpRestriction = automationRestriction(plan, { followUpCount: automation.followUps.length });
+    await this.recordRun(
+      job,
+      contact.id,
+      'SENT',
+      followUpRestriction && automation.followUps.length
+        ? `DM sent. ${followUpRestriction} No follow-ups were scheduled.`
+        : publicReplyFailure,
+    );
     await this.prisma.contact.update({ where: { id: contact.id }, data: { dmsSent: { increment: 1 } } });
 
     // Schedule follow-ups (each within the 24h window).
-    await this.scheduleFollowUps(automation.followUps, job);
+    if (!followUpRestriction && !job.commentId) await this.scheduleFollowUps(automation.followUps, job);
   }
 
-  private async scheduleFollowUps(followUps: { id: string; delayMinutes: number }[], job: DmJob) {
-    const sentAt = new Date().toISOString();
+  private async scheduleFollowUps(followUps: { id: string; order: number; delayMinutes: number }[], job: DmJob) {
+    const sentAt = job.primarySentAt ?? new Date().toISOString();
     for (const fu of followUps) {
+      if ((await this.currentAutomationStatus(job.automationId)) !== 'LIVE') return;
       const delayMs = Math.min(Math.max(fu.delayMinutes, 0) * 60_000, WINDOW_MS - 60_000);
-      await this.dmQueue.add(
+      const eventId = `${job.triggerEventId}:fu:${fu.id}`;
+      if (await this.dmQueue.getJob(eventId)) continue; // legacy raw ID during rollout
+      const queued = await this.dmQueue.add(
         'send',
-        { ...job, followUpId: fu.id, primarySentAt: sentAt },
-        { jobId: `${job.triggerEventId}:fu:${fu.id}`, delay: delayMs },
+        { ...job, followUpId: fu.id, followUpOrder: fu.order, primarySentAt: sentAt },
+        { jobId: dmQueueJobId(eventId), delay: delayMs },
       );
+      // Deletion can pause the automation between the first check and enqueue.
+      // The delete path also waits for active jobs, so removing this job here
+      // closes the small race without allowing an orphaned delayed delivery.
+      if ((await this.currentAutomationStatus(job.automationId)) !== 'LIVE') {
+        await queued.remove();
+        return;
+      }
     }
   }
 
   // ---------- follow-up DM ----------
   private async processFollowUp(job: DmJob): Promise<void> {
+    const eventId = runEventId(job);
+    const existingRun = await this.prisma.run.findUnique({ where: { triggerEventId: eventId } });
+    const canResumeAfterCommentReply = existingRun?.status === 'SKIPPED'
+      && existingRun.error === COMMENT_FOLLOWUP_REPLY_REQUIRED;
+    if (existingRun && ['SENT', 'SKIPPED', 'FAILED', 'UNKNOWN'].includes(existingRun.status) && !canResumeAfterCommentReply) {
+      if (existingRun.status === 'SENT') await this.quota.settle(eventId, true);
+      if (existingRun.status === 'SKIPPED' || existingRun.status === 'FAILED') await this.quota.settle(eventId, false);
+      return;
+    }
+
     const fu = await this.prisma.followUp.findUnique({
       where: { id: job.followUpId! },
-      include: { automation: { include: { igAccount: true } } },
+      include: {
+        automation: {
+          include: {
+            igAccount: { include: { user: { select: { id: true, plan: true, planExpiresAt: true, trialEndsAt: true } } } },
+            trackedLinks: true,
+          },
+        },
+      },
     });
-    if (!fu || fu.automation.status !== 'LIVE') return;
-
-    // 24h window guard.
-    const since = job.primarySentAt ? Date.now() - new Date(job.primarySentAt).getTime() : 0;
-    if (since >= WINDOW_MS) { this.log.debug(`Follow-up ${fu.id} skipped: outside 24h window`); return; }
+    if (!fu) {
+      const automation = await this.prisma.automation.findUnique({ where: { id: job.automationId }, select: { id: true } });
+      if (!automation) return; // parent deletion cascaded the run; avoid retrying a foreign-key failure
+      await this.recordRun(job, null, 'SKIPPED', 'This follow-up step was removed before it could run.');
+      return;
+    }
+    if (fu.automation.status !== 'LIVE' || !fu.automation.igAccount.isActive) {
+      await this.recordRun(job, null, 'SKIPPED', fu.automation.status !== 'LIVE' ? 'Automation is not live.' : 'Instagram account is disconnected.');
+      return;
+    }
+    const activeAccounts = await this.activeAccountIds(fu.automation.igAccount.user.id);
+    const followUpPlan = planFor(fu.automation.igAccount.user);
+    const restriction = accountPlanRestriction(followUpPlan, activeAccounts, fu.automation.igAccount.id)
+      ?? automationRestriction(followUpPlan, {
+      ...fu.automation,
+      followUpCount: 1,
+      });
+    if (restriction) {
+      await this.recordRun(job, null, 'SKIPPED', restriction);
+      return;
+    }
 
     const contact = await this.prisma.contact.findUnique({
       where: { igAccountId_igScopedId: { igAccountId: job.igAccountId, igScopedId: job.recipientIgsid } },
     });
+    if (!contact) {
+      await this.recordRun(job, null, 'SKIPPED', 'The Instagram contact record is no longer available.');
+      return;
+    }
+
+    const primarySentAt = job.primarySentAt ? new Date(job.primarySentAt) : null;
+    const replyAt = job.replyReceivedAt ? new Date(job.replyReceivedAt) : contact.lastReplyAt ? new Date(contact.lastReplyAt) : null;
+    if (job.commentId && (!primarySentAt || !replyAt || replyAt <= primarySentAt)) {
+      await this.recordRun(job, contact.id, 'SKIPPED', COMMENT_FOLLOWUP_REPLY_REQUIRED);
+      return;
+    }
+
+    // A comment private reply opens the follow-up window only after the
+    // commenter responds. Use that response time, not the private-reply time.
+    const latestReplyAt = contact.lastReplyAt && replyAt && contact.lastReplyAt > replyAt ? contact.lastReplyAt : replyAt;
+    const windowStart = job.commentId ? latestReplyAt : primarySentAt;
+    const since = windowStart ? Date.now() - windowStart.getTime() : 0;
+    if (since >= WINDOW_MS) {
+      await this.recordRun(job, contact.id, 'SKIPPED', 'The 24-hour messaging window has expired.');
+      return;
+    }
 
     // Condition gate.
     const ok = await this.conditionHolds(fu.condition, fu.automationId, job, contact?.lastReplyAt ?? null);
-    if (!ok) { this.log.debug(`Follow-up ${fu.id} condition ${fu.condition} not met — skipped`); return; }
+    if (!ok) {
+      await this.recordRun(job, contact.id, 'SKIPPED', `Follow-up condition ${fu.condition.toLowerCase().replaceAll('_', ' ')} was not met.`);
+      return;
+    }
+
+    const reserved = await this.quota.consume(
+      fu.automation.igAccount.user.id,
+      fu.automationId,
+      fu.automation.dailyLimit,
+      eventId,
+    );
+    if (!reserved) {
+      await this.recordRun(job, contact.id, 'SKIPPED', 'The plan DM quota or automation daily limit has been reached.');
+      return;
+    }
+
+    await this.recordRun(job, contact.id, 'PENDING');
 
     const token = this.enc.decrypt(fu.automation.igAccount.accessTokenEnc);
     const igUserId = fu.automation.igAccount.igUserId;
+    const loginMode = fu.automation.igAccount.loginMode;
     const blocks = fu.dmBlocks;
     const textBlock = (Array.isArray(blocks) ? blocks : []).find((b: any) => b?.type === 'text') as any;
     const text = personalize(textBlock?.text ?? 'Just following up!', { username: job.recipientUsername, name: contact?.name });
-    const buttons = applyTracking(extractButtons(blocks), [], true, this.publicUrl(), job.recipientIgsid);
+    const trackedLinks = fu.automation.trackedLinks ?? [];
+    const attributionSecret = fu.automation.trackClicks && trackedLinks.length > 0
+      ? this.config.getOrThrow<string>('ENCRYPTION_KEY')
+      : undefined;
+    const buttons = applyTracking(
+      extractButtons(blocks), trackedLinks, fu.automation.trackClicks, this.publicUrl(), job.recipientIgsid, attributionSecret,
+    );
+
+    if ((await this.currentAutomationStatus(job.automationId)) !== 'LIVE') {
+      await this.recordRun(job, contact.id, 'SKIPPED', 'Automation is not live.');
+      return;
+    }
+    if (!(await this.accountMaySend(job.igAccountId))) {
+      await this.recordRun(job, contact.id, 'SKIPPED', 'This Instagram account is disconnected or being deleted.');
+      return;
+    }
 
     // Follow-ups always go as a direct message (the comment thread is done).
-    const result = await this.meta.sendDirectMessage(igUserId, token, job.recipientIgsid, text, buttons);
-    if (!result.ok && result.retryable) throw new Error(`Retryable Meta error: ${result.error}`);
-    if (result.ok && contact) await this.prisma.contact.update({ where: { id: contact.id }, data: { dmsSent: { increment: 1 } } });
+    const result = await this.meta.sendDirectMessage(igUserId, token, job.recipientIgsid, text, buttons, loginMode);
+    if (!result.ok) {
+      if (result.retryable) throw new Error(`Retryable Meta error: ${result.error}`);
+      await this.recordRun(job, contact.id, 'FAILED', result.error);
+      return;
+    }
+    await this.recordRun(job, contact.id, 'SENT');
+    await this.prisma.contact.update({ where: { id: contact.id }, data: { dmsSent: { increment: 1 } } });
   }
 
   private async conditionHolds(condition: string, automationId: string, job: DmJob, lastReplyAt: Date | null): Promise<boolean> {
@@ -148,11 +399,52 @@ export class DmProcessorService {
 
   private publicUrl() { return this.config.get<string>('PUBLIC_URL', 'http://localhost:4000'); }
 
-  private async recordRun(job: DmJob, contactId: string, status: 'SENT' | 'SKIPPED' | 'FAILED', error?: string) {
-    await this.prisma.run.upsert({
-      where: { triggerEventId: job.triggerEventId },
-      create: { automationId: job.automationId, igAccountId: job.igAccountId, contactId, triggerEventId: job.triggerEventId, status, error, sentAt: status === 'SENT' ? new Date() : null },
-      update: { status, error, sentAt: status === 'SENT' ? new Date() : null },
+  private async activeAccountIds(userId: string): Promise<string[]> {
+    const accounts = await this.prisma.igAccount.findMany({
+      where: { userId, isActive: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true },
     });
+    return accounts.map((account) => account.id);
+  }
+
+  private async accountMaySend(igAccountId: string): Promise<boolean> {
+    const account = await this.prisma.igAccount.findUnique({
+      where: { id: igAccountId },
+      select: { isActive: true, user: { select: { deletionRequestedAt: true, suspendedAt: true } } },
+    });
+    return !!account?.isActive && !account.user.deletionRequestedAt && !account.user.suspendedAt;
+  }
+
+  private async currentAutomationStatus(automationId: string): Promise<'LIVE' | 'PAUSED' | 'DRAFT' | null> {
+    const automation = await this.prisma.automation.findUnique({ where: { id: automationId }, select: { status: true } });
+    return automation?.status ?? null;
+  }
+
+  private async recordRun(job: DmJob, contactId: string | null, status: 'PENDING' | 'SENT' | 'SKIPPED' | 'FAILED', error?: string) {
+    const triggerEventId = runEventId(job);
+    await this.prisma.run.upsert({
+      where: { triggerEventId },
+      create: { automationId: job.automationId, igAccountId: job.igAccountId, contactId, triggerEventId, followUpOrder: job.followUpOrder ?? null, status, error: error ?? null, sentAt: status === 'SENT' ? new Date() : null },
+      update: { contactId, followUpOrder: job.followUpOrder ?? null, status, error: error ?? null, sentAt: status === 'SENT' ? new Date() : null },
+    });
+    if (status === 'SENT') await this.quota.settle(triggerEventId, true);
+    else if (status === 'SKIPPED' || status === 'FAILED') await this.quota.settle(triggerEventId, false);
+    if (status !== 'PENDING') await this.publishDeliveryUpdate(job);
+  }
+
+  private async publishDeliveryUpdate(job: DmJob): Promise<void> {
+    try {
+      const automation = await this.prisma.automation.findUnique({
+        where: { id: job.automationId },
+        select: { igAccount: { select: { userId: true } } },
+      });
+      const userId = automation?.igAccount?.userId;
+      if (userId) await this.dashboardEvents.publish(userId, 'delivery');
+    } catch (error) {
+      // Never retry a provider delivery just because the optional UI
+      // invalidation lookup failed after the run was durably recorded.
+      this.log.warn(`Dashboard delivery update unavailable (${safeErrorLabel(error)})`);
+    }
   }
 }

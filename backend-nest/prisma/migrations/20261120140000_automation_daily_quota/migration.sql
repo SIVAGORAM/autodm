@@ -1,0 +1,3 @@
+ALTER TABLE "automations"
+  ADD COLUMN "dailyCount" INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN "dailyCountResetAt" TIMESTAMP(3);

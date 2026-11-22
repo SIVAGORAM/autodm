@@ -1,6 +1,6 @@
 // Plan resolution — computed from SERVER time on every request. No background
 // job, no client trust. The effective tier drives caps, quotas and feature gates.
-import { Tier, PAID_TIERS, planDef } from './plan.config';
+import { Tier, PAID_TIERS, planDef, PlanDef } from './plan.config';
 
 export type PlanUser =
   | { plan: string; planExpiresAt?: Date | null; trialEndsAt?: Date | null }
@@ -41,4 +41,14 @@ export function isProActive(u: PlanUser): boolean {
 // Convenience: the resolved plan definition for this user.
 export function planFor(u: PlanUser) {
   return planDef(effectivePlan(u));
+}
+
+/** Older active Instagram accounts keep their slots after a plan downgrade. */
+export function accountPlanRestriction(plan: PlanDef, orderedActiveAccountIds: string[], igAccountId: string): string | null {
+  const index = orderedActiveAccountIds.indexOf(igAccountId);
+  if (index === -1) return 'This Instagram connection is inactive.';
+  if (index >= plan.accountCap) {
+    return `Your current plan includes ${plan.accountCap} connected account(s). Upgrade or disconnect an account to run automations here.`;
+  }
+  return null;
 }

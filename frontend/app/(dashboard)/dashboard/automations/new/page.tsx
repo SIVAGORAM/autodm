@@ -2,25 +2,26 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { automationApi } from '../../../../../services/api';
+import Link from 'next/link';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { automationApi, instagramApi } from '../../../../../services/api';
 import { useAuthStore } from '../../../../../store/authStore';
+import { InstagramPostSelector } from '../../../../../components/instagram-post-selector';
+import { AutomationMessagePreview } from '../../../../../components/automation-message-preview';
 import {
   Button, Card, Badge, Stepper, Toggle, TagInput, Input, Textarea, Label,
 } from '../../../../../components/ui/primitives';
-import { ArrowLeft, ArrowRight, MessageCircle, Film, Radio, Mail, Plus, Trash2, Check } from 'lucide-react';
+import { ArrowLeft, ArrowRight, MessageCircle, Film, Mail, Plus, Trash2, Check } from 'lucide-react';
 
 const STEPS = ['Trigger', 'Keywords & reply', 'The DM'];
 
 type Btn = { title: string; url: string };
-const paidTriggers = ['ANY_POST', 'STORY_REPLY', 'LIVE_COMMENT', 'DM'];
+const paidTriggers = ['ANY_POST', 'STORY_REPLY', 'DM'];
 
 const triggerOptions = [
-  { value: 'POST_COMMENT', label: 'Comment on a post or Reel', icon: MessageCircle, paid: false },
-  { value: 'NEXT_POST', label: 'My next post', icon: Film, paid: false },
+  { value: 'POST_COMMENT', label: 'Comment on a post', icon: MessageCircle, paid: false },
   { value: 'ANY_POST', label: 'Comment on any post', icon: MessageCircle, paid: true },
   { value: 'STORY_REPLY', label: 'Story reply', icon: Film, paid: true },
-  { value: 'LIVE_COMMENT', label: 'Live comment', icon: Radio, paid: true },
   { value: 'DM', label: 'Incoming DM', icon: Mail, paid: true },
 ];
 
@@ -28,27 +29,35 @@ export default function NewAutomationPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const user = useAuthStore((s) => s.user) as any;
-  const isPaid = user?.plan === 'PAID' || user?.subscription?.status === 'ACTIVE';
+  const isPaid = ['CREATOR', 'PRO', 'AGENCY'].includes(user?.plan);
 
   const [step, setStep] = useState(0);
   const [err, setErr] = useState('');
+  const [selectedIgAccountId, setSelectedIgAccountId] = useState('');
+  const [selectedMediaSupported, setSelectedMediaSupported] = useState(true);
 
   // form state
   const [name, setName] = useState('');
   const [triggerType, setTriggerType] = useState('POST_COMMENT');
   const [mediaId, setMediaId] = useState('');
-  const [matchMode, setMatchMode] = useState<'KEYWORDS' | 'ANY' | 'AI_INTENT'>('KEYWORDS');
+  const [matchMode, setMatchMode] = useState<'KEYWORDS' | 'ANY'>('KEYWORDS');
   const [keywords, setKeywords] = useState<string[]>([]);
   const [replyToComment, setReplyToComment] = useState(true);
   const [publicReplies, setPublicReplies] = useState<string[]>(['']);
   const [dmText, setDmText] = useState('');
   const [buttons, setButtons] = useState<Btn[]>([{ title: '', url: '' }]);
-  const [askToFollow, setAskToFollow] = useState(false);
-  const [collectEmail, setCollectEmail] = useState(false);
   const [trackClicks, setTrackClicks] = useState(true);
   const [followUps, setFollowUps] = useState<{ condition: string; delayMinutes: number; text: string }[]>([]);
 
-  const igAccountId = user?.instagramAccount?.id ?? user?.igAccounts?.[0]?.id ?? '';
+  const accountsQ = useQuery({
+    queryKey: ['ig-accounts'],
+    queryFn: async () => (await instagramApi.accounts()).data.data as { id: string; username: string; isActive: boolean }[],
+  });
+  const activeAccounts = (accountsQ.data ?? []).filter((account) => account.isActive);
+  const igAccountId = activeAccounts.some((account) => account.id === selectedIgAccountId)
+    ? selectedIgAccountId
+    : activeAccounts[0]?.id ?? '';
+  const selectedAccount = activeAccounts.find((account) => account.id === igAccountId);
 
   const create = useMutation({
     mutationFn: (status: 'DRAFT' | 'LIVE') => {
@@ -60,7 +69,7 @@ export default function NewAutomationPage() {
         mediaId: triggerType === 'POST_COMMENT' && mediaId ? mediaId : null,
         matchMode, keywords,
         publicReplies: replyToComment ? publicReplies.filter((r) => r.trim()) : [],
-        replyToComment, askToFollow, collectEmail, trackClicks, dmBlocks, status,
+        replyToComment, trackClicks, dmBlocks, status,
         followUps: followUps
           .filter((f) => f.text.trim())
           .map((f, i) => ({ order: i, condition: f.condition, delayMinutes: f.delayMinutes, dmBlocks: [{ type: 'text', text: f.text }] })),
@@ -73,7 +82,12 @@ export default function NewAutomationPage() {
   // step validation
   function validate(s: number): string | null {
     if (s === 0) {
+      if (accountsQ.isLoading) return 'Loading your Instagram accounts. Try again in a moment.';
+      if (accountsQ.isError) return 'Could not load your Instagram accounts. Refresh this page and try again.';
+      if (!igAccountId) return 'Connect an active Instagram account before creating an automation.';
       if (!name.trim()) return 'Give your automation a name.';
+      if (triggerType === 'POST_COMMENT' && !mediaId.trim()) return 'Choose a specific post. Use “Comment on any post” for account-wide coverage.';
+      if (triggerType === 'POST_COMMENT' && !selectedMediaSupported) return 'Choose a supported Instagram post.';
       if (!isPaid && paidTriggers.includes(triggerType)) return 'That trigger needs a paid plan.';
     }
     if (s === 1) {
@@ -84,6 +98,7 @@ export default function NewAutomationPage() {
       if (!dmText.trim()) return 'Write the DM message.';
       const bad = buttons.find((b) => (b.title.trim() && !b.url.trim()) || (!b.title.trim() && b.url.trim()));
       if (bad) return 'Each button needs both a label and a URL.';
+      if (['POST_COMMENT', 'ANY_POST'].includes(triggerType) && followUps.some((item) => item.condition === 'NO_REPLY')) return 'A comment private reply cannot be followed by an unsolicited message. Choose another condition; the commenter must reply first.';
     }
     return null;
   }
@@ -109,8 +124,36 @@ export default function NewAutomationPage() {
           {step === 0 && (
             <div className="space-y-5">
               <div>
+                <Label htmlFor="ig-account">Instagram account</Label>
+                {accountsQ.isLoading ? (
+                  <p className="mt-1.5 text-sm text-muted-foreground" role="status">Loading connected accounts…</p>
+                ) : accountsQ.isError ? (
+                  <div className="mt-1.5 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive" role="alert">
+                    Couldn’t load your Instagram accounts. Refresh this page and try again.
+                  </div>
+                ) : activeAccounts.length === 0 ? (
+                  <div className="mt-1.5 rounded-md border border-border p-3 text-sm text-muted-foreground">
+                    Connect a professional Instagram account to continue.{' '}
+                    <Link href="/dashboard/instagram" className="font-medium text-primary underline underline-offset-4">Connect Instagram</Link>
+                  </div>
+                ) : activeAccounts.length === 1 ? (
+                  <div className="mt-1.5 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-foreground">
+                    @{activeAccounts[0].username}
+                  </div>
+                ) : (
+                  <select
+                    id="ig-account"
+                    value={igAccountId}
+                    onChange={(event) => setSelectedIgAccountId(event.target.value)}
+                    className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
+                  >
+                    {activeAccounts.map((account) => <option key={account.id} value={account.id}>@{account.username}</option>)}
+                  </select>
+                )}
+              </div>
+              <div>
                 <Label htmlFor="name">Automation name</Label>
-                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Free guide on my Reel" className="mt-1.5" />
+                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Free guide for my post" className="mt-1.5" />
               </div>
               <div>
                 <Label>When someone…</Label>
@@ -137,11 +180,11 @@ export default function NewAutomationPage() {
                   })}
                 </div>
               </div>
+              {triggerType === 'ANY_POST' && <p role="status" className="text-xs leading-relaxed text-muted-foreground">Meta’s current Webhooks and Private Replies guides document Reel comment events and replies. HeyLaunch has not yet verified a real Reel event and reply on an authorized staging account, so delivery remains unverified.</p>}
+              {['POST_COMMENT', 'ANY_POST'].includes(triggerType) && <p className="text-xs leading-relaxed text-muted-foreground">Each comment can trigger one DM. A rule for the exact post takes priority over “Any post”; if multiple rules at the same priority match, the oldest automation handles it.</p>}
+              {['DM', 'STORY_REPLY'].includes(triggerType) && <p className="text-xs leading-relaxed text-muted-foreground">If multiple active rules match the same message, the oldest automation handles it.</p>}
               {triggerType === 'POST_COMMENT' && (
-                <div>
-                  <Label htmlFor="media">Post or Reel ID <span className="text-muted-foreground">(optional — leave blank for any)</span></Label>
-                  <Input id="media" value={mediaId} onChange={(e) => setMediaId(e.target.value)} placeholder="17912345678901234" className="mt-1.5" />
-                </div>
+                <InstagramPostSelector accountId={igAccountId} value={mediaId} onChange={setMediaId} onEligibilityChange={setSelectedMediaSupported} />
               )}
             </div>
           )}
@@ -151,7 +194,7 @@ export default function NewAutomationPage() {
               <div>
                 <Label>Match</Label>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {(['KEYWORDS', 'ANY', 'AI_INTENT'] as const).map((m) => (
+                  {(['KEYWORDS', 'ANY'] as const).map((m) => (
                     <button
                       key={m}
                       type="button"
@@ -159,7 +202,7 @@ export default function NewAutomationPage() {
                       aria-pressed={matchMode === m}
                       className={`rounded-full border px-3 py-1 text-sm ${matchMode === m ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}`}
                     >
-                      {m === 'KEYWORDS' ? 'Specific keywords' : m === 'ANY' ? 'Any comment' : 'AI intent'}
+                      {m === 'KEYWORDS' ? 'Specific keywords' : 'Any comment'}
                     </button>
                   ))}
                 </div>
@@ -233,8 +276,6 @@ export default function NewAutomationPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Row label="Ask to follow before sending" hint="Only followers get the link." checked={askToFollow} onChange={setAskToFollow} locked={!isPaid} />
-                <Row label="Collect email in the DM" hint="Send to your email tool." checked={collectEmail} onChange={setCollectEmail} locked={!isPaid} />
                 <Row label="Track link clicks" hint="Count clicks on your buttons." checked={trackClicks} onChange={setTrackClicks} />
               </div>
 
@@ -242,7 +283,7 @@ export default function NewAutomationPage() {
                 <div className="mb-2 flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-foreground">Follow-ups {!isPaid && <Badge tone="primary">Paid</Badge>}</p>
-                    <p className="text-xs text-muted-foreground">Send a nudge later if they don&apos;t click or reply (within 24h).</p>
+                    <p className="text-xs text-muted-foreground">For comment automations, each follow-up delay starts when the commenter replies. HeyLaunch sends it only within Instagram’s 24-hour window; no follow-up is sent if they never reply.</p>
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -256,7 +297,7 @@ export default function NewAutomationPage() {
                         >
                           <option value="DELAY">After a delay</option>
                           <option value="LINK_NOT_CLICKED">If link not clicked</option>
-                          <option value="NO_REPLY">If no reply</option>
+                          <option value="NO_REPLY" disabled={['POST_COMMENT', 'ANY_POST'].includes(triggerType)}>If no reply (not available after a comment DM)</option>
                         </select>
                         <div className="flex items-center gap-1">
                           <Input type="number" min={1} max={1439} value={f.delayMinutes}
@@ -269,6 +310,7 @@ export default function NewAutomationPage() {
                       <Input value={f.text} onChange={(e) => setFollowUps((p) => p.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))} placeholder="Follow-up message" />
                     </div>
                   ))}
+                  {['POST_COMMENT', 'ANY_POST'].includes(triggerType) && followUps.some((item) => item.condition === 'NO_REPLY') && <p role="status" className="text-xs text-muted-foreground">Change “If no reply” to another condition. Instagram requires the commenter to respond before HeyLaunch can send a follow-up.</p>}
                   {isPaid && followUps.length < 3 && (
                     <Button variant="ghost" className="h-9 px-2" onClick={() => setFollowUps((p) => [...p, { condition: 'LINK_NOT_CLICKED', delayMinutes: 60, text: '' }])}><Plus className="h-4 w-4" /> Add follow-up</Button>
                   )}
@@ -283,8 +325,9 @@ export default function NewAutomationPage() {
               <h2 className="text-lg font-medium text-foreground">Review</h2>
               <dl className="space-y-2 text-sm">
                 <Review k="Name" v={name} />
+                <Review k="Instagram" v={selectedAccount ? `@${selectedAccount.username}` : ''} />
                 <Review k="Trigger" v={triggerOptions.find((o) => o.value === triggerType)?.label ?? triggerType} />
-                <Review k="Match" v={matchMode === 'KEYWORDS' ? keywords.join(', ') : matchMode === 'ANY' ? 'Any comment' : 'AI intent'} />
+                <Review k="Match" v={matchMode === 'KEYWORDS' ? keywords.join(', ') : 'Any comment'} />
                 <Review k="Buttons" v={buttons.filter((b) => b.title && b.url).map((b) => b.title).join(', ') || '—'} />
               </dl>
               <p className="text-xs text-muted-foreground">Check the preview on the right, then launch.</p>
@@ -307,9 +350,9 @@ export default function NewAutomationPage() {
 
         {/* ─── Right: phone preview ─── */}
         <div className="lg:sticky lg:top-6 h-fit">
-          <PhonePreview
-            username={user?.instagramAccount?.username ?? user?.igAccounts?.[0]?.username ?? 'yourbrand'}
-            reply={replyToComment ? publicReplies.find((r) => r.trim()) : undefined}
+          <AutomationMessagePreview
+            accountUsername={selectedAccount?.username ?? 'yourbrand'}
+            publicReply={replyToComment ? publicReplies.find((r) => r.trim()) : undefined}
             dmText={dmText}
             buttons={buttons.filter((b) => b.title.trim())}
           />
@@ -333,35 +376,4 @@ function Row({ label, hint, checked, onChange, locked }: { label: string; hint: 
 
 function Review({ k, v }: { k: string; v: string }) {
   return <div className="flex gap-2"><dt className="w-20 shrink-0 text-muted-foreground">{k}</dt><dd className="text-foreground">{v || '—'}</dd></div>;
-}
-
-function PhonePreview({ username, reply, dmText, buttons }: { username: string; reply?: string; dmText: string; buttons: { title: string; url: string }[] }) {
-  return (
-    <Card className="p-3">
-      <p className="mb-2 px-1 text-xs font-medium text-muted-foreground">Preview</p>
-      <div className="mx-auto max-w-[280px] rounded-2xl border border-border bg-background p-3">
-        <div className="mb-2 flex items-center gap-2 border-b border-border pb-2">
-          <div className="h-7 w-7 rounded-full bg-muted" aria-hidden />
-          <span className="text-sm font-medium text-foreground">{username}</span>
-        </div>
-        {reply && (
-          <div className="mb-2">
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Public reply</p>
-            <p className="rounded-lg bg-muted px-3 py-1.5 text-sm text-foreground">{reply}</p>
-          </div>
-        )}
-        <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Direct message</p>
-        <div className="rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">
-          {dmText || <span className="opacity-70">Your DM text appears here…</span>}
-          {buttons.length > 0 && (
-            <div className="mt-2 space-y-1">
-              {buttons.map((b, i) => (
-                <div key={i} className="rounded-md bg-background/20 px-2 py-1 text-center text-xs font-medium">{b.title || 'Button'}</div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </Card>
-  );
 }

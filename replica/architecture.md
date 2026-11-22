@@ -1,5 +1,7 @@
 # Architecture — AutoDM (Instagram Auto-DM SaaS)
 
+> **Historical architecture draft (18 November 2026).** This document records an early design and contains decisions and behavior that have since changed. Use [`docs/architecture/PROJECT_OVERVIEW.md`](../docs/architecture/PROJECT_OVERVIEW.md), [`API_AND_DATA.md`](../docs/architecture/API_AND_DATA.md), and [`FEATURE_INVENTORY.md`](../docs/architecture/FEATURE_INVENTORY.md) for the current source-verified architecture.
+
 Companion to `recon.md` and `build-log.md`. Describes the stack, data model,
 API surface, runtime loop and how it scales. Status reflects what is already
 built in `backend-nest/` (see build-log).

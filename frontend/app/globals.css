@@ -2,62 +2,170 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ──────────────────────────────────────────────────────────────────────────
+   Legacy shadcn/Tailwind HSL tokens — kept only so Tailwind `base` and the
+   (vestigial) components/ui primitives still compile. The live UI uses the
+   HeyLaunch semantic tokens below. Do not add new usages of these.
+   ────────────────────────────────────────────────────────────────────────── */
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 200 24% 12%;
+    --foreground: 240 6% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 200 24% 12%;
+    --card-foreground: 240 6% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 200 24% 12%;
-    --primary: 178 70% 30%;
+    --popover-foreground: 240 6% 10%;
+    --primary: 240 6% 10%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 196 30% 95%;
-    --secondary-foreground: 200 24% 18%;
-    --muted: 200 20% 96%;
-    --muted-foreground: 200 12% 42%;
-    --accent: 14 90% 58%;
-    --accent-foreground: 0 0% 100%;
-    --success: 152 58% 36%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 240 6% 10%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 74 100% 48%;
+    --accent-foreground: 240 6% 10%;
+    --success: 142 71% 37%;
     --success-foreground: 0 0% 100%;
-    --warning: 38 92% 48%;
+    --warning: 33 94% 43%;
     --warning-foreground: 0 0% 100%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 200 18% 90%;
-    --input: 200 18% 90%;
-    --ring: 178 70% 34%;
-    --radius: 0.625rem;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 240 6% 10%;
+    --radius: 0.75rem;
   }
 
   .dark {
-    --background: 200 28% 8%;
-    --foreground: 190 20% 92%;
-    --card: 200 24% 11%;
-    --card-foreground: 190 20% 92%;
-    --popover: 200 24% 11%;
-    --popover-foreground: 190 20% 92%;
-    --primary: 172 62% 45%;
-    --primary-foreground: 200 28% 8%;
-    --secondary: 200 20% 18%;
-    --secondary-foreground: 190 20% 92%;
-    --muted: 200 18% 18%;
-    --muted-foreground: 195 12% 62%;
-    --accent: 14 85% 62%;
-    --accent-foreground: 200 28% 8%;
-    --success: 152 52% 46%;
-    --success-foreground: 200 28% 8%;
-    --warning: 38 88% 56%;
-    --warning-foreground: 200 28% 8%;
-    --destructive: 0 65% 55%;
+    --background: 240 6% 5%;
+    --foreground: 210 20% 98%;
+    --card: 240 6% 10%;
+    --card-foreground: 210 20% 98%;
+    --popover: 240 6% 10%;
+    --popover-foreground: 210 20% 98%;
+    --primary: 210 20% 98%;
+    --primary-foreground: 240 6% 10%;
+    --secondary: 240 5% 16%;
+    --secondary-foreground: 210 20% 98%;
+    --muted: 240 5% 16%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 74 100% 48%;
+    --accent-foreground: 240 6% 10%;
+    --success: 142 71% 45%;
+    --success-foreground: 240 6% 10%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 240 6% 10%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 200 16% 20%;
-    --input: 200 16% 20%;
-    --ring: 172 62% 45%;
+    --border: 240 5% 18%;
+    --input: 240 5% 18%;
+    --ring: 210 20% 98%;
   }
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+   HeyLaunch semantic design tokens — the single source of truth for the UI.
+   Premium black / white / charcoal / neutral-gray with a signature lime accent.
+   Light is :root, dark is .dark (toggled by next-themes via the `class` strategy).
+   ────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* surfaces */
+  --bg: #FAFAFA;
+  --surface: #FFFFFF;
+  --card: #FFFFFF;
+  --card-hover: #F6F6F7;
+  --overlay: rgba(23, 23, 27, 0.45);
+  /* text */
+  --text: #17171B;
+  --text-muted: #667085;
+  --text-faint: #6B7280; /* AA 4.5:1 on --bg (was #98A2B3, 2.47:1) */
+  /* lines */
+  --border: #E5E7EB;
+  --border-soft: #F0F1F3;
+  /* navigation */
+  --nav-selected: #F3F4F6;
+  --nav-hover: #F7F8F9;
+  /* primary action (black in light) */
+  --btn-primary: #17171B;
+  --btn-primary-text: #FFFFFF;
+  --btn-primary-hover: #000000;
+  /* brand */
+  --lime: #B9F500;
+  --lime-hover: #A8E000;
+  --on-lime: #17171B;
+  --violet: #6938EF;
+  /* semantic status (solid tuned for AA 4.5:1 on their -soft pill backgrounds) */
+  --success: #0F7A37; /* was #16A34A — 2.95:1 on --success-soft */
+  --success-soft: #E7F6EC;
+  --warning: #A8520A; /* was #D97706 — AA 4.85:1 on --warning-soft */
+  --warning-soft: #FBF1E3;
+  --error: #C81E1E; /* was #DC2626 — 4.15:1 on --error-soft */
+  --error-soft: #FBEAEA;
+  --info: #2563EB;
+  --info-soft: #E8F0FE;
+  /* elevation */
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-md: 0 4px 16px -6px rgba(16, 24, 40, 0.12);
+  --shadow-lg: 0 20px 48px -18px rgba(16, 24, 40, 0.20);
+  /* radii */
+  --radius-card: 12px;
+  --radius-dialog: 16px;
+  /* focus ring (violet, matches rl-kit) */
+  --focus-ring: rgba(105, 56, 239, 0.35);
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #0B0B0D;
+  --surface: #0F0F12;
+  --card: #17171B;
+  --card-hover: #1E1E23;
+  --overlay: rgba(0, 0, 0, 0.6);
+  --text: #F9FAFB;
+  --text-muted: #A1A1AA;
+  --text-faint: #71717A;
+  --border: #29292F;
+  --border-soft: #202024;
+  --nav-selected: #27272D;
+  --nav-hover: #202026;
+  --btn-primary: #F9FAFB;
+  --btn-primary-text: #17171B;
+  --btn-primary-hover: #FFFFFF;
+  --lime: #B9F500;
+  --lime-hover: #C6FF1A;
+  --on-lime: #17171B;
+  --violet: #8B6CF0;
+  --success: #22C55E;
+  --success-soft: #16291D;
+  --warning: #F59E0B;
+  --warning-soft: #2A2113;
+  --error: #EF4444;
+  --error-soft: #2A1718;
+  --info: #3B82F6;
+  --info-soft: #14233B;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 16px -6px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 20px 48px -18px rgba(0, 0, 0, 0.6);
+  --focus-ring: rgba(139, 108, 240, 0.45);
+  color-scheme: dark;
+}
+
 @layer base {
-  * { @apply border-border; }
-  body { @apply bg-background text-foreground; font-feature-settings: "cv11", "ss01"; }
+  * { border-color: var(--border); }
+  html { background: var(--bg); }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Respect reduced-motion for everyone. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

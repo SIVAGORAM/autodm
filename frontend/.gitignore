@@ -4,3 +4,9 @@ node_modules
 .env*.local
 dist
 .next
+.next-dev
+
+# Local build artifacts / backups (QA cleanup)
+*.tgz
+*.bak
+_to_delete/

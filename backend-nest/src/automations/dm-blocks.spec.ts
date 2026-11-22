@@ -1,10 +1,12 @@
 import { extractButtons, applyTracking, isUnwrappable } from './dm-blocks';
+import { signClickAttribution } from '../tracking/click-attribution';
 
 const blocks = [
   { type: 'text', text: 'hi' },
   { type: 'buttons', buttons: [{ title: 'Get it', url: 'https://shop.me/x' }, { title: 'Amazon', url: 'https://www.amazon.in/dp/abc' }] },
 ];
 const links = [{ slug: 'ab12', targetUrl: 'https://shop.me/x' }];
+const attributionSecret = 'test-attribution-secret';
 
 describe('extractButtons', () => {
   it('pulls title+url pairs from button blocks', () => {
@@ -29,8 +31,9 @@ describe('isUnwrappable', () => {
 
 describe('applyTracking', () => {
   it('wraps a tracked URL in the redirect', () => {
-    const out = applyTracking(extractButtons(blocks), links, true, 'https://api.me/', 'IGSID1');
-    expect(out[0].url).toBe('https://api.me/r/ab12?c=IGSID1');
+    const out = applyTracking(extractButtons(blocks), links, true, 'https://api.me/', 'IGSID1', attributionSecret);
+    const signature = signClickAttribution('ab12', 'IGSID1', attributionSecret);
+    expect(out[0].url).toBe(`https://api.me/r/ab12?c=IGSID1&s=${signature}`);
   });
   it('leaves Amazon untouched even when tracking is on', () => {
     const out = applyTracking(extractButtons(blocks), links, true, 'https://api.me');

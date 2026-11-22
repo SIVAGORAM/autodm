@@ -17,6 +17,8 @@ dist/
 **/dist/
 .next/
 **/.next/
+.next-dev/
+**/.next-dev/
 build/
 **/build/
 out/
@@ -41,3 +43,6 @@ replica/_to_delete/
 # ───── editor ─────
 .vscode/
 .idea/
+_fe_build.tgz
+_be_verify.tgz
+frontend/_fe_build.tgz

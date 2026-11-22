@@ -1,0 +1,169 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heylaunch?schema=public
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/heylaunch?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_ACCESS_SECRET: ci-access-secret-that-is-only-used-in-ephemeral-tests
+      JWT_REFRESH_SECRET: ci-refresh-secret-that-is-only-used-in-ephemeral-tests
+      ENCRYPTION_KEY: ci-encryption-key-that-is-only-used-in-ephemeral-tests
+      NODE_ENV: test
+      PORT: "4000"
+      COOKIE_SECURE: "false"
+      PUBLIC_URL: http://localhost:4000
+      CORS_ORIGIN: http://localhost:3000
+      RAZORPAY_WEBHOOK_SECRET: ci-only-webhook-signing-key
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: heylaunch
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d heylaunch"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.22.1
+          cache: npm
+          cache-dependency-path: backend-nest/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend-nest
+        run: npm ci
+
+      - name: Audit backend dependencies
+        working-directory: backend-nest
+        run: npm audit --audit-level=high
+
+      - name: Generate and validate Prisma Client/schema
+        working-directory: backend-nest
+        run: |
+          npx prisma generate
+          npx prisma validate
+
+      - name: Apply migrations to disposable PostgreSQL
+        working-directory: backend-nest
+        run: |
+          npx prisma migrate deploy
+          npx prisma migrate status
+
+      - name: Verify administrator audit records are immutable
+        working-directory: backend-nest
+        env:
+          CI: "true"
+        run: npm run test:audit-immutability
+
+      - name: Run backend tests
+        working-directory: backend-nest
+        run: npm test -- --runInBand
+
+      - name: Build backend
+        working-directory: backend-nest
+        run: npm run build
+
+      - name: Verify Redis-backed HTTP throttling
+        working-directory: backend-nest
+        env:
+          THROTTLER_REDIS_SMOKE: "true"
+        run: npm run test:redis-throttler
+
+      - name: Verify API PostgreSQL and Redis readiness
+        working-directory: backend-nest
+        run: |
+          node dist/main.js > "$RUNNER_TEMP/heylaunch-api.log" 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          ready=false
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4000/ready >/dev/null; then
+              echo "API readiness passed with PostgreSQL and Redis connected."
+              ready=true
+              break
+            fi
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              cat "$RUNNER_TEMP/heylaunch-api.log"
+              exit 1
+            fi
+            sleep 2
+          done
+          if [ "$ready" != true ]; then
+            cat "$RUNNER_TEMP/heylaunch-api.log"
+            exit 1
+          fi
+          npm run test:smoke
+          npm run test:dashboard-events-smoke
+
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.22.1
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Audit frontend dependencies
+        working-directory: frontend
+        run: npm audit --audit-level=high
+
+      - name: Verify frontend API URL policy
+        working-directory: frontend
+        run: npm run test:config
+
+      - name: Lint and build frontend
+        working-directory: frontend
+        env:
+          RENDER: "true"
+          NEXT_PUBLIC_API_URL: https://api.example.invalid
+        run: npm run build

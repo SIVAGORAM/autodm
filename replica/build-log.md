@@ -1,5 +1,7 @@
 # Build log — AutoDM
 
+> **Historical snapshot (18 November 2026).** Its TODO entries describe the state at that date and are not the current implementation status. For current verified behavior, see [`docs/architecture/FEATURE_INVENTORY.md`](../docs/architecture/FEATURE_INVENTORY.md), [`PROJECT_OVERVIEW.md`](../docs/architecture/PROJECT_OVERVIEW.md), and [`TECHNICAL_DEBT.md`](../docs/architecture/TECHNICAL_DEBT.md).
+
 Stack: Next.js (frontend, existing) + NestJS/Fastify (backend-nest, new). Postgres (Prisma) + Redis (BullMQ).
 Old Express backend kept untouched in `backend/` as backup.
 

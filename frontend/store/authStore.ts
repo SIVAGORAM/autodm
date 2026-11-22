@@ -8,8 +8,13 @@ interface User {
   name: string;
   email: string;
   role: string;
+  adminPermissions?: Array<'SUPPORT_MANAGE' | 'CONTACT_MANAGE' | 'MAIL_READ' | 'OPERATIONS_READ'>;
+  plan?: 'FREE' | 'CREATOR' | 'PRO' | 'AGENCY' | 'PAID';
   profilePicUrl?: string | null;
   isVerified?: boolean;
+  termsVersion?: string | null;
+  privacyVersion?: string | null;
+  ageConfirmedAt?: string | null;
   instagramAccount?: { id: string; username: string; isActive: boolean } | null;
   subscription?: { status: string; currentPeriodEnd: string; plan: { name: string; dmLimit: number; campaignLimit: number } } | null;
 }
@@ -26,7 +31,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       user: null,
       isLoading: false,
       isAuthenticated: false,
