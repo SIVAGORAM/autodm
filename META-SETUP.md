@@ -157,7 +157,12 @@ webhook, redirect URI, and permissions have been verified.
 - Meta's current product-specific webhook and private-reply guides document Reel
   comment events and private replies. An older Facebook Login-specific Webhooks
   page still says Reels are unsupported; verify Reel event delivery in your
-  authorized test account before launch.
+  authorized test account before launch. The comment webhook payload includes
+  the media product type. However, Meta's current IG Media reference documents
+  the `media_product_type` media-read field only for the separate Instagram API
+  with Facebook Login. HeyLaunch uses Instagram Login and Unified Login, so the
+  media picker labels videos as “Video / Reel” instead of requesting that
+  unsupported field. Specific media selection still uses the owned media ID.
 
 ### 7. Required callback URLs (Meta needs these for any data-handling app)
 - **Deauthorize callback URL:** `https://<your-api-domain>/api/instagram/deauthorize` (implemented; verifies Meta's signed request, pauses the account automations, and clears the local token)

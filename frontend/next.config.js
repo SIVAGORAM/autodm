@@ -1,5 +1,6 @@
 const path = require('path');
 const { PHASE_DEVELOPMENT_SERVER } = require('next/constants');
+const { resolveApiBase } = require('./lib/api-url-policy.cjs');
 
 /** @type {import('next').NextConfig} */
 const createNextConfig = (phase) => ({
@@ -9,6 +10,15 @@ const createNextConfig = (phase) => ({
   distDir: phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next',
   output: 'standalone',
   outputFileTracingRoot: path.join(__dirname, '..'),
+  // Proxy browser API calls through the frontend origin. This keeps HTTP-only
+  // auth cookies first-party even when the API and web app use separate hosts.
+  async rewrites() {
+    const apiOrigin = resolveApiBase(process.env.NEXT_PUBLIC_API_URL, {
+      production: process.env.NODE_ENV === 'production',
+      requireHttps: process.env.RENDER === 'true',
+    });
+    return [{ source: '/api/:path*', destination: `${apiOrigin}/api/:path*` }];
+  },
   // The build script runs ESLint directly; Next 15's embedded lint wrapper
   // currently misreads this ESLint 9 flat config.
   eslint: { ignoreDuringBuilds: true },

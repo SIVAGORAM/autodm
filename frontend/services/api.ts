@@ -1,20 +1,14 @@
 // services/api.ts
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports -- shared with the Node build validator.
-const resolveApiBase = require('../lib/api-url-policy.cjs').resolveApiBase as (
-  configuredUrl: string | undefined,
-  options?: { production?: boolean },
-) => string;
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- shared with the Node policy check.
 const shouldSkipAuthRefresh = require('../lib/auth-refresh-policy.cjs').shouldSkipAuthRefresh as (url?: string) => boolean;
-const API_BASE = resolveApiBase(process.env.NEXT_PUBLIC_API_URL, {
-  production: process.env.NODE_ENV === 'production',
-});
 
 export const api = axios.create({
-  baseURL: `${API_BASE}/api`,
-  withCredentials: true, // Send cookies
+  // Keep browser requests on the frontend origin. next.config.js proxies /api
+  // to the backend so auth cookies remain first-party in production browsers.
+  baseURL: '/api',
+  withCredentials: true,
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
 });
@@ -79,7 +73,7 @@ api.interceptors.response.use(
 
       try {
         // Refresh token is in httpOnly cookie, just call the endpoint
-        await axios.post(`${API_BASE}/api/auth/refresh`, {}, { withCredentials: true });
+        await api.post('/auth/refresh');
         processQueue(null);
         return api(originalRequest);
       } catch (refreshError) {
