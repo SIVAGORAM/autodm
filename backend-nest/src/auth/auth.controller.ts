@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, Get, Post, Req, Res, ServiceUnav
 import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
 import { FastifyReply, FastifyRequest } from 'fastify';
+import '@fastify/cookie';
 import { AuthService } from './auth.service';
 import { adminMfaCodeSchema, adminMfaSetupSchema, forgotPasswordSchema, legalAcceptanceSchema, loginSchema, resetPasswordSchema, signupSchema, verifyOtpSchema } from './auth.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -13,7 +14,7 @@ export class AuthController {
 
   @Throttle({ default: { limit: 8, ttl: 60_000 } }) // brute-force protection
   @Post('signup')
-  async signup(@Body() body: unknown, @Res({ passthrough: true }) res: FastifyReply) {
+  async signup(@Req() req: FastifyRequest, @Body() body: unknown, @Res({ passthrough: true }) res: FastifyReply) {
     if (this.config.get('NODE_ENV') === 'production' && this.config.get('LEGAL_POLICY_STATUS', 'DRAFT') !== 'APPROVED') {
       throw new ServiceUnavailableException('Sign-up is temporarily unavailable while the legal policies are being finalized.');
     }
@@ -21,22 +22,22 @@ export class AuthController {
     const { user, accessToken, refreshToken, verificationEmailQueued } = await this.auth.signup(
       name, email, password, termsVersion, privacyVersion,
     );
-    this.setCookies(res, accessToken, refreshToken);
+    this.setCookies(res, accessToken, refreshToken, req);
     return { success: true, data: { user, verificationEmailQueued } };
   }
 
   @Throttle({ default: { limit: 8, ttl: 60_000 } }) // brute-force protection
   @Post('login')
-  async login(@Body() body: unknown, @Res({ passthrough: true }) res: FastifyReply) {
+  async login(@Req() req: FastifyRequest, @Body() body: unknown, @Res({ passthrough: true }) res: FastifyReply) {
     const { email, password } = loginSchema.parse(body);
     const result = await this.auth.login(email, password);
     if ('mfaRequired' in result) {
       res.clearCookie('access_token', { path: '/' });
       res.clearCookie('refresh_token', { path: '/api/auth' });
-      this.setAdminMfaChallengeCookie(res, result.challenge);
+      this.setAdminMfaChallengeCookie(res, result.challenge, req);
       return { success: true, data: { mfaRequired: result.mfaRequired, mfaSetupRequired: result.mfaSetupRequired } };
     }
-    this.setCookies(res, result.accessToken, result.refreshToken);
+    this.setCookies(res, result.accessToken, result.refreshToken, req);
     return { success: true, data: { user: result.user } };
   }
 
@@ -56,8 +57,8 @@ export class AuthController {
     const challenge = (req as any).cookies?.admin_mfa_challenge;
     if (!challenge) throw new UnauthorizedException('Administrator sign-in session expired. Sign in again.');
     const result = await this.auth.confirmAdminMfaSetup(challenge, code);
-    this.clearAdminMfaChallengeCookie(res);
-    this.setCookies(res, result.accessToken, result.refreshToken);
+    this.clearAdminMfaChallengeCookie(res, req);
+    this.setCookies(res, result.accessToken, result.refreshToken, req);
     return { success: true, data: { user: result.user, recoveryCodes: result.recoveryCodes } };
   }
 
@@ -68,8 +69,8 @@ export class AuthController {
     const challenge = (req as any).cookies?.admin_mfa_challenge;
     if (!challenge) throw new UnauthorizedException('Administrator sign-in session expired. Sign in again.');
     const result = await this.auth.verifyAdminMfa(challenge, code);
-    this.clearAdminMfaChallengeCookie(res);
-    this.setCookies(res, result.accessToken, result.refreshToken);
+    this.clearAdminMfaChallengeCookie(res, req);
+    this.setCookies(res, result.accessToken, result.refreshToken, req);
     return { success: true, data: { user: result.user } };
   }
 
@@ -78,7 +79,7 @@ export class AuthController {
     const token = (req as any).cookies?.refresh_token;
     if (!token) throw new UnauthorizedException('No refresh token');
     const { accessToken, refreshToken } = await this.auth.refresh(token);
-    this.setCookies(res, accessToken, refreshToken);
+    this.setCookies(res, accessToken, refreshToken, req);
     return { success: true };
   }
 
@@ -146,11 +147,23 @@ export class AuthController {
     return { success: true };
   }
 
-  private setCookies(res: FastifyReply, accessToken: string, refreshToken: string) {
-    const secure = this.config.get('COOKIE_SECURE', false) === true || this.config.get('COOKIE_SECURE') === 'true';
-    // Cross-site (frontend and backend on different domains) requires SameSite=None + Secure.
-    // Same-origin local dev uses Lax over http.
+  private resolveCookieOptions(req?: FastifyRequest) {
+    const forwardedProto = req?.headers?.['x-forwarded-proto'];
+    const firstForwardedProto = Array.isArray(forwardedProto)
+      ? forwardedProto[0]
+      : forwardedProto?.split(',')[0]?.trim();
+    const isHttps = req?.protocol === 'https' || firstForwardedProto?.toLowerCase() === 'https';
+    const envSecure = this.config.get('COOKIE_SECURE');
+    const configuredSecure = envSecure === true || envSecure === 'true';
+    // Preserve an explicit secure-cookie requirement even if proxy headers are
+    // absent or malformed. HTTPS requests may opt into secure cookies locally.
+    const secure = configuredSecure || isHttps;
     const sameSite: 'none' | 'lax' = secure ? 'none' : 'lax';
+    return { secure, sameSite };
+  }
+
+  private setCookies(res: FastifyReply, accessToken: string, refreshToken: string, req?: FastifyRequest) {
+    const { secure, sameSite } = this.resolveCookieOptions(req);
     res.setCookie('access_token', accessToken, {
       httpOnly: true, secure, sameSite, path: '/', maxAge: 15 * 60,
     });
@@ -159,15 +172,15 @@ export class AuthController {
     });
   }
 
-  private setAdminMfaChallengeCookie(res: FastifyReply, challenge: string) {
-    const secure = this.config.get('COOKIE_SECURE', false) === true || this.config.get('COOKIE_SECURE') === 'true';
+  private setAdminMfaChallengeCookie(res: FastifyReply, challenge: string, req?: FastifyRequest) {
+    const { secure, sameSite } = this.resolveCookieOptions(req);
     res.setCookie('admin_mfa_challenge', challenge, {
-      httpOnly: true, secure, sameSite: secure ? 'none' : 'lax', path: '/api/auth/admin-mfa', maxAge: 5 * 60,
+      httpOnly: true, secure, sameSite, path: '/api/auth/admin-mfa', maxAge: 5 * 60,
     });
   }
 
-  private clearAdminMfaChallengeCookie(res: FastifyReply) {
-    const secure = this.config.get('COOKIE_SECURE', false) === true || this.config.get('COOKIE_SECURE') === 'true';
-    res.clearCookie('admin_mfa_challenge', { httpOnly: true, secure, sameSite: secure ? 'none' : 'lax', path: '/api/auth/admin-mfa' });
+  private clearAdminMfaChallengeCookie(res: FastifyReply, req?: FastifyRequest) {
+    const { secure, sameSite } = this.resolveCookieOptions(req);
+    res.clearCookie('admin_mfa_challenge', { httpOnly: true, secure, sameSite, path: '/api/auth/admin-mfa' });
   }
 }

@@ -12,6 +12,7 @@ describe('AuthController token transport', () => {
   const config = { get: jest.fn((_key: string, fallback?: unknown) => fallback) };
   const reply = { setCookie: jest.fn(), clearCookie: jest.fn() };
   const controller = new AuthController(auth as any, config as any);
+  const httpRequest = { protocol: 'http', headers: {} } as any;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -21,7 +22,7 @@ describe('AuthController token transport', () => {
   });
 
   it('sets HTTP-only cookies on signup without returning the access token in JSON', async () => {
-    const result = await controller.signup({
+    const result = await controller.signup(httpRequest, {
       name: 'Creator', email: 'creator@example.test', password: 'StrongPass1!',
       termsAccepted: true, privacyAcknowledged: true, ageConfirmed: true,
       termsVersion: TERMS_VERSION, privacyVersion: PRIVACY_VERSION,
@@ -38,12 +39,12 @@ describe('AuthController token transport', () => {
       get: (key: string, fallback?: unknown) => key === 'NODE_ENV' ? 'production' : fallback,
     } as any);
 
-    await expect(productionController.signup({}, reply as any)).rejects.toThrow('legal policies are being finalized');
+    await expect(productionController.signup(httpRequest, {}, reply as any)).rejects.toThrow('legal policies are being finalized');
     expect(auth.signup).not.toHaveBeenCalled();
   });
 
   it('sets HTTP-only cookies on login without returning the access token in JSON', async () => {
-    const result = await controller.login({ email: 'creator@example.test', password: 'StrongPass1!' }, reply as any);
+    const result = await controller.login(httpRequest, { email: 'creator@example.test', password: 'StrongPass1!' }, reply as any);
 
     expect(result).toEqual({ success: true, data: { user } });
     expect(JSON.stringify(result)).not.toContain('access-secret');
@@ -52,7 +53,7 @@ describe('AuthController token transport', () => {
 
   it('withholds administrator sessions until the authenticator challenge is completed', async () => {
     auth.login.mockResolvedValue({ mfaRequired: true, mfaSetupRequired: false, challenge: 'challenge-secret' });
-    const result = await controller.login({ email: 'creator@example.test', password: 'StrongPass1!' }, reply as any);
+    const result = await controller.login(httpRequest, { email: 'creator@example.test', password: 'StrongPass1!' }, reply as any);
     expect(result).toEqual({ success: true, data: { mfaRequired: true, mfaSetupRequired: false } });
     expect(JSON.stringify(result)).not.toContain('challenge-secret');
     expect(reply.setCookie).toHaveBeenCalledWith('admin_mfa_challenge', 'challenge-secret', expect.objectContaining({ httpOnly: true, maxAge: 300 }));
@@ -60,11 +61,28 @@ describe('AuthController token transport', () => {
   });
 
   it('rotates cookies on refresh without returning the replacement access token in JSON', async () => {
-    const result = await controller.refresh({ cookies: { refresh_token: 'refresh-secret' } } as any, reply as any);
+    const result = await controller.refresh({ ...httpRequest, cookies: { refresh_token: 'refresh-secret' } }, reply as any);
 
     expect(result).toEqual({ success: true });
     expect(JSON.stringify(result)).not.toContain('access-secret');
     expect(reply.setCookie).toHaveBeenCalledWith('access_token', 'access-secret', expect.objectContaining({ httpOnly: true }));
+  });
+
+  it('marks cookies secure for HTTPS requests even when COOKIE_SECURE is not configured', async () => {
+    const httpsRequest = { protocol: 'http', headers: { 'x-forwarded-proto': 'https, http' } } as any;
+    await controller.login(httpsRequest, { email: 'creator@example.test', password: 'StrongPass1!' }, reply as any);
+
+    expect(reply.setCookie).toHaveBeenCalledWith('access_token', 'access-secret', expect.objectContaining({ secure: true, sameSite: 'none' }));
+  });
+
+  it('never downgrades explicitly secure cookies when a proxy omits HTTPS headers', async () => {
+    const secureController = new AuthController(auth as any, {
+      get: (key: string, fallback?: unknown) => key === 'COOKIE_SECURE' ? true : fallback,
+    } as any);
+
+    await secureController.login(httpRequest, { email: 'creator@example.test', password: 'StrongPass1!' }, reply as any);
+
+    expect(reply.setCookie).toHaveBeenCalledWith('access_token', 'access-secret', expect.objectContaining({ secure: true, sameSite: 'none' }));
   });
 
   it('scopes the delivery-status request to the authenticated user', async () => {

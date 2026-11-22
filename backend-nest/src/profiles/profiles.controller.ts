@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Post, Query, Req, UseGuards, BadRequestException } from '@nestjs/common';
 import { FastifyRequest } from 'fastify';
+import '@fastify/multipart';
 import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { VerifiedEmailGuard } from '../common/guards/verified-email.guard';
