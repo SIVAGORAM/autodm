@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -70,8 +70,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const queryClient = useQueryClient();
   const [menu, setMenu] = useState(false);
   const [drawer, setDrawer] = useState(false);
+  const [sessionCheckFailed, setSessionCheckFailed] = useState(false);
 
-  useEffect(() => { fetchMe().catch(() => router.push('/login')); }, []);
+  const verifySession = useCallback(() => {
+    setSessionCheckFailed(false);
+    return fetchMe().then(() => undefined).catch((error: { response?: { status?: number } }) => {
+      if (error?.response?.status === 401) router.replace('/login');
+      else setSessionCheckFailed(true);
+    });
+  }, [fetchMe, router]);
+
+  useEffect(() => { void verifySession(); }, [verifySession]);
   useEffect(() => {
     if (!isAuthenticated || !user?.id || typeof EventSource === 'undefined' || !api.defaults.baseURL) return;
     const source = new EventSource(`${api.defaults.baseURL}/dashboard/events`, { withCredentials: true });
@@ -115,6 +124,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!isAuthenticated && isLoading) {
     return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg)' }}><Spinner /></div>;
+  }
+  if (!isAuthenticated && sessionCheckFailed) {
+    return <main role="alert" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24, background: 'var(--bg)', color: 'var(--text)' }}>
+      <div style={{ width: 'min(100%, 420px)', textAlign: 'center' }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700 }}>We couldn’t verify your session</h1>
+        <p style={{ marginTop: 8, color: 'var(--text-muted)', lineHeight: 1.6 }}>The service may be waking up or temporarily unavailable. Your account has not been signed out.</p>
+        <button type="button" onClick={() => void verifySession()} style={{ marginTop: 18, minHeight: 44, padding: '0 18px', border: 0, borderRadius: 10, background: 'var(--text)', color: 'var(--bg)', font: 'inherit', fontWeight: 650, cursor: 'pointer' }}>Try again</button>
+        <div style={{ marginTop: 14 }}><Link href="/login" style={{ color: 'var(--text-muted)' }}>Back to sign in</Link></div>
+      </div>
+    </main>;
   }
   if (!isAuthenticated) return null;
 

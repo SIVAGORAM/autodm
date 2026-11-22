@@ -78,8 +78,11 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError as AxiosError, null);
-        // Redirect to login
-        if (typeof window !== 'undefined') {
+        // Only discard the session when the backend definitively rejects the
+        // refresh cookie. A timeout or 5xx can be a sleeping/restarting API;
+        // the dashboard should offer a retry instead of logging the creator out.
+        const refreshStatus = axios.isAxiosError(refreshError) ? refreshError.response?.status : undefined;
+        if (refreshStatus === 401 && typeof window !== 'undefined') {
           window.location.href = '/login';
         }
         return Promise.reject(refreshError);

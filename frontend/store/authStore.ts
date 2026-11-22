@@ -51,7 +51,9 @@ export const useAuthStore = create<AuthState>()(
           const res = await authApi.me();
           set({ user: res.data.data.user, isAuthenticated: true, isFetched: true });
         } catch (err) {
-          set({ user: null, isAuthenticated: false, isFetched: true });
+          const status = (err as { response?: { status?: number } } | null)?.response?.status;
+          if (status === 401) set({ user: null, isAuthenticated: false, isFetched: true });
+          else set({ isFetched: true });
           throw err;
         } finally {
           set({ isLoading: false });
