@@ -5,7 +5,7 @@ import { Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { MetaService, DmButton } from '../meta/meta.service';
 import { EncryptionService } from '../common/encryption.service';
-import { COMMENT_FOLLOWUP_REPLY_REQUIRED, DmJob, dmQueueJobId, runEventId } from './queue.constants';
+import { CLICK_TO_DIRECT_AD_MESSAGE_WINDOW_MS, COMMENT_FOLLOWUP_REPLY_REQUIRED, DmJob, dmQueueJobId, isCommentPrivateReplyDefinitelyExpired, messageWindowState, MessageWindowType, runEventId, STANDARD_MESSAGE_WINDOW_MS } from './queue.constants';
 import { DM_QUEUE_TOKEN } from './queue.constants';
 import { extractButtons, applyTracking } from '../automations/dm-blocks';
 import { personalize } from '../automations/personalize';
@@ -16,7 +16,7 @@ import { reserveCommentPrivateReply } from './instagram-rate-limiter';
 import { DashboardEventsService } from './dashboard-events.service';
 import { safeErrorLabel } from '../common/safe-error-label';
 
-const WINDOW_MS = 24 * 60 * 60 * 1000; // Meta 24h messaging window
+const WINDOW_MS = STANDARD_MESSAGE_WINDOW_MS;
 
 // Processes a DM job — primary send or a scheduled follow-up.
 @Injectable()
@@ -113,6 +113,56 @@ export class DmProcessorService {
       },
     });
     if (!automation) return;
+    // Jobs already in Redis before this guard shipped have no commentEventAt;
+    // BullMQ's immutable enqueue timestamp is a safe fallback for those jobs.
+    const commentEventAt = job.commentEventAt ?? (Number.isFinite(queueJob?.timestamp)
+      ? new Date(queueJob!.timestamp).toISOString()
+      : undefined);
+    if (job.commentId && isCommentPrivateReplyDefinitelyExpired(commentEventAt)) {
+      const reason = 'This comment event is more than seven days old; Instagram private replies are no longer eligible.';
+      if (existing?.status === 'PENDING') {
+        // A previous attempt may have reached Meta before its response was
+        // lost. Preserve that uncertainty instead of converting it to a
+        // definite no-send or retrying an expired private reply.
+        const updated = await this.prisma.run.updateMany({
+          where: { triggerEventId: runEventId(job), status: 'PENDING' },
+          data: { status: 'UNKNOWN', error: reason },
+        });
+        if (updated?.count > 0) await this.publishDeliveryUpdate(job);
+      } else {
+        await this.recordRun(job, null, 'SKIPPED', reason);
+      }
+      return;
+    }
+    if (job.triggerType === 'DM' || job.triggerType === 'STORY_REPLY') {
+      // Meta's standard messaging window begins at the viewer's inbound
+      // message. Preserve compatibility with already-queued jobs by falling
+      // back to BullMQ's immutable enqueue timestamp during rollout.
+      const messageAt = job.replyReceivedAt ?? (Number.isFinite(queueJob?.timestamp)
+        ? new Date(queueJob!.timestamp).toISOString()
+        : undefined);
+      const messageWindow: MessageWindowType = job.triggerType === 'DM' && job.messageWindow === 'CLICK_TO_DIRECT_AD'
+        ? 'CLICK_TO_DIRECT_AD'
+        : 'STANDARD';
+      const windowState = messageWindowState(messageAt, messageWindow);
+      if (windowState !== 'ELIGIBLE') {
+        const reason = windowState === 'EXPIRED'
+          ? `The ${messageWindow === 'CLICK_TO_DIRECT_AD' ? '7-day Click-to-Direct ad' : '24-hour'} Instagram messaging window for this inbound message has expired; no reply was sent.`
+          : 'The original message time could not be verified; the reply was skipped to protect messaging eligibility.';
+        if (existing?.status === 'PENDING') {
+          // An earlier attempt may have reached Meta before a timeout. Keep
+          // the result ambiguous instead of treating it as a definite no-send.
+          const updated = await this.prisma.run.updateMany({
+            where: { triggerEventId: runEventId(job), status: 'PENDING' },
+            data: { status: 'UNKNOWN', error: reason },
+          });
+          if (updated?.count > 0) await this.publishDeliveryUpdate(job);
+        } else {
+          await this.recordRun(job, null, 'SKIPPED', reason);
+        }
+        return;
+      }
+    }
     const plan = planFor(automation.igAccount.user);
     const activeAccounts = await this.activeAccountIds(automation.igAccount.user.id);
     const restriction = accountPlanRestriction(plan, activeAccounts, automation.igAccount.id)
@@ -225,15 +275,20 @@ export class DmProcessorService {
     );
     await this.prisma.contact.update({ where: { id: contact.id }, data: { dmsSent: { increment: 1 } } });
 
-    // Schedule follow-ups (each within the 24h window).
+    // Schedule follow-ups within the message's actual Meta eligibility window.
     if (!followUpRestriction && !job.commentId) await this.scheduleFollowUps(automation.followUps, job);
   }
 
   private async scheduleFollowUps(followUps: { id: string; order: number; delayMinutes: number }[], job: DmJob) {
     const sentAt = job.primarySentAt ?? new Date().toISOString();
+    const windowMs = job.messageWindow === 'CLICK_TO_DIRECT_AD' ? CLICK_TO_DIRECT_AD_MESSAGE_WINDOW_MS : WINDOW_MS;
+    // Meta measures this window from the person's inbound message, not from
+    // the time HeyLaunch sent its primary response.
+    const windowStart = job.replyReceivedAt ? new Date(job.replyReceivedAt) : new Date(sentAt);
+    const maxDelayMs = Math.max(0, windowMs - (Date.now() - windowStart.getTime()) - 60_000);
     for (const fu of followUps) {
       if ((await this.currentAutomationStatus(job.automationId)) !== 'LIVE') return;
-      const delayMs = Math.min(Math.max(fu.delayMinutes, 0) * 60_000, WINDOW_MS - 60_000);
+      const delayMs = Math.min(Math.max(fu.delayMinutes, 0) * 60_000, maxDelayMs);
       const eventId = `${job.triggerEventId}:fu:${fu.id}`;
       if (await this.dmQueue.getJob(eventId)) continue; // legacy raw ID during rollout
       const queued = await this.dmQueue.add(
@@ -314,10 +369,15 @@ export class DmProcessorService {
     // A comment private reply opens the follow-up window only after the
     // commenter responds. Use that response time, not the private-reply time.
     const latestReplyAt = contact.lastReplyAt && replyAt && contact.lastReplyAt > replyAt ? contact.lastReplyAt : replyAt;
-    const windowStart = job.commentId ? latestReplyAt : primarySentAt;
+    const windowStart = job.commentId
+      ? latestReplyAt
+      : job.replyReceivedAt ? new Date(job.replyReceivedAt) : primarySentAt;
+    const windowMs = !job.commentId && job.messageWindow === 'CLICK_TO_DIRECT_AD'
+      ? CLICK_TO_DIRECT_AD_MESSAGE_WINDOW_MS
+      : WINDOW_MS;
     const since = windowStart ? Date.now() - windowStart.getTime() : 0;
-    if (since >= WINDOW_MS) {
-      await this.recordRun(job, contact.id, 'SKIPPED', 'The 24-hour messaging window has expired.');
+    if (since >= windowMs) {
+      await this.recordRun(job, contact.id, 'SKIPPED', `The ${windowMs === CLICK_TO_DIRECT_AD_MESSAGE_WINDOW_MS ? '7-day Click-to-Direct ad' : '24-hour'} messaging window has expired.`);
       return;
     }
 

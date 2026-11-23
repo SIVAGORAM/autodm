@@ -16,12 +16,17 @@ describe('AdminGuard', () => {
 
     await expect(guard.canActivate(context)).rejects.toThrow('Administrator access required.');
     expect(prisma.user.findUnique).toHaveBeenCalledWith({
-      where: { id: 'user-1' }, select: { role: true, deletionRequestedAt: true, adminMfaEnabledAt: true, adminPermissions: true },
+      where: { id: 'user-1' }, select: { role: true, deletionRequestedAt: true, suspendedAt: true, adminMfaEnabledAt: true, adminPermissions: true },
     });
   });
 
   it('rejects a deletion-locked admin account', async () => {
     prisma.user.findUnique.mockResolvedValue({ role: 'ADMIN', deletionRequestedAt: new Date() });
+    await expect(guard.canActivate(context)).rejects.toThrow('Administrator access required.');
+  });
+
+  it('rejects an admin suspended between authentication and authorization checks', async () => {
+    prisma.user.findUnique.mockResolvedValue({ role: 'ADMIN', deletionRequestedAt: null, suspendedAt: new Date() });
     await expect(guard.canActivate(context)).rejects.toThrow('Administrator access required.');
   });
 

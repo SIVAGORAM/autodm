@@ -151,7 +151,7 @@ export default function VerifyPage() {
               <button type="button" onClick={() => setDeletionOpen(true)} style={{ color: AC.muted, fontSize: 13, fontWeight: 600, background: 'none', border: 0, padding: 0, textDecoration: 'underline', cursor: 'pointer' }}>Delete unverified account</button>
             ) : (
               <div style={{ display: 'grid', gap: 10 }}>
-                <p style={{ margin: 0, color: AC.muted, fontSize: 12, lineHeight: 1.5 }}>Deletion signs you out and disables automations immediately. Remaining account data is removed after a 15-minute safety period and once queued work finishes. Payment transaction references may be retained without your account link.</p>
+                <p style={{ margin: 0, color: AC.muted, fontSize: 12, lineHeight: 1.5 }}>Submitting immediately signs out all sessions and disables connected accounts and automations. A background worker removes remaining account data after queued work drains and a 15-minute processing delay. That delay is not a cancellation period, and the account cannot be restored after submission. Payment transaction references may be retained without your account link.</p>
                 <label htmlFor="verify-delete-password" style={{ color: AC.muted, fontSize: 12 }}>Current password</label>
                 <input id="verify-delete-password" type="password" autoComplete="current-password" value={deletionPassword} onChange={(event) => setDeletionPassword(event.target.value)} style={{ height: 42, padding: '0 12px', borderRadius: 9, border: `1px solid ${AC.line}` }} />
                 <label htmlFor="verify-delete-email" style={{ color: AC.muted, fontSize: 12 }}>Type {user?.email} to confirm</label>

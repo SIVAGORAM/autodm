@@ -16,9 +16,9 @@ export class AdminGuard implements CanActivate {
     // stale role claim embedded in an access token.
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { role: true, deletionRequestedAt: true, adminMfaEnabledAt: true, adminPermissions: true },
+      select: { role: true, deletionRequestedAt: true, suspendedAt: true, adminMfaEnabledAt: true, adminPermissions: true },
     });
-    if (!user || !['ADMIN', 'SUPER_ADMIN'].includes(user.role) || user.deletionRequestedAt) {
+    if (!user || !['ADMIN', 'SUPER_ADMIN'].includes(user.role) || user.deletionRequestedAt || user.suspendedAt) {
       throw new ForbiddenException('Administrator access required.');
     }
     if (!user.adminMfaEnabledAt) throw new ForbiddenException('Administrator MFA setup is required.');

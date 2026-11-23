@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { EncryptionService } from '../common/encryption.service';
 import { InstagramService } from './instagram.service';
@@ -54,11 +55,62 @@ export class TokenRefreshService {
         await this.alert(a, 'Instagram connection expired — reconnect to resume sending.');
       }
     }
-    for (const a of unifiedExpiring) {
-      await this.alert(a, 'Unified Instagram connection is nearing token expiry. Reconnect the account to keep automation running.');
+    if (this.ig.unifiedTokenRefreshEnabled) {
+      const groups = new Map<string, { token: string; rows: typeof unifiedExpiring }>();
+      for (const account of unifiedExpiring) {
+        try {
+          const token = this.enc.decrypt(account.accessTokenEnc);
+          const tokenFingerprint = createHash('sha256').update(token).digest('hex');
+          const key = [account.userId, account.clientBusinessId ?? '', account.unifiedConfigId ?? '', tokenFingerprint].join(':');
+          const group = groups.get(key) ?? { token, rows: [] };
+          group.rows.push(account);
+          groups.set(key, group);
+        } catch {
+          await this.alert(account, 'Unified Instagram connection needs attention. Reconnect to keep automation running.');
+        }
+      }
+
+      for (const group of groups.values()) {
+        const representative = group.rows[0];
+        try {
+          if (!representative.clientBusinessId || !representative.unifiedConfigId) {
+            throw new Error('Unified token is missing its business/configuration binding');
+          }
+          const { accessToken, expiresInSec } = await this.ig.refreshUnifiedToken(group.token);
+          if (expiresInSec !== null && (!Number.isFinite(expiresInSec) || expiresInSec <= 0)) {
+            throw new Error('Meta returned an invalid refreshed token lifetime');
+          }
+          const expiresAt = expiresInSec === null ? null : new Date(Date.now() + expiresInSec * 1000);
+          const updated = await this.prisma.igAccount.updateMany({
+            where: {
+              id: { in: group.rows.map((row) => row.id) },
+              userId: representative.userId,
+              isActive: true,
+              loginMode: 'UNIFIED_LOGIN',
+              accessTokenEnc: { in: group.rows.map((row) => row.accessTokenEnc) },
+            },
+            data: { accessTokenEnc: this.enc.encrypt(accessToken), tokenExpiresAt: expiresAt },
+          });
+          refreshed += updated.count;
+        } catch (error: any) {
+          const status = Number.isInteger(error?.response?.status) ? error.response.status : 'network';
+          const rawCode = error?.response?.data?.error?.code;
+          const code = Number.isInteger(rawCode) || (typeof rawCode === 'string' && /^\d{1,6}$/.test(rawCode))
+            ? String(rawCode)
+            : 'unknown';
+          this.log.warn(`Unified token maintenance failed status=${status} providerCode=${code}`);
+          for (const account of group.rows) {
+            await this.alert(account, 'Unified Instagram connection is nearing token expiry. Reconnect the account to keep automation running.');
+          }
+        }
+      }
+    } else {
+      for (const account of unifiedExpiring) {
+        await this.alert(account, 'Unified Instagram connection is nearing token expiry. Reconnect the account to keep automation running.');
+      }
     }
     if (accounts.length || unifiedExpiring.length) {
-      this.log.log(`Token maintenance: ${refreshed}/${accounts.length} legacy tokens refreshed; ${unifiedExpiring.length} Unified Login token(s) need reconnection`);
+      this.log.log(`Token maintenance: ${refreshed}/${accounts.length} legacy account tokens refreshed; unifiedExpiring=${unifiedExpiring.length} unifiedRefreshEnabled=${this.ig.unifiedTokenRefreshEnabled}`);
     }
     return { checked: accounts.length + unifiedExpiring.length, refreshed };
   }

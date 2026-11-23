@@ -30,8 +30,12 @@ describe('AuthController token transport', () => {
 
     expect(result).toEqual({ success: true, data: { user, verificationEmailQueued: true } });
     expect(JSON.stringify(result)).not.toContain('access-secret');
-    expect(reply.setCookie).toHaveBeenCalledWith('access_token', 'access-secret', expect.objectContaining({ httpOnly: true }));
-    expect(reply.setCookie).toHaveBeenCalledWith('refresh_token', 'refresh-secret', expect.objectContaining({ httpOnly: true }));
+    expect(reply.setCookie).toHaveBeenCalledWith('access_token', 'access-secret', expect.objectContaining({
+      httpOnly: true, path: '/', maxAge: 15 * 60, sameSite: 'lax',
+    }));
+    expect(reply.setCookie).toHaveBeenCalledWith('refresh_token', 'refresh-secret', expect.objectContaining({
+      httpOnly: true, path: '/api/auth', maxAge: 30 * 24 * 60 * 60, sameSite: 'lax',
+    }));
   });
 
   it('keeps production signup disabled until the legal policy drafts are approved', async () => {
@@ -49,6 +53,9 @@ describe('AuthController token transport', () => {
     expect(result).toEqual({ success: true, data: { user } });
     expect(JSON.stringify(result)).not.toContain('access-secret');
     expect(reply.setCookie).toHaveBeenCalledWith('access_token', 'access-secret', expect.objectContaining({ httpOnly: true }));
+    expect(reply.setCookie).toHaveBeenCalledWith('refresh_token', 'refresh-secret', expect.objectContaining({
+      httpOnly: true, path: '/api/auth', maxAge: 30 * 24 * 60 * 60, sameSite: 'lax',
+    }));
   });
 
   it('withholds administrator sessions until the authenticator challenge is completed', async () => {
@@ -61,18 +68,33 @@ describe('AuthController token transport', () => {
   });
 
   it('rotates cookies on refresh without returning the replacement access token in JSON', async () => {
+    auth.refresh.mockResolvedValueOnce({ accessToken: 'rotated-access-secret', refreshToken: 'rotated-refresh-secret' });
     const result = await controller.refresh({ ...httpRequest, cookies: { refresh_token: 'refresh-secret' } }, reply as any);
 
     expect(result).toEqual({ success: true });
-    expect(JSON.stringify(result)).not.toContain('access-secret');
-    expect(reply.setCookie).toHaveBeenCalledWith('access_token', 'access-secret', expect.objectContaining({ httpOnly: true }));
+    expect(JSON.stringify(result)).not.toContain('rotated-access-secret');
+    expect(reply.setCookie).toHaveBeenCalledWith('access_token', 'rotated-access-secret', expect.objectContaining({ httpOnly: true }));
+    expect(reply.setCookie).toHaveBeenCalledWith('refresh_token', 'rotated-refresh-secret', expect.objectContaining({
+      httpOnly: true, path: '/api/auth', maxAge: 30 * 24 * 60 * 60, sameSite: 'lax',
+    }));
   });
 
   it('marks cookies secure for HTTPS requests even when COOKIE_SECURE is not configured', async () => {
     const httpsRequest = { protocol: 'http', headers: { 'x-forwarded-proto': 'https, http' } } as any;
     await controller.login(httpsRequest, { email: 'creator@example.test', password: 'StrongPass1!' }, reply as any);
 
-    expect(reply.setCookie).toHaveBeenCalledWith('access_token', 'access-secret', expect.objectContaining({ secure: true, sameSite: 'none' }));
+    expect(reply.setCookie).toHaveBeenCalledWith('access_token', 'access-secret', expect.objectContaining({ secure: true, sameSite: 'lax' }));
+  });
+
+  it('keeps session cookies secure in production when proxy scheme headers are missing', async () => {
+    const productionController = new AuthController(auth as any, {
+      get: (key: string, fallback?: unknown) => key === 'NODE_ENV' ? 'production' : fallback,
+    } as any);
+
+    await productionController.login(httpRequest, { email: 'creator@example.test', password: 'StrongPass1!' }, reply as any);
+
+    expect(reply.setCookie).toHaveBeenCalledWith('access_token', 'access-secret', expect.objectContaining({ secure: true }));
+    expect(reply.setCookie).toHaveBeenCalledWith('refresh_token', 'refresh-secret', expect.objectContaining({ secure: true }));
   });
 
   it('never downgrades explicitly secure cookies when a proxy omits HTTPS headers', async () => {
@@ -82,7 +104,7 @@ describe('AuthController token transport', () => {
 
     await secureController.login(httpRequest, { email: 'creator@example.test', password: 'StrongPass1!' }, reply as any);
 
-    expect(reply.setCookie).toHaveBeenCalledWith('access_token', 'access-secret', expect.objectContaining({ secure: true, sameSite: 'none' }));
+    expect(reply.setCookie).toHaveBeenCalledWith('access_token', 'access-secret', expect.objectContaining({ secure: true, sameSite: 'lax' }));
   });
 
   it('scopes the delivery-status request to the authenticated user', async () => {

@@ -29,7 +29,11 @@ function setup() {
   };
   const queue: any = { getJob: jest.fn().mockResolvedValue(null), addBulk: jest.fn().mockResolvedValue([{ id: 'job-1' }]) };
   const dashboardEvents = { publish: jest.fn().mockResolvedValue(undefined) };
-  return { prisma, queue, dashboardEvents, service: new WebhookService(prisma, queue, { consume: jest.fn() } as any, dashboardEvents as any) };
+  return { prisma, queue, dashboardEvents, service: new WebhookService(
+    prisma, queue, { consume: jest.fn() } as any, dashboardEvents as any,
+    { getCommentMediaId: jest.fn().mockResolvedValue(null) } as any,
+    { decrypt: jest.fn().mockReturnValue('provider-token') } as any,
+  ) };
 }
 
 describe('WebhookService durable intake', () => {
@@ -74,7 +78,7 @@ describe('WebhookService durable intake', () => {
       getJob: jest.fn().mockResolvedValue(null),
       add: jest.fn().mockResolvedValue({ id: 'follow-up-job' }),
     };
-    const service = new WebhookService(prisma, queue, {} as any, { publish: jest.fn().mockResolvedValue(undefined) } as any);
+    const service = new WebhookService(prisma, queue, {} as any, { publish: jest.fn().mockResolvedValue(undefined) } as any, {} as any, {} as any);
 
     await (service as any).scheduleCommentFollowUps(
       { id: 'account-row-1', igUserId: 'ig-business-1' },
@@ -130,6 +134,43 @@ describe('WebhookService durable intake', () => {
     expect(queue.addBulk).toHaveBeenCalledWith([{
       name: 'process-webhook-event',
       data: { webhookEventId: 'event-row-1' },
+      opts: { jobId: expect.stringMatching(/^wh-[a-f0-9]{64}$/), attempts: 1 },
+    }]);
+  });
+
+  it('persists and queues a story-reply message as one durable, deduplicated event', async () => {
+    const { prisma, queue, service } = setup();
+    const message = {
+      sender: { id: 'viewer-1' },
+      recipient: { id: 'ig-business-1' },
+      timestamp: 1790000000000,
+      message: {
+        mid: 'story-reply-1',
+        text: 'guide please',
+        reply_to: { story: { id: 'story-1', url: 'https://example.test/story' } },
+      },
+    };
+    prisma.webhookEvent.findMany.mockResolvedValue([{
+      id: 'message-event-row', eventId: 'message:ig-business-1:story-reply-1',
+      payload: { entry: [{ id: 'ig-business-1', messaging: [message] }] },
+      processedAt: null, nextAttemptAt: null, deadLetterAt: null,
+    }]);
+
+    await service.accept({ entry: [{ id: 'ig-business-1', messaging: [message, message] }] });
+
+    expect(prisma.webhookEvent.createMany).toHaveBeenCalledWith({
+      data: [{
+        eventId: 'message:ig-business-1:story-reply-1',
+        igUserId: 'ig-business-1',
+        igAccountId: 'account-row-1',
+        payload: { entry: [{ id: 'ig-business-1', messaging: [message] }] },
+      }],
+      skipDuplicates: true,
+    });
+    expect(prisma.webhookEvent.createMany.mock.invocationCallOrder[0]).toBeLessThan(queue.addBulk.mock.invocationCallOrder[0]);
+    expect(queue.addBulk).toHaveBeenCalledWith([{
+      name: 'process-webhook-event',
+      data: { webhookEventId: 'message-event-row' },
       opts: { jobId: expect.stringMatching(/^wh-[a-f0-9]{64}$/), attempts: 1 },
     }]);
   });
@@ -264,6 +305,32 @@ describe('WebhookService durable intake', () => {
     expect(errorLog).toHaveBeenCalledWith('Instagram comment webhook moved to dead letter after 8 attempts');
     expect(errorLog.mock.calls.flat().join(' ')).not.toContain('private-ig-id');
     expect(errorLog.mock.calls.flat().join(' ')).not.toContain('private-comment-id');
+    handle.mockRestore();
+  });
+
+  it('stores retry timing for a transient comment-processing failure', async () => {
+    const { prisma, service } = setup();
+    const row = {
+      id: 'event-row-1', eventId: 'comment:ig-business-1:comment-1', igUserId: 'ig-business-1',
+      igAccountId: 'account-row-1', payload, processedAt: null, deadLetterAt: null,
+    };
+    prisma.webhookEvent.findUnique.mockResolvedValue(row);
+    prisma.igAccount.findUnique.mockResolvedValue({
+      isActive: true, userId: 'owner-1', user: { deletionRequestedAt: null, suspendedAt: null },
+    });
+    prisma.webhookEvent.update.mockResolvedValueOnce({ attempts: 1 });
+    const handle = jest.spyOn(service, 'handle').mockRejectedValue(new Error('provider request failed'));
+
+    await expect(service.processEvent(row.id)).rejects.toThrow('provider request failed');
+
+    expect(prisma.webhookEvent.update).toHaveBeenLastCalledWith({
+      where: { id: row.id },
+      data: {
+        lastError: 'Webhook processing failed (Error)',
+        nextAttemptAt: expect.any(Date),
+        deadLetterAt: null,
+      },
+    });
     handle.mockRestore();
   });
 

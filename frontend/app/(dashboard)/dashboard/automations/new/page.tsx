@@ -58,6 +58,7 @@ export default function NewAutomationPage() {
     ? selectedIgAccountId
     : activeAccounts[0]?.id ?? '';
   const selectedAccount = activeAccounts.find((account) => account.id === igAccountId);
+  const supportsPublicCommentReply = ['POST_COMMENT', 'ANY_POST'].includes(triggerType);
 
   const create = useMutation({
     mutationFn: (status: 'DRAFT' | 'LIVE') => {
@@ -68,8 +69,8 @@ export default function NewAutomationPage() {
         igAccountId, name, triggerType,
         mediaId: triggerType === 'POST_COMMENT' && mediaId ? mediaId : null,
         matchMode, keywords,
-        publicReplies: replyToComment ? publicReplies.filter((r) => r.trim()) : [],
-        replyToComment, trackClicks, dmBlocks, status,
+        publicReplies: supportsPublicCommentReply && replyToComment ? publicReplies.filter((r) => r.trim()) : [],
+        replyToComment: supportsPublicCommentReply && replyToComment, trackClicks, dmBlocks, status,
         followUps: followUps
           .filter((f) => f.text.trim())
           .map((f, i) => ({ order: i, condition: f.condition, delayMinutes: f.delayMinutes, dmBlocks: [{ type: 'text', text: f.text }] })),
@@ -213,14 +214,14 @@ export default function NewAutomationPage() {
                   <div className="mt-1.5"><TagInput tags={keywords} onChange={setKeywords} max={keywordCap} placeholder="e.g. GUIDE" /></div>
                 </div>
               )}
-              <div className="flex items-center justify-between rounded-lg border border-border p-3">
+              {supportsPublicCommentReply && <div className="flex items-center justify-between rounded-lg border border-border p-3">
                 <div>
                   <p className="text-sm font-medium text-foreground">Also reply under the comment</p>
                   <p className="text-xs text-muted-foreground">Rotates up to 3 public replies.</p>
                 </div>
                 <Toggle checked={replyToComment} onChange={setReplyToComment} label="Reply under the comment" />
-              </div>
-              {replyToComment && (
+              </div>}
+              {supportsPublicCommentReply && replyToComment && (
                 <div className="space-y-2">
                   {publicReplies.map((r, i) => (
                     <div key={i} className="flex gap-2">

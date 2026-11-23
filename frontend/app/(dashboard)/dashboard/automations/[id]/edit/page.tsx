@@ -50,6 +50,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
   const [trackClicks, setTrackClicks] = useState(true);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [error, setError] = useState('');
+  const supportsPublicCommentReply = ['POST_COMMENT', 'ANY_POST'].includes(triggerType);
 
   useEffect(() => {
     const current = automation.data;
@@ -83,8 +84,9 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
         name: name.trim(), triggerType,
         mediaId: triggerType === 'POST_COMMENT' && mediaId.trim() ? mediaId.trim() : null,
         matchMode, keywords,
-        publicReplies: replyToComment ? publicReplies.filter((reply) => reply.trim()) : [],
-        replyToComment, trackClicks, askToFollow: false, collectEmail: false, dmBlocks,
+        publicReplies: supportsPublicCommentReply && replyToComment ? publicReplies.filter((reply) => reply.trim()) : [],
+        replyToComment: supportsPublicCommentReply && replyToComment,
+        trackClicks, askToFollow: false, collectEmail: false, dmBlocks,
         followUps: followUps.map((item, index) => ({
           ...(item.id ? { id: item.id } : {}), order: index, condition: item.condition, delayMinutes: item.delayMinutes,
           dmBlocks: [{ type: 'text', text: item.text.trim() }],
@@ -186,7 +188,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
           {matchMode === 'KEYWORDS' && <div><Label>Keywords</Label><div className="mt-1.5"><TagInput tags={keywords} onChange={setKeywords} max={keywordLimit} placeholder="Add a keyword" /></div></div>}
         </section>
 
-        {triggerType === 'POST_COMMENT' && (
+        {supportsPublicCommentReply && (
           <section className="space-y-3 border-t border-border pt-5">
             <div className="flex items-center justify-between gap-4">
               <div><p className="text-sm font-medium text-foreground">Reply under the comment</p><p className="text-xs text-muted-foreground">Choose up to 3 public replies to rotate.</p></div>
@@ -242,7 +244,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
       <aside className="h-fit lg:sticky lg:top-6">
         <AutomationMessagePreview
           accountUsername={automation.data.igAccount?.username ?? 'yourbrand'}
-          publicReply={triggerType === 'POST_COMMENT' && replyToComment ? publicReplies.find((reply) => reply.trim()) : undefined}
+          publicReply={supportsPublicCommentReply && replyToComment ? publicReplies.find((reply) => reply.trim()) : undefined}
           dmText={dmText}
           buttons={buttons}
         />

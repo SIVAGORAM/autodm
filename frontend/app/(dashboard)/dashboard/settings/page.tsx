@@ -133,7 +133,7 @@ export default function SettingsPage() {
           <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--error)' }}>Delete account</span>
         </div>
         <p style={{ margin: '0 0 16px', color: RL.muted, fontSize: 13, lineHeight: 1.55 }}>
-          Deletion signs out all sessions, erases your login/profile details, clears HeyLaunch’s stored Instagram credentials, and disables automations immediately. Instagram may retain the app authorization until you revoke it in your Instagram settings. Remaining creator data is removed after a 15-minute safety period and once in-progress delivery jobs finish. Payment transaction references are retained without your account link for accounting records.
+          Submitting immediately signs out every session, hides your public profile, disables connected Instagram accounts and automations, and replaces your login details. A background worker permanently removes remaining creator data after queued work drains and a 15-minute processing delay. That delay is not a cancellation period: you cannot sign back in or restore the account after submitting. Instagram authorization may remain until you revoke HeyLaunch in Instagram settings. Payment transaction references are retained without your account link for accounting records.
         </p>
         {!deletionOpen ? (
           <Btn variant="ghost" onClick={() => setDeletionOpen(true)}>Continue to account deletion</Btn>
@@ -143,7 +143,7 @@ export default function SettingsPage() {
             <div><label style={lbl} htmlFor="delete-account-email">Type {user?.email} to confirm</label><input id="delete-account-email" autoComplete="email" type="email" style={field} value={deletionEmail} onChange={(e) => setDeletionEmail(e.target.value)} /></div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <Btn variant="ghost" onClick={() => setDeletionOpen(false)} disabled={deleting}>Cancel</Btn>
-              <Btn variant="danger" onClick={requestDeletion} disabled={deleting}>{deleting ? 'Requesting deletion…' : 'Delete my account'}</Btn>
+              <Btn variant="danger" onClick={requestDeletion} disabled={deleting}>{deleting ? 'Submitting deletion…' : 'Permanently delete my account'}</Btn>
             </div>
           </div>
         )}

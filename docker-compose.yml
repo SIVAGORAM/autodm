@@ -79,7 +79,12 @@ services:
       dockerfile: Dockerfile
       target: build
     command: ["node", "dist/worker.js"]
-    environment: *backend_environment
+    environment:
+      <<: *backend_environment
+      # Compose uses the isolated local Mailpit SMTP service, so verification
+      # and reset messages are delivered to the local inbox during development.
+      # Instagram delivery and scheduled maintenance remain disabled.
+      RUN_MAIL_OUTBOX_WORKER_IN_DEVELOPMENT: "true"
     depends_on:
       api:
         condition: service_healthy

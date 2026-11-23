@@ -10,6 +10,10 @@ const createNextConfig = (phase) => ({
   distDir: phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next',
   output: 'standalone',
   outputFileTracingRoot: path.join(__dirname, '..'),
+  // Keep static generation deterministic on constrained/Windows build hosts.
+  // Multiple workers have intermittently observed Next's generated manifests
+  // before they were fully written during local production builds.
+  experimental: { cpus: 2 },
   // Proxy browser API calls through the frontend origin. This keeps HTTP-only
   // auth cookies first-party even when the API and web app use separate hosts.
   async rewrites() {

@@ -26,7 +26,7 @@ Request only scopes required by the selected login setup and features being subm
 | Unified Login | `instagram_manage_comments` | Subscribe to comment webhooks and support comment private replies | Must be present in the configured Meta login configuration; Advanced Access unverified |
 | Unified Login | `instagram_manage_messages` | Subscribe to message webhooks and send permitted private replies/follow-ups | Must be present in the configured Meta login configuration; Advanced Access unverified |
 
-Do not request `ads_read`, `ads_management`, publishing, insights, `business_management`, or other scopes unless a specific approved product feature needs them. Automatic BISU token management is not implemented; the current login implementation handles an invalid/expired token through reconnection. Meta says token expiration depends on the configuration and access stops if a client removes the app or moves the account to another portfolio.
+Do not request `ads_read`, `ads_management`, publishing, insights, `business_management`, or other scopes unless a specific approved product feature needs them. The opt-in BISU expiry refresh uses Meta's documented `fb_exchange_token` endpoint and app credentials; it does not use the separate token-generation API that requires `business_management`. Keep `META_UNIFIED_TOKEN_REFRESH_ENABLED=false` until staging verifies it. Meta says token expiration depends on the configuration and access stops if a client removes the app or moves the account to another portfolio.
 
 ## Meta Dashboard and business-owner actions
 

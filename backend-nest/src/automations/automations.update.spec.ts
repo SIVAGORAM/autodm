@@ -37,6 +37,18 @@ function setup(existingIds: string[], triggerType = 'DM', conditions: string[] =
 }
 
 describe('AutomationsService.update follow-up integrity', () => {
+  it('clears comment-only reply settings when a post automation changes to Story Reply', async () => {
+    const { service, tx } = setup([], 'POST_COMMENT');
+
+    await service.update('user-a', 'CREATOR', automationId, {
+      triggerType: 'STORY_REPLY', replyToComment: true, publicReplies: ['Thanks for commenting'],
+    });
+
+    expect(tx.automation.update).toHaveBeenCalledWith({ where: { id: automationId }, data: {
+      triggerType: 'STORY_REPLY', replyToComment: false, publicReplies: [],
+    } });
+  });
+
   it('updates retained follow-up rows in place so queued jobs keep their IDs', async () => {
     const { service, tx } = setup([followUpId]);
 
@@ -44,7 +56,9 @@ describe('AutomationsService.update follow-up integrity', () => {
       followUps: [{ id: followUpId, order: 0, condition: 'DELAY', delayMinutes: 90, dmBlocks: textBlock('Updated message') }],
     });
 
-    expect(tx.automation.update).toHaveBeenCalledWith({ where: { id: automationId }, data: {} });
+    expect(tx.automation.update).toHaveBeenCalledWith({ where: { id: automationId }, data: {
+      replyToComment: false, publicReplies: [],
+    } });
     expect(tx.followUp.update).toHaveBeenCalledWith({
       where: { id: followUpId },
       data: { order: 0, condition: 'DELAY', delayMinutes: 90, dmBlocks: textBlock('Updated message') },

@@ -59,35 +59,56 @@ describe('InstagramController OAuth callback binding', () => {
   });
 
   it('binds signed OAuth state to a short-lived HTTP-only browser cookie', async () => {
-    await controller.authUrl('user-1', undefined as any, reply as any);
+    await controller.authUrl('user-1', undefined as any, { protocol: 'http', headers: { 'x-forwarded-proto': 'https' } } as any, reply as any);
 
     expect(jwt.signAsync).toHaveBeenCalledWith(
       expect.objectContaining({ sub: 'user-1', nonce: expect.any(String) }),
       expect.objectContaining({ audience: 'ig-oauth', issuer: 'autodm', expiresIn: '10m' }),
     );
     expect(reply.setCookie).toHaveBeenCalledWith('ig_oauth_state', expect.any(String), expect.objectContaining({
-      httpOnly: true, sameSite: 'lax', path: '/api/instagram/callback', maxAge: 600,
+      httpOnly: true, secure: true, sameSite: 'lax', path: '/api/instagram/callback', maxAge: 600,
     }));
   });
 
   it('keeps legacy Instagram Login as the default even when Unified Login is enabled', async () => {
     (ig as any).unifiedLoginEnabled = true;
 
-    await controller.authUrl('user-1', undefined as any, reply as any);
+    await controller.authUrl('user-1', undefined as any, { protocol: 'http', headers: {} } as any, reply as any);
 
     expect(ig.buildAuthUrl).toHaveBeenCalledWith(expect.any(String), false, 'INSTAGRAM_LOGIN');
   });
 
   it('exposes Unified Login as available only when its backend feature flag is enabled', () => {
     (ig as any).unifiedLoginEnabled = false;
+    (ig as any).instagramLoginAppId = 'instagram-app-id';
+    (ig as any).instagramLoginUsesMetaFallback = false;
+    (ig as any).unifiedLoginAppId = 'meta-app-id';
+    (ig as any).unifiedLoginConfigId = 'business-config-id';
+    (ig as any).oauthRedirectUri = 'https://app.example.test/api/instagram/callback';
     expect(controller.loginOptions()).toEqual({
       success: true,
-      data: { unifiedLoginEnabled: false, webhookCallbackUrl: 'https://api.example.test/webhooks/instagram' },
+      data: {
+        unifiedLoginEnabled: false,
+        instagramLoginAppId: 'instagram-app-id',
+        instagramLoginUsesMetaFallback: false,
+        unifiedLoginAppId: 'meta-app-id',
+        unifiedLoginConfigId: 'business-config-id',
+        oauthRedirectUri: 'https://app.example.test/api/instagram/callback',
+        webhookCallbackUrl: 'https://api.example.test/webhooks/instagram',
+      },
     });
     (ig as any).unifiedLoginEnabled = true;
     expect(controller.loginOptions()).toEqual({
       success: true,
-      data: { unifiedLoginEnabled: true, webhookCallbackUrl: 'https://api.example.test/webhooks/instagram' },
+      data: {
+        unifiedLoginEnabled: true,
+        instagramLoginAppId: 'instagram-app-id',
+        instagramLoginUsesMetaFallback: false,
+        unifiedLoginAppId: 'meta-app-id',
+        unifiedLoginConfigId: 'business-config-id',
+        oauthRedirectUri: 'https://app.example.test/api/instagram/callback',
+        webhookCallbackUrl: 'https://api.example.test/webhooks/instagram',
+      },
     });
   });
 
@@ -105,6 +126,9 @@ describe('InstagramController OAuth callback binding', () => {
       where: { igAccountId: { in: ['account-1'] } },
       _max: { createdAt: true },
     });
+    expect(prisma.igAccount.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({ loginMode: true }),
+    }));
     expect(result.data).toEqual([expect.objectContaining({ lastWebhookAt: createdAt.toISOString() })]);
     expect(JSON.stringify(result)).not.toContain('payload');
   });
@@ -141,7 +165,7 @@ describe('InstagramController OAuth callback binding', () => {
   it('rejects an explicit Unified Login authorization request while the feature flag is disabled', async () => {
     (ig as any).unifiedLoginEnabled = false;
 
-    await expect(controller.authUrl('user-1', 'UNIFIED_LOGIN', reply as any))
+    await expect(controller.authUrl('user-1', 'UNIFIED_LOGIN', { protocol: 'http', headers: {} } as any, reply as any))
       .rejects.toThrow('Unified Instagram Login is not enabled.');
     expect(ig.buildAuthUrl).not.toHaveBeenCalled();
   });
@@ -149,7 +173,7 @@ describe('InstagramController OAuth callback binding', () => {
   it('allows an explicit Unified Login authorization request only after the feature flag is enabled', async () => {
     (ig as any).unifiedLoginEnabled = true;
 
-    await controller.authUrl('user-1', 'UNIFIED_LOGIN', reply as any);
+    await controller.authUrl('user-1', 'UNIFIED_LOGIN', { protocol: 'http', headers: {} } as any, reply as any);
 
     expect(ig.buildAuthUrl).toHaveBeenCalledWith(expect.any(String), false, 'UNIFIED_LOGIN');
     expect(jwt.signAsync).toHaveBeenCalledWith(expect.objectContaining({ loginMode: 'UNIFIED_LOGIN' }), expect.any(Object));
@@ -173,6 +197,44 @@ describe('InstagramController OAuth callback binding', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(reply.clearCookie).toHaveBeenCalledWith('ig_oauth_state', expect.objectContaining({ path: '/api/instagram/callback' }));
     expect(reply.redirect).toHaveBeenCalledWith(expect.stringContaining('/dashboard/instagram?error='), 302);
+  });
+
+  it('logs only normalized provider error fields when Meta returns an OAuth denial', async () => {
+    const warn = jest.spyOn((controller as any).log, 'warn').mockImplementation(() => undefined);
+
+    await controller.callback('', '', 'access_denied', {
+      query: { error_code: '190', error_description: 'sensitive provider details must not be logged' },
+      cookies: {},
+    }, reply as any);
+
+    expect(warn).toHaveBeenCalledWith('Meta Instagram OAuth returned error=access_denied code=190');
+    expect(warn).toHaveBeenCalledWith('IG callback failed stage=provider_callback (BadRequestException)');
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('sensitive provider details');
+    expect(ig.exchangeCodeForToken).not.toHaveBeenCalled();
+    expect(reply.redirect).toHaveBeenCalledWith('http://localhost:3000/dashboard/instagram?error=cancelled', 302);
+  });
+
+  it('records the failed OAuth callback stage without logging exception contents', async () => {
+    const warn = jest.spyOn((controller as any).log, 'warn').mockImplementation(() => undefined);
+    ig.exchangeCodeForToken.mockRejectedValueOnce(new Error('provider response contained a private token'));
+
+    await controller.callback('oauth-code', 'signed-state', '', { cookies: { ig_oauth_state: nonce } }, reply as any);
+
+    expect(warn).toHaveBeenCalledWith('IG callback failed stage=code_exchange (Error)');
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('private token');
+    expect(reply.redirect).toHaveBeenCalledWith('http://localhost:3000/dashboard/instagram?error=connect_failed', 302);
+  });
+
+  it('clears the OAuth state cookie with the Secure flag behind an HTTPS-terminating proxy', async () => {
+    await controller.callback('', '', '', {
+      protocol: 'http',
+      headers: { 'x-forwarded-proto': 'https' },
+      cookies: {},
+    }, reply as any);
+
+    expect(reply.clearCookie).toHaveBeenCalledWith('ig_oauth_state', expect.objectContaining({
+      path: '/api/instagram/callback', secure: true, sameSite: 'lax',
+    }));
   });
 
   it('does not link an Instagram account after the initiating account is deletion-locked', async () => {

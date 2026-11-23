@@ -4,6 +4,7 @@ import { WebhookAdminController } from './webhook-admin.controller';
 import { WebhookService } from './webhook.service';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { SuperAdminGuard } from '../common/guards/super-admin.guard';
+import { InstagramModule } from '../instagram/instagram.module';
 
-@Module({ controllers: [WebhookController, WebhookAdminController], providers: [WebhookService, AdminGuard, SuperAdminGuard] })
+@Module({ imports: [InstagramModule], controllers: [WebhookController, WebhookAdminController], providers: [WebhookService, AdminGuard, SuperAdminGuard] })
 export class WebhookModule {}

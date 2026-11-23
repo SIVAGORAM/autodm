@@ -1,4 +1,4 @@
-import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { createHash, randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { Queue } from 'bullmq';
@@ -11,6 +11,8 @@ import { automationRestriction } from '../common/automation-entitlement';
 import { DmQuotaService } from '../common/dm-quota.service';
 import { safeErrorLabel } from '../common/safe-error-label';
 import { DashboardEventsService } from '../queue/dashboard-events.service';
+import { InstagramService } from '../instagram/instagram.service';
+import { EncryptionService } from '../common/encryption.service';
 
 function commentValues(value: unknown): unknown[] {
   if (Array.isArray(value)) return value;
@@ -42,6 +44,8 @@ export class WebhookService {
     @Inject(DM_QUEUE_TOKEN) private dmQueue: Queue,
     private quota: DmQuotaService,
     private dashboardEvents: DashboardEventsService,
+    private readonly instagram: InstagramService,
+    private readonly encryption: EncryptionService,
   ) {}
 
   // Apply an abuse limit only after signature verification fails. The generic
@@ -364,7 +368,7 @@ export class WebhookService {
     const text: string = normalized.text ?? '';
     const fromId = normalized.from?.id ? String(normalized.from.id) : '';
     const fromUser = normalized.from?.username as string | undefined;
-    const mediaId = String(normalized.media?.id ?? '');
+    let mediaId = String(normalized.media?.id ?? '');
     if (!fromId || !commentId) return;
 
     const account = await this.prisma.igAccount.findUnique({ where: { igUserId } });
@@ -390,9 +394,17 @@ export class WebhookService {
         igAccountId: account.id,
         status: 'LIVE',
         triggerType: { in: ['POST_COMMENT', 'ANY_POST'] },
-        OR: [{ mediaId }, { mediaId: null }],
       },
     });
+    // Meta may omit a carousel's parent album ID from the webhook. Resolve it
+    // before choosing between specific-media and account-wide rules. If the
+    // ID remains unknown, retry the durable webhook instead of allowing a
+    // fallback rule to send a potentially incorrect reply.
+    if (!mediaId && automations.some((automation) => !!automation.mediaId)) {
+      const token = this.encryption.decrypt(account.accessTokenEnc);
+      mediaId = await this.instagram.getCommentMediaId(token, commentId, account.loginMode) ?? '';
+      if (!mediaId) throw new ServiceUnavailableException('Instagram comment media ID is unavailable; webhook processing will retry.');
+    }
     // A media-specific rule must win over the global fallback if both match.
     // Tie-break by creation time and id so the selected automation is stable.
     automations.sort((left, right) => {
@@ -419,6 +431,7 @@ export class WebhookService {
       await this.enqueue({
         automationId: a.id, igAccountId: account.id, triggerType: a.triggerType,
         commentId, recipientIgsid: fromId, recipientUsername: fromUser,
+        commentEventAt: this.commentNotificationTime(entry?.time),
         text: this.firstText(a.dmBlocks), matchedKeyword: res.keyword,
         triggerEventId,
       });
@@ -433,10 +446,17 @@ export class WebhookService {
     const mid = msg.message?.mid ? String(msg.message.mid) : '';
     if (!senderId || senderId === igUserId || !mid) return;
     if (msg.message?.is_echo) return;
-    const providerTimestamp = Number(msg.timestamp);
-    const replyAt = Number.isFinite(providerTimestamp) && providerTimestamp > 0
-      ? new Date(providerTimestamp)
-      : new Date();
+    const providerTimestamp = typeof msg.timestamp === 'number' || (typeof msg.timestamp === 'string' && /^\d+$/.test(msg.timestamp))
+      ? Number(msg.timestamp)
+      : Number.NaN;
+    if (!Number.isFinite(providerTimestamp) || providerTimestamp <= 0 || providerTimestamp > Date.now() + 5 * 60_000) {
+      // Never replace a missing provider timestamp with the current time: that
+      // would incorrectly create a fresh Meta messaging window for an old or
+      // malformed event.
+      this.log.warn('Skipping inbound Instagram message with an invalid provider timestamp');
+      return;
+    }
+    const replyAt = new Date(providerTimestamp);
 
     const account = await this.prisma.igAccount.findUnique({ where: { igUserId } });
     if (!account?.isActive) return;
@@ -468,6 +488,15 @@ export class WebhookService {
 
     // A story reply arrives as a message with reply_to.story; a plain DM does not.
     const kind = msg.message?.reply_to?.story ? 'STORY_REPLY' : 'DM';
+    const adReferral = msg.message?.referral;
+    const adId = adReferral?.ad_id;
+    const hasMetaAdId = (typeof adId === 'number' && Number.isSafeInteger(adId) && adId > 0)
+      || (typeof adId === 'string' && /^\d+$/.test(adId));
+    // Meta documents this signed messages-webhook marker for Click-to-Direct
+    // ads. Require the complete marker and only extend ordinary DM triggers;
+    // story replies and generic referrals stay on the 24-hour rule.
+    const clickToDirectAd = kind === 'DM' && adReferral?.source === 'ADS'
+      && adReferral?.type === 'OPEN_THREAD' && hasMetaAdId;
 
     const automations = await this.prisma.automation.findMany({
       where: { igAccountId: account.id, status: 'LIVE', triggerType: kind },
@@ -491,7 +520,8 @@ export class WebhookService {
       await this.enqueue({
         automationId: a.id, igAccountId: account.id, triggerType: kind,
         recipientIgsid: senderId, text: this.firstText(a.dmBlocks),
-        matchedKeyword: res.keyword, triggerEventId,
+        matchedKeyword: res.keyword, triggerEventId, replyReceivedAt: replyAt.toISOString(),
+        ...(clickToDirectAd ? { messageWindow: 'CLICK_TO_DIRECT_AD' as const } : {}),
       });
       break;
     }
@@ -579,5 +609,16 @@ export class WebhookService {
     // queued this event under its pre-hash ID.
     if (await this.dmQueue.getJob(job.triggerEventId)) return;
     await this.dmQueue.add('send', job, { jobId: dmQueueJobId(job.triggerEventId) });
+  }
+
+  private commentNotificationTime(value: unknown): string {
+    const timestamp = typeof value === 'number' || (typeof value === 'string' && /^\d{1,16}$/.test(value))
+      ? Number(value)
+      : Number.NaN;
+    if (!Number.isFinite(timestamp) || timestamp <= 0) return new Date().toISOString();
+    // Meta's webhook entry.time uses Unix seconds; tolerate millisecond values
+    // in older or normalized payloads without confusing them with seconds.
+    const date = new Date(timestamp < 1e12 ? timestamp * 1000 : timestamp);
+    return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
   }
 }

@@ -53,9 +53,41 @@ export class InstagramService {
 
   private get appId() { return this.config.getOrThrow<string>('META_APP_ID'); }
   private get appSecret() { return this.config.getOrThrow<string>('META_APP_SECRET'); }
+  // Instagram Business Login has its own app credentials. Fall back to the
+  // historical shared variables so existing deployments keep working until
+  // the Instagram product credentials are entered separately.
+  private get instagramAppId() { return this.config.get<string>('INSTAGRAM_APP_ID')?.trim() || this.appId; }
+  private get instagramAppSecret() { return this.config.get<string>('INSTAGRAM_APP_SECRET')?.trim() || this.appSecret; }
   get unifiedLoginEnabled() { return this.config.get<boolean>('META_UNIFIED_LOGIN_ENABLED') === true || this.config.get('META_UNIFIED_LOGIN_ENABLED') === 'true'; }
+  get unifiedTokenRefreshEnabled() { return this.config.get<boolean>('META_UNIFIED_TOKEN_REFRESH_ENABLED') === true || this.config.get('META_UNIFIED_TOKEN_REFRESH_ENABLED') === 'true'; }
   private get unifiedConfigId() { return this.config.get<string>('META_UNIFIED_LOGIN_CONFIG_ID') ?? ''; }
-  private get redirectUri() { return `${this.config.getOrThrow<string>('PUBLIC_URL').trim().replace(/\/+$/, '')}/api/instagram/callback`; }
+  // These identifiers are public OAuth parameters, not credentials. Exposing
+  // them to the authenticated setup panel helps operators match the deployed
+  // backend to the Meta app/configuration without revealing either secret.
+  get instagramLoginAppId() { return this.config.get<string>('INSTAGRAM_APP_ID')?.trim() || this.config.get<string>('META_APP_ID')?.trim() || ''; }
+  get instagramLoginUsesMetaFallback() { return !this.config.get<string>('INSTAGRAM_APP_ID')?.trim(); }
+  get unifiedLoginAppId() { return this.config.get<string>('META_APP_ID')?.trim() || ''; }
+  get unifiedLoginConfigId() { return this.unifiedConfigId; }
+  private get redirectUri() {
+    const configured = this.config.get<string>('INSTAGRAM_OAUTH_REDIRECT_URI')?.trim();
+    if (configured) return configured.replace(/\/+$/, '');
+
+    // OAuth starts through the frontend's same-origin /api proxy. Send Meta
+    // back through that same host so the browser-bound OAuth state cookie is
+    // sent to the callback and can be validated.
+    const frontendOrigin = this.config.get<string>('CORS_ORIGIN')?.split(',')[0]?.trim();
+    if (frontendOrigin) {
+      try {
+        const origin = new URL(frontendOrigin);
+        if (origin.protocol === 'http:' || origin.protocol === 'https:') {
+          return `${origin.origin}/api/instagram/callback`;
+        }
+      } catch { /* use the API-origin fallback for legacy local configurations */ }
+    }
+    return `${this.config.getOrThrow<string>('PUBLIC_URL').trim().replace(/\/+$/, '')}/api/instagram/callback`;
+  }
+
+  get oauthRedirectUri() { return this.redirectUri; }
 
   buildAuthUrl(state: string, forceReauth = false, loginMode: InstagramLoginMode = 'INSTAGRAM_LOGIN'): string {
     if (loginMode === 'UNIFIED_LOGIN') {
@@ -65,6 +97,10 @@ export class InstagramService {
         config_id: this.unifiedConfigId,
         redirect_uri: this.redirectUri,
         response_type: 'code',
+        // Unified Login uses a Business Integration System User token. Meta's
+        // Facebook Login for Business flow requires this override so the
+        // config's default response type cannot replace the authorization-code
+        // response that our server-side exchange expects.
         override_default_response_type: 'true',
         prompt: 'login',
         state,
@@ -77,11 +113,15 @@ export class InstagramService {
       'instagram_business_manage_comments',
     ].join(',');
     const p = new URLSearchParams({
-      client_id: this.appId,
+      client_id: this.instagramAppId,
       redirect_uri: this.redirectUri,
       response_type: 'code',
       scope: scopes,
       state,
+      // Keep legacy Instagram Login on Instagram credentials. Facebook's
+      // optional OIDC branch uses a different app configuration and can fail
+      // with a generic Meta error for this Instagram-product app ID.
+      enable_fb_login: 'false',
     });
     // When adding a DIFFERENT account, force Instagram to show the login/account
     // chooser instead of silently reusing the browser's current IG session.
@@ -94,8 +134,8 @@ export class InstagramService {
    try {
     // 1. code -> short-lived token
     const form = new URLSearchParams({
-      client_id: this.appId,
-      client_secret: this.appSecret,
+      client_id: this.instagramAppId,
+      client_secret: this.instagramAppSecret,
       grant_type: 'authorization_code',
       redirect_uri: this.redirectUri,
       code,
@@ -110,7 +150,9 @@ export class InstagramService {
 
     // 2. short -> long-lived (≈60 days)
     const longRes = await axios.get('https://graph.instagram.com/access_token', {
-      params: { grant_type: 'ig_exchange_token', client_secret: this.appSecret, access_token: shortToken },
+      // Use the same Instagram product credentials that issued the short-lived
+      // token. META_APP_SECRET may belong to the separate Facebook Login app.
+      params: { grant_type: 'ig_exchange_token', client_secret: this.instagramAppSecret, access_token: shortToken },
       timeout: 15_000,
       ...this.httpOptions,
     });
@@ -167,9 +209,7 @@ export class InstagramService {
       }
       const uniqueIds = new Set(assigned.map((account: any) => account.id));
       if (uniqueIds.size !== assigned.length) throw new BadRequestException('Unified Login returned duplicate Instagram accounts.');
-      const expiresInSec = Number.isFinite(Number(tokenRes.data.expires_in)) && Number(tokenRes.data.expires_in) > 0
-        ? Number(tokenRes.data.expires_in)
-        : null;
+      const expiresInSec = await this.unifiedTokenExpirySeconds(accessToken, tokenRes.data?.expires_in);
       return {
         accessToken,
         igUserId: assigned[0].id,
@@ -190,6 +230,54 @@ export class InstagramService {
     }
   }
 
+  /**
+   * Unified Login's expiry is selected in the Meta configuration. Some code
+   * exchange responses omit `expires_in`, so inspect the issued token rather
+   * than treating missing metadata as a non-expiring credential. The app
+   * access token stays server-side and is never logged or returned.
+   */
+  private async unifiedTokenExpirySeconds(accessToken: string, expiresIn: unknown): Promise<number | null> {
+    const parsedExpiresIn = typeof expiresIn === 'number' || (typeof expiresIn === 'string' && /^\d+(?:\.\d+)?$/.test(expiresIn))
+      ? Number(expiresIn)
+      : Number.NaN;
+    if (Number.isFinite(parsedExpiresIn) && parsedExpiresIn > 0) return parsedExpiresIn;
+
+    return this.inspectUnifiedTokenExpiry(accessToken);
+  }
+
+  private async inspectUnifiedTokenExpiry(accessToken: string): Promise<number | null> {
+    try {
+      const version = this.config.get<string>('META_GRAPH_VERSION') ?? 'v26.0';
+      const expectedAppId = this.appId;
+      const debug = await axios.get(`https://graph.facebook.com/${version}/debug_token`, {
+        params: {
+          input_token: accessToken,
+          access_token: `${expectedAppId}|${this.appSecret}`,
+        },
+        timeout: 15_000,
+        ...this.httpOptions,
+      });
+      const data = debug.data?.data;
+      if (data?.is_valid !== true || String(data.app_id) !== expectedAppId ||
+          !(typeof data.expires_at === 'number' || (typeof data.expires_at === 'string' && /^\d+$/.test(data.expires_at)))) {
+        throw new Error('Meta did not return valid token expiry metadata');
+      }
+      const expiresAt = Number(data.expires_at);
+      if (expiresAt === 0) return null; // Meta explicitly reports a non-expiring token.
+      const remainingSeconds = expiresAt - Math.floor(Date.now() / 1000);
+      if (!Number.isFinite(remainingSeconds) || remainingSeconds <= 0) {
+        throw new Error('Meta returned an expired token');
+      }
+      return remainingSeconds;
+    } catch (err: any) {
+      const status = Number.isInteger(err?.response?.status) ? err.response.status : 'network';
+      const rawCode = err?.response?.data?.error?.code;
+      const providerCode = Number.isInteger(rawCode) || (typeof rawCode === 'string' && /^\d{1,6}$/.test(rawCode)) ? String(rawCode) : 'unknown';
+      this.log.warn(`Unified Instagram token expiry check failed status=${status} providerCode=${providerCode}`);
+      throw new BadRequestException('Meta did not confirm whether this Instagram connection token expires. Check the selected login configuration and retry.');
+    }
+  }
+
   async refreshLongLivedToken(currentToken: string): Promise<{ accessToken: string; expiresInSec: number }> {
     const res = await axios.get('https://graph.instagram.com/refresh_access_token', {
       params: { grant_type: 'ig_refresh_token', access_token: currentToken },
@@ -197,6 +285,43 @@ export class InstagramService {
       ...this.httpOptions,
     });
     return { accessToken: res.data.access_token, expiresInSec: res.data.expires_in ?? 60 * 24 * 60 * 60 };
+  }
+
+  /** Refresh an expiring Business Integration System User token. */
+  async refreshUnifiedToken(currentToken: string): Promise<{ accessToken: string; expiresInSec: number | null }> {
+    if (typeof currentToken !== 'string' || !currentToken.trim()) {
+      throw new BadRequestException('The saved Instagram token is missing. Reconnect the account.');
+    }
+    const version = this.config.get<string>('META_GRAPH_VERSION') ?? 'v26.0';
+    try {
+      const response = await axios.get(`https://graph.facebook.com/${version}/oauth/access_token`, {
+        params: {
+          grant_type: 'fb_exchange_token',
+          client_id: this.appId,
+          client_secret: this.appSecret,
+          set_token_expires_in_60_days: true,
+          fb_exchange_token: currentToken,
+        },
+        timeout: 15_000,
+        ...this.httpOptions,
+      });
+      const accessToken = response.data?.access_token;
+      if (typeof accessToken !== 'string' || accessToken.length < 20) {
+        throw new Error('Meta returned no replacement token');
+      }
+      // Verify the replacement token belongs to this app and confirm its actual
+      // expiry before replacing the currently stored token.
+      const expiresInSec = await this.inspectUnifiedTokenExpiry(accessToken);
+      return { accessToken, expiresInSec };
+    } catch (err: any) {
+      const status = Number.isInteger(err?.response?.status) ? err.response.status : 'network';
+      const rawCode = err?.response?.data?.error?.code ?? err?.response?.data?.code;
+      const providerCode = Number.isInteger(rawCode) || (typeof rawCode === 'string' && /^\d{1,6}$/.test(rawCode))
+        ? String(rawCode)
+        : 'unknown';
+      this.log.warn(`Unified Instagram token refresh failed status=${status} providerCode=${providerCode}`);
+      throw new ServiceUnavailableException('Meta could not refresh this Instagram token. Reconnect the account if the issue persists.');
+    }
   }
 
   async getMedia(token: string, igUserId: string, loginMode: InstagramLoginMode = 'INSTAGRAM_LOGIN', after?: string): Promise<{
@@ -207,8 +332,13 @@ export class InstagramService {
       const host = loginMode === 'UNIFIED_LOGIN' ? 'graph.facebook.com' : 'graph.instagram.com';
       const version = this.config.get<string>('META_GRAPH_VERSION') ?? 'v26.0';
       const path = loginMode === 'UNIFIED_LOGIN' ? `${encodeURIComponent(igUserId)}/media` : 'me/media';
+      // Meta exposes media_product_type (FEED/REELS/STORY/AD) only through
+      // Instagram API with Facebook Login. Keep the legacy Instagram Login
+      // field set compatible while allowing Unified Login to identify Reels.
+      const fields = ['id', 'media_type', 'caption', 'permalink', 'timestamp'];
+      if (loginMode === 'UNIFIED_LOGIN') fields.push('media_product_type');
       const res = await axios.get(`https://${host}/${version}/${path}`, {
-        params: { fields: 'id,media_type,caption,permalink,timestamp', limit: 50, ...(after ? { after } : {}), access_token: token },
+        params: { fields: fields.join(','), limit: 50, ...(after ? { after } : {}), access_token: token },
         timeout: 15_000,
         ...this.httpOptions,
       });
@@ -256,6 +386,36 @@ export class InstagramService {
         : 'unknown';
       this.log.warn(`getMediaMetadata failed status=${status} providerCode=${code}`);
       throw new BadRequestException('Could not verify this Instagram post. Reload recent posts or reconnect the account, then try again.');
+    }
+  }
+
+  /**
+   * Instagram may omit the parent album ID from a carousel comment webhook.
+   * Meta documents querying the comment node's `media` field to resolve it.
+   * This is only called when the webhook did not include a media ID.
+   */
+  async getCommentMediaId(token: string, commentId: string, loginMode: InstagramLoginMode = 'INSTAGRAM_LOGIN'): Promise<string | null> {
+    const host = loginMode === 'UNIFIED_LOGIN' ? 'graph.facebook.com' : 'graph.instagram.com';
+    const version = this.config.get<string>('META_GRAPH_VERSION') ?? 'v26.0';
+    try {
+      const res = await axios.get(`https://${host}/${version}/${encodeURIComponent(commentId)}`, {
+        params: { fields: 'media', access_token: token },
+        timeout: 10_000,
+        ...this.httpOptions,
+      });
+      const mediaId = res.data?.media?.id;
+      return typeof mediaId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(mediaId) ? mediaId : null;
+    } catch (err: any) {
+      const status = Number.isInteger(err?.response?.status) ? err.response.status : 'network';
+      const rawCode = err?.response?.data?.error?.code ?? err?.response?.data?.code;
+      const code = Number.isInteger(rawCode) || (typeof rawCode === 'string' && /^\d{1,6}$/.test(rawCode))
+        ? String(rawCode)
+        : 'unknown';
+      this.log.warn(`getCommentMediaId failed status=${status} providerCode=${code}`);
+      // A missing media ID prevents safe selection between a selected-post
+      // automation and an account-wide fallback. Let durable webhook retry and
+      // eventually dead-letter this event instead of acknowledging it as done.
+      throw new ServiceUnavailableException('Instagram comment media lookup failed; webhook processing will retry.');
     }
   }
 }

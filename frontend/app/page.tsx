@@ -123,7 +123,7 @@ function ReplyPathDemo() {
           <span className={styles.pathIndex}>01</span>
           <div className={styles.commentCard}>
             <div className={styles.commentAvatar} aria-hidden="true">M</div>
-            <div className={styles.commentText}><small>COMMENT · @mira</small><p>Could you share the guide?</p></div>
+            <div className={styles.commentText}><small>Comment · @mira</small><p>Could you share the guide?</p></div>
             <MessageCircle size={17} aria-hidden="true" />
           </div>
         </article>
@@ -131,14 +131,14 @@ function ReplyPathDemo() {
           <span className={styles.pathIndex}>02</span>
           <div className={styles.matchCard}>
             <div className={styles.matchMark}><Check size={16} aria-hidden="true" /></div>
-            <div><small>YOUR KEYWORD RULE</small><p>“guide” found in comment</p></div>
-            <span className={styles.matchState}>MATCH</span>
+            <div><small>Your keyword rule</small><p>“guide” found in comment</p></div>
+            <span className={styles.matchState}>Match</span>
           </div>
         </article>
         <article className={styles.pathStep}>
           <span className={styles.pathIndex}>03</span>
           <div className={styles.replyCard}>
-            <div className={styles.replyLabel}><MessageCircle size={15} aria-hidden="true" /><small>PREPARED PRIVATE REPLY</small></div>
+            <div className={styles.replyLabel}><MessageCircle size={15} aria-hidden="true" /><small>Prepared private reply</small></div>
             <p>Thanks for asking. Here’s the guide you wanted.</p>
             <div className={styles.replyFooter}><span>Sent only when eligible</span><ArrowUpRight size={14} aria-hidden="true" /></div>
           </div>
@@ -239,8 +239,8 @@ export default function Home() {
         </div>
         <div className={styles.activityPanel} aria-label="Illustrative HeyLaunch activity log">
           <div className={styles.activityHeading}><div><span className={styles.activityDot} /><strong>Activity, with context</strong></div><span>Illustrative interface</span></div>
-          <div className={styles.activityEntry}><span className={styles.activityGlyph}><MessageCircle size={17} aria-hidden="true" /></span><div><strong>Comment matched</strong><small>Keyword · “guide”</small></div><span className={styles.activityStatus}>MATCHED</span></div>
-          <div className={styles.activityEntry}><span className={styles.activityGlyph}><ArrowUpRight size={17} aria-hidden="true" /></span><div><strong>Private reply outcome</strong><small>See the recorded delivery status</small></div><span className={styles.activityStatus}>RECORDED</span></div>
+          <div className={styles.activityEntry}><span className={styles.activityGlyph}><MessageCircle size={17} aria-hidden="true" /></span><div><strong>Comment matched</strong><small>Keyword · “guide”</small></div><span className={styles.activityStatus}>Matched</span></div>
+          <div className={styles.activityEntry}><span className={styles.activityGlyph}><ArrowUpRight size={17} aria-hidden="true" /></span><div><strong>Private reply outcome</strong><small>See the recorded delivery status</small></div><span className={styles.activityStatus}>Recorded</span></div>
           <p className={styles.activityNote}>Example view only. This is not connected to a live Instagram account.</p>
         </div>
       </section>
@@ -286,7 +286,7 @@ export default function Home() {
           <div className={styles.scopeRows}>
             <div><Check size={16} aria-hidden="true" /><strong>Photo & carousel comment automations</strong><span>Implemented · staging verification pending</span></div>
             <div><span className={styles.scopeHollow} aria-hidden="true" /><strong>Unified inbox</strong><span>In development</span></div>
-            <div><span className={styles.scopeHollow} aria-hidden="true" /><strong>Public creator profiles</strong><span>In development</span></div>
+            <div><span className={styles.scopeHollow} aria-hidden="true" /><strong>Public creator profiles</strong><span>Implemented · staging verification pending</span></div>
           </div>
         </div>
       </section>

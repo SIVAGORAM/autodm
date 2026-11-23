@@ -22,4 +22,30 @@ describe('EncryptionService', () => {
     const legacy = CryptoJS.AES.encrypt('old-instagram-token', key).toString();
     expect(service.decrypt(legacy)).toBe('old-instagram-token');
   });
+
+  it('fails explicitly when no configured key can decrypt a legacy value', () => {
+    const oldCiphertext = CryptoJS.AES.encrypt('old-instagram-token', key).toString();
+    const wrongKeyService = new EncryptionService({
+      getOrThrow: () => 'a-different-test-encryption-key-that-is-long-enough',
+    } as any);
+    expect(() => wrongKeyService.decrypt(oldCiphertext)).toThrow('Unable to decrypt legacy encrypted value with configured keys');
+  });
+
+  it('decrypts old authenticated and legacy values while encrypting new values with the primary key', () => {
+    const oldKey = 'old-encryption-key-for-safe-rotation-at-least-32-chars';
+    const primaryKey = 'new-encryption-key-for-safe-rotation-at-least-32-chars';
+    const oldService = new EncryptionService({ getOrThrow: () => oldKey } as any);
+    const rotatingService = new EncryptionService({
+      getOrThrow: () => primaryKey,
+      get: (name: string) => name === 'ENCRYPTION_FALLBACK_KEYS' ? oldKey : undefined,
+    } as any);
+    const oldAuthenticated = oldService.encrypt('old-v2-token');
+    const oldLegacy = CryptoJS.AES.encrypt('old-legacy-token', oldKey).toString();
+
+    expect(rotatingService.decrypt(oldAuthenticated)).toBe('old-v2-token');
+    expect(rotatingService.decrypt(oldLegacy)).toBe('old-legacy-token');
+    const newlyEncrypted = rotatingService.encrypt('new-token');
+    expect(newlyEncrypted.startsWith('v2.')).toBe(true);
+    expect(rotatingService.decrypt(newlyEncrypted)).toBe('new-token');
+  });
 });

@@ -1,6 +1,156 @@
 import { DmProcessorService } from './dm-processor.service';
 
 describe('DmProcessorService delivery recovery', () => {
+  it.each(['DM', 'STORY_REPLY'])('skips an expired %s message instead of calling Meta', async (triggerType) => {
+    const runUpsert = jest.fn().mockResolvedValue({ id: 'run-1', status: 'SKIPPED' });
+    const job: any = {
+      automationId: 'automation-1', igAccountId: 'account-1', triggerType,
+      recipientIgsid: 'recipient-1', text: 'Reply',
+      triggerEventId: 'message:ig-user-1:message-1',
+      replyReceivedAt: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(),
+    };
+    const prisma: any = {
+      run: { findUnique: jest.fn().mockResolvedValue(null), upsert: runUpsert },
+      automation: { findUnique: jest.fn().mockResolvedValue({ id: job.automationId }) },
+    };
+    const meta: any = { sendDirectMessage: jest.fn() };
+    const quota: any = { settle: jest.fn().mockResolvedValue(undefined) };
+    const service = new DmProcessorService(prisma, meta, {} as any, {} as any, quota, {} as any, { publish: jest.fn() } as any);
+
+    await service.process(job, { timestamp: Date.now() } as any);
+
+    expect(runUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({ status: 'SKIPPED', error: expect.stringContaining('24-hour Instagram messaging window') }),
+    }));
+    expect(quota.settle).toHaveBeenCalledWith(job.triggerEventId, false);
+    expect(meta.sendDirectMessage).not.toHaveBeenCalled();
+  });
+
+  it('accepts a marked Click-to-Direct ad message within seven days, using the original event time', async () => {
+    const runUpsert = jest.fn().mockResolvedValue({ id: 'run-1', status: 'SKIPPED' });
+    const automation = {
+      id: 'automation-1', status: 'PAUSED', triggerType: 'DM', matchMode: 'KEYWORDS', keywords: ['guide'],
+      askToFollow: false, collectEmail: false, followUps: [],
+      igAccount: { id: 'account-1', isActive: true, user: { id: 'owner-1', plan: 'PRO' } },
+    };
+    const prisma: any = {
+      run: { findUnique: jest.fn().mockResolvedValue(null), upsert: runUpsert },
+      automation: { findUnique: jest.fn()
+        .mockResolvedValueOnce(automation)
+        .mockResolvedValueOnce({ igAccount: { userId: 'owner-1' } }) },
+      igAccount: { findMany: jest.fn().mockResolvedValue([{ id: 'account-1' }]) },
+    };
+    const meta: any = { sendDirectMessage: jest.fn() };
+    const quota: any = { settle: jest.fn().mockResolvedValue(undefined) };
+    const service = new DmProcessorService(prisma, meta, {} as any, {} as any, quota, {} as any, { publish: jest.fn().mockResolvedValue(undefined) } as any);
+    const job: any = {
+      automationId: 'automation-1', igAccountId: 'account-1', triggerType: 'DM',
+      recipientIgsid: 'recipient-1', text: 'Reply', triggerEventId: 'message:ig-user-1:ctd-message',
+      replyReceivedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+      messageWindow: 'CLICK_TO_DIRECT_AD',
+    };
+
+    await service.process(job, { timestamp: Date.now() } as any);
+
+    expect(runUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({ status: 'SKIPPED', error: 'automation is not live' }),
+    }));
+    expect(meta.sendDirectMessage).not.toHaveBeenCalled();
+  });
+
+  it('keeps an expired message retry UNKNOWN when an earlier provider send may have succeeded', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 0 });
+    const job: any = {
+      automationId: 'automation-1', igAccountId: 'account-1', triggerType: 'STORY_REPLY',
+      recipientIgsid: 'recipient-1', text: 'Reply', triggerEventId: 'message:ig-user-1:story-1',
+      replyReceivedAt: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(),
+    };
+    const prisma: any = {
+      run: { findUnique: jest.fn().mockResolvedValue({ status: 'PENDING' }), updateMany },
+      automation: { findUnique: jest.fn().mockResolvedValue({ id: job.automationId }) },
+    };
+    const meta: any = { sendDirectMessage: jest.fn() };
+    const quota: any = { settle: jest.fn() };
+    const service = new DmProcessorService(prisma, meta, {} as any, {} as any, quota, {} as any, { publish: jest.fn() } as any);
+
+    await service.process(job, { timestamp: Date.now() } as any);
+
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { triggerEventId: job.triggerEventId, status: 'PENDING' },
+      data: expect.objectContaining({ status: 'UNKNOWN', error: expect.stringContaining('24-hour Instagram messaging window') }),
+    }));
+    expect(quota.settle).not.toHaveBeenCalled();
+    expect(meta.sendDirectMessage).not.toHaveBeenCalled();
+  });
+
+  it('skips a comment job whose webhook notification is beyond the private-reply window', async () => {
+    const runUpsert = jest.fn().mockResolvedValue({ id: 'run-1', status: 'SKIPPED' });
+    const automation = { id: 'automation-1' };
+    const prisma: any = {
+      run: { findUnique: jest.fn().mockResolvedValue(null), upsert: runUpsert },
+      automation: { findUnique: jest.fn().mockResolvedValue(automation) },
+    };
+    const meta: any = { replyToComment: jest.fn(), sendCommentDm: jest.fn(), sendDirectMessage: jest.fn() };
+    const quota: any = { settle: jest.fn().mockResolvedValue(undefined) };
+    const dashboardEvents: any = { publish: jest.fn().mockResolvedValue(undefined) };
+    const service = new DmProcessorService(prisma, meta, {} as any, {} as any, quota, {} as any, dashboardEvents);
+    const job: any = {
+      automationId: automation.id,
+      igAccountId: 'account-1',
+      triggerType: 'POST_COMMENT',
+      commentId: 'comment-1',
+      commentEventAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+      recipientIgsid: 'recipient-1',
+      text: 'Reply',
+      triggerEventId: 'comment:ig-user-1:comment-1',
+    };
+
+    await service.process(job, { timestamp: Date.now() } as any);
+
+    expect(runUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({ status: 'SKIPPED', error: expect.stringContaining('more than seven days old') }),
+    }));
+    expect(quota.settle).toHaveBeenCalledWith(job.triggerEventId, false);
+    expect(meta.replyToComment).not.toHaveBeenCalled();
+    expect(meta.sendCommentDm).not.toHaveBeenCalled();
+    expect(meta.sendDirectMessage).not.toHaveBeenCalled();
+  });
+
+  it('keeps an expired retry UNKNOWN when an earlier provider send may have succeeded', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const prisma: any = {
+      run: { findUnique: jest.fn().mockResolvedValue({ status: 'PENDING' }), updateMany },
+      automation: { findUnique: jest.fn()
+        .mockResolvedValueOnce({ id: 'automation-1' })
+        .mockResolvedValueOnce({ igAccount: { userId: 'owner-1' } }) },
+    };
+    const meta: any = { replyToComment: jest.fn(), sendCommentDm: jest.fn() };
+    const quota: any = { settle: jest.fn() };
+    const dashboardEvents: any = { publish: jest.fn().mockResolvedValue(undefined) };
+    const service = new DmProcessorService(prisma, meta, {} as any, {} as any, quota, {} as any, dashboardEvents);
+    const job: any = {
+      automationId: 'automation-1',
+      igAccountId: 'account-1',
+      triggerType: 'POST_COMMENT',
+      commentId: 'comment-1',
+      commentEventAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+      recipientIgsid: 'recipient-1',
+      text: 'Reply',
+      triggerEventId: 'comment:ig-user-1:comment-1',
+    };
+
+    await service.process(job, { timestamp: Date.now() } as any);
+
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { triggerEventId: job.triggerEventId, status: 'PENDING' },
+      data: expect.objectContaining({ status: 'UNKNOWN', error: expect.stringContaining('more than seven days old') }),
+    }));
+    expect(quota.settle).not.toHaveBeenCalled();
+    expect(meta.replyToComment).not.toHaveBeenCalled();
+    expect(meta.sendCommentDm).not.toHaveBeenCalled();
+    expect(dashboardEvents.publish).toHaveBeenCalledWith(expect.any(String), 'delivery');
+  });
+
   it('does not repeat a successful public comment reply when the DM needs a retry', async () => {
     let run: any = null;
     const automation = {
@@ -93,7 +243,8 @@ describe('DmProcessorService delivery recovery', () => {
     const prisma: any = { automation: { findUnique: jest.fn().mockResolvedValue({ status: 'LIVE' }) } };
     const service = new DmProcessorService(prisma, {} as any, {} as any, {} as any, {} as any, dmQueue, { publish: jest.fn().mockResolvedValue(undefined) } as any);
     const followUps = [{ id: 'follow-up-1', order: 0, delayMinutes: 30 }];
-    const job: any = { triggerEventId: 'comment:ig-user-1:comment-1', primarySentAt: '2026-11-21T00:00:00Z' };
+    const inboundAt = new Date(Date.now() - 60_000).toISOString();
+    const job: any = { triggerEventId: 'comment:ig-user-1:comment-1', primarySentAt: new Date().toISOString(), replyReceivedAt: inboundAt };
 
     await (service as any).scheduleFollowUps(followUps, job);
 
@@ -106,6 +257,25 @@ describe('DmProcessorService delivery recovery', () => {
     dmQueue.getJob.mockResolvedValueOnce({ id: 'legacy-job' });
     await (service as any).scheduleFollowUps(followUps, job);
     expect(dmQueue.add).not.toHaveBeenCalled();
+  });
+
+  it('caps an ad-triggered follow-up at the remaining seven-day window from the first message', async () => {
+    const dmQueue: any = { getJob: jest.fn().mockResolvedValue(null), add: jest.fn().mockResolvedValue({ remove: jest.fn() }) };
+    const prisma: any = { automation: { findUnique: jest.fn().mockResolvedValue({ status: 'LIVE' }) } };
+    const service = new DmProcessorService(prisma, {} as any, {} as any, {} as any, {} as any, dmQueue, { publish: jest.fn().mockResolvedValue(undefined) } as any);
+    const followUps = [{ id: 'follow-up-1', order: 0, delayMinutes: 120 }];
+    const replyReceivedAt = new Date(Date.now() - 6 * 24 * 60 * 60_000 - 23 * 60 * 60_000).toISOString();
+    const job: any = {
+      triggerEventId: 'message:ig-user-1:ctd-1', primarySentAt: new Date().toISOString(),
+      replyReceivedAt, messageWindow: 'CLICK_TO_DIRECT_AD',
+    };
+
+    await (service as any).scheduleFollowUps(followUps, job);
+
+    const delay = dmQueue.add.mock.calls[0][2].delay;
+    expect(delay).toBeGreaterThan(57 * 60_000);
+    expect(delay).toBeLessThanOrEqual(59 * 60_000);
+    expect(dmQueue.add.mock.calls[0][1]).toMatchObject({ messageWindow: 'CLICK_TO_DIRECT_AD', replyReceivedAt });
   });
 
   it('marks an exhausted primary send as unknown without overwriting a known terminal result', async () => {

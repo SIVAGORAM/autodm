@@ -97,7 +97,9 @@ export default function AdminCustomerDetailPage() {
     </Card>}
     {customer.deletionRequestedAt && <Card style={{ marginBottom: 14 }}>
       <strong style={{ color: 'var(--text)' }}>Deletion requested</strong>
-      <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 0 }}>Requested {new Date(customer.deletionRequestedAt).toLocaleString()}. Use the deletion review workflow; do not suspend or reactivate this account here.</p>
+      <p style={{ color: 'var(--text-muted)', fontSize: 13, lineHeight: 1.55, marginBottom: 0 }}>
+        Requested {new Date(customer.deletionRequestedAt).toLocaleString()}. The account was disabled, its sessions revoked, Instagram credentials cleared, and automations paused at request time. A background worker permanently removes remaining account-owned data after the safety window and once active queue work has drained. Payment references are retained without the customer link. This product has no admin approval, cancellation, or restore control for deletion requests.
+      </p>
     </Card>}
 
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,240px),1fr))', gap: 12, marginBottom: 14 }}>

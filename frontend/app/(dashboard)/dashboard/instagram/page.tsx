@@ -8,7 +8,59 @@ import { instagramApi, paymentApi } from '../../../../services/api';
 import { RL, Card, Pill, Btn, Empty, Skel, PageHead } from '../../../../components/rl-kit';
 import { Instagram, Plus, AlertCircle, Unlink, CheckCircle2, X, Sparkles, Lock } from 'lucide-react';
 
-type IgAccount = { id: string; username: string; igUserId: string; isActive: boolean; tokenExpiresAt?: string; webhookSubscribedAt?: string | null; lastWebhookAt?: string | null };
+type LoginMode = 'INSTAGRAM_LOGIN' | 'UNIFIED_LOGIN';
+type IgAccount = { id: string; username: string; igUserId: string; isActive: boolean; loginMode: LoginMode; tokenExpiresAt?: string; webhookSubscribedAt?: string | null; lastWebhookAt?: string | null };
+
+function getTokenExpiry(expiresAt: string | undefined, now: number) {
+  if (!expiresAt) return null;
+  const timestamp = Date.parse(expiresAt);
+  if (!Number.isFinite(timestamp)) return null;
+  const millisecondsRemaining = timestamp - now;
+  return {
+    date: new Date(timestamp).toLocaleDateString(),
+    daysRemaining: Math.ceil(millisecondsRemaining / 86_400_000),
+    isExpired: millisecondsRemaining <= 0,
+  };
+}
+
+function TokenExpiryNotice({
+  account,
+  unifiedLoginEnabled,
+  isConnecting,
+  onReconnect,
+}: {
+  account: IgAccount;
+  unifiedLoginEnabled: boolean;
+  isConnecting: boolean;
+  onReconnect: () => void;
+}) {
+  // Keep date-dependent markup client-only so server and browser clocks/time
+  // zones cannot produce a hydration mismatch around midnight or expiry.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => setNow(Date.now()), []);
+  const expiry = now === null ? null : getTokenExpiry(account.tokenExpiresAt, now);
+  if (!expiry || expiry.daysRemaining > 7) return null;
+
+  const isExpired = expiry.isExpired;
+  const canReconnect = account.loginMode === 'INSTAGRAM_LOGIN' || unifiedLoginEnabled;
+  const remaining = expiry.daysRemaining === 0
+    ? 'today'
+    : `in ${expiry.daysRemaining} day${expiry.daysRemaining === 1 ? '' : 's'}`;
+  const message = isExpired
+    ? `Meta reported this connection token expired on ${expiry.date}. Reconnect to restore automation access.`
+    : account.loginMode === 'UNIFIED_LOGIN'
+      ? `Meta reports this token expires ${remaining} (${expiry.date}). Reconnect before expiry to avoid interruption.`
+      : `This token expires ${remaining} (${expiry.date}). HeyLaunch attempts scheduled refresh for Instagram Login tokens; reconnect if refresh fails.`;
+
+  return (
+    <div role="alert" style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', border: `1px solid ${RL.amber}55`, borderRadius: 10, padding: '10px 12px', background: `${RL.amber}0b` }}>
+      <span style={{ minWidth: 0, fontSize: 13, lineHeight: 1.5, color: RL.ink }}>{message}</span>
+      {canReconnect
+        ? <Btn variant="ghost" disabled={isConnecting} onClick={onReconnect}>{isConnecting ? 'Opening…' : 'Reconnect account'}</Btn>
+        : <span style={{ fontSize: 12.5, color: RL.muted }}>Unified Login reconnect is currently disabled. Contact your workspace administrator.</span>}
+    </div>
+  );
+}
 
 export default function InstagramPage() {
   const qc = useQueryClient();
@@ -20,11 +72,19 @@ export default function InstagramPage() {
     if (params.get('connected')) {
       setBanner(params.get('webhook_error')
         ? { tone: 'error', msg: 'Account connected, but Meta did not confirm comment and message webhooks. Set them up below before enabling comment automations.' }
-        : { tone: 'success', msg: 'Instagram account connected and webhooks confirmed.' });
+        : { tone: 'success', msg: 'Instagram connected and Meta accepted the webhook subscription. Send a controlled test comment or message to confirm live delivery.' });
       router.replace('/dashboard/instagram');
     }
     const err = params.get('error');
-    if (err) { setBanner({ tone: 'error', msg: decodeURIComponent(err) }); router.replace('/dashboard/instagram'); }
+    if (err) {
+      setBanner({
+        tone: 'error',
+        msg: err === 'cancelled'
+          ? 'Instagram connection was cancelled. You can start again whenever you’re ready.'
+          : 'We couldn’t connect Instagram. Check the Meta login configuration and that the account is professional, then try again.',
+      });
+      router.replace('/dashboard/instagram');
+    }
   }, [params, router]);
 
   useEffect(() => {
@@ -37,8 +97,12 @@ export default function InstagramPage() {
     queryKey: ['ig-accounts'], queryFn: async () => (await instagramApi.accounts()).data.data as IgAccount[],
     refetchInterval: 30_000, refetchIntervalInBackground: false,
   });
-  const { data: loginOptions, isError: loginOptionsError } = useQuery({
-    queryKey: ['instagram-login-options'], queryFn: async () => (await instagramApi.loginOptions()).data.data as { unifiedLoginEnabled: boolean; webhookCallbackUrl: string },
+  const { data: loginOptions, isError: loginOptionsError, refetch: refetchLoginOptions } = useQuery({
+    queryKey: ['instagram-login-options'], queryFn: async () => (await instagramApi.loginOptions()).data.data as {
+      unifiedLoginEnabled: boolean; instagramLoginAppId: string; instagramLoginUsesMetaFallback: boolean;
+      unifiedLoginAppId: string; unifiedLoginConfigId: string;
+      oauthRedirectUri: string; webhookCallbackUrl: string;
+    },
   });
   const sub = useQuery({
     queryKey: ['subscription'], queryFn: async () => (await paymentApi.getSubscription()).data.data as { plan: string; name: string; active: boolean; limits: { accountCap: number } },
@@ -76,10 +140,47 @@ export default function InstagramPage() {
   const isPaidPlan = (sub.data?.plan ?? 'free') !== 'free';
   const cap = sub.data?.limits?.accountCap ?? 1;
   const canAddMore = active.length < cap;
+  // Prefer the configured modern login for a new connection. For users who
+  // already linked an account, keep that account's mode as the primary action
+  // so reconnect/add-account flows do not silently switch OAuth integrations.
+  const primaryLoginMode: LoginMode = active[0]?.loginMode === 'UNIFIED_LOGIN' && !loginOptions?.unifiedLoginEnabled
+    ? 'INSTAGRAM_LOGIN'
+    : active[0]?.loginMode ?? (loginOptions?.unifiedLoginEnabled ? 'UNIFIED_LOGIN' : 'INSTAGRAM_LOGIN');
+  const alternateLoginMode: LoginMode = primaryLoginMode === 'UNIFIED_LOGIN' ? 'INSTAGRAM_LOGIN' : 'UNIFIED_LOGIN';
+  const alternateLoginAvailable = alternateLoginMode === 'INSTAGRAM_LOGIN' || loginOptions?.unifiedLoginEnabled;
+  const primaryLoginLabel = primaryLoginMode === 'UNIFIED_LOGIN' ? 'Connect Instagram with Meta' : 'Connect Instagram';
+  const alternateLoginLabel = alternateLoginMode === 'UNIFIED_LOGIN'
+    ? 'Connect with Meta Unified Login'
+    : 'Use Instagram Login (legacy)';
 
   return (
     <div style={{ maxWidth: 680 }}>
       <PageHead title="Instagram" sub={`Connect the professional accounts your automations run on. ${isPaidPlan ? `${planName}: up to ${cap} accounts.` : `Free: ${cap} account — upgrade for more.`}`} />
+
+      {loginOptionsError && (
+        <div role="alert" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14, padding: '12px 14px', borderRadius: 10, background: 'var(--error-soft)', color: 'var(--error)' }}>
+          <span>Could not load the available Meta login method. Retry before connecting so HeyLaunch uses the configured flow.</span>
+          <Btn variant="ghost" onClick={() => void refetchLoginOptions()}>Retry</Btn>
+        </div>
+      )}
+
+      {active.length === 0 && loginOptions && (
+        <Card pad={14} style={{ marginBottom: 14 }}>
+          <strong style={{ color: RL.ink, fontSize: 14 }}>Meta connection setup</strong>
+          <p style={{ color: RL.muted, fontSize: 13, lineHeight: 1.5, margin: '5px 0 8px' }}>
+            Active login method: {loginOptions.unifiedLoginEnabled ? 'Meta Unified Login' : 'Instagram Login'}. Match the relevant App ID, configuration ID, and callback in Meta Developers.
+          </p>
+          <div style={{ display: 'grid', gap: 6, marginBottom: 8, color: RL.muted, fontSize: 12.5 }}>
+            <div>Instagram Login App ID: <code style={{ color: RL.ink }}>{loginOptions.instagramLoginAppId || 'Not configured'}</code></div>
+            {loginOptions.instagramLoginUsesMetaFallback && <div role="status" style={{ color: RL.amber }}>Instagram Login is falling back to META_APP_ID. Confirm that this is the Instagram product App ID from Meta’s Business Login settings; the Facebook/Unified Login App ID may not be interchangeable.</div>}
+            <div>Meta App ID (Unified Login): <code style={{ color: RL.ink }}>{loginOptions.unifiedLoginAppId || 'Not configured'}</code></div>
+            <div>Unified Login configuration ID: <code style={{ color: RL.ink }}>{loginOptions.unifiedLoginConfigId || 'Not configured'}</code> <span>({loginOptions.unifiedLoginEnabled ? 'enabled' : 'disabled'})</span></div>
+          </div>
+          <code style={{ display: 'block', overflowWrap: 'anywhere', color: RL.ink, fontSize: 12.5, padding: '9px 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)' }}>
+            {loginOptions.oauthRedirectUri}
+          </code>
+        </Card>
+      )}
 
       {active.length > 0 && !active.every((account) => account.lastWebhookAt) && (
         <Card pad={16} style={{ marginBottom: 14, borderColor: `${RL.amber}66`, background: `${RL.amber}0b` }}>
@@ -118,8 +219,8 @@ export default function InstagramPage() {
         <Empty icon={<Instagram style={{ width: 24, height: 24 }} />} title="No account connected"
           sub="Connect an Instagram professional (Business or Creator) account to start sending auto-DMs."
           action={<div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 10 }}>
-            <Btn variant="accent" disabled={connect.isPending} onClick={() => connect.mutate('INSTAGRAM_LOGIN')}><Instagram style={{ width: 16, height: 16 }} /> {connect.isPending ? 'Opening…' : 'Connect Instagram'}</Btn>
-            {loginOptions?.unifiedLoginEnabled && <Btn variant="ghost" disabled={connect.isPending} onClick={() => connect.mutate('UNIFIED_LOGIN')}>Connect with Meta Unified Login</Btn>}
+            <Btn variant="accent" disabled={connect.isPending || !loginOptions} onClick={() => connect.mutate(primaryLoginMode)}><Instagram style={{ width: 16, height: 16 }} /> {connect.isPending ? 'Opening…' : primaryLoginLabel}</Btn>
+            {alternateLoginAvailable && <Btn variant="ghost" disabled={connect.isPending} onClick={() => connect.mutate(alternateLoginMode)}>{alternateLoginLabel}</Btn>}
           </div>} />
       )}
 
@@ -137,6 +238,12 @@ export default function InstagramPage() {
                 </div>
                 <Btn variant="ghost" disabled={disconnect.isPending} onClick={() => disconnect.mutate(a.id)}><Unlink style={{ width: 15, height: 15 }} /> Disconnect</Btn>
               </div>
+              <TokenExpiryNotice
+                account={a}
+                unifiedLoginEnabled={Boolean(loginOptions?.unifiedLoginEnabled)}
+                isConnecting={connect.isPending}
+                onReconnect={() => connect.mutate(a.loginMode)}
+              />
               <div role="status" style={{ marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
                 <span style={{ fontSize: 13, color: RL.muted }}>
                   {!a.webhookSubscribedAt
@@ -155,8 +262,8 @@ export default function InstagramPage() {
 
           {canAddMore ? (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-              <Btn variant="ghost" disabled={connect.isPending} onClick={() => connect.mutate('INSTAGRAM_LOGIN')}><Plus style={{ width: 16, height: 16 }} /> {connect.isPending ? 'Opening…' : 'Connect another account'}</Btn>
-              {loginOptions?.unifiedLoginEnabled && <Btn variant="ghost" disabled={connect.isPending} onClick={() => connect.mutate('UNIFIED_LOGIN')}>Connect with Meta Unified Login</Btn>}
+              <Btn variant="ghost" disabled={connect.isPending} onClick={() => connect.mutate(primaryLoginMode)}><Plus style={{ width: 16, height: 16 }} /> {connect.isPending ? 'Opening…' : 'Connect another account'}</Btn>
+              {alternateLoginAvailable && <Btn variant="ghost" disabled={connect.isPending} onClick={() => connect.mutate(alternateLoginMode)}>{alternateLoginLabel}</Btn>}
             </div>
           ) : !isPaidPlan || cap < 15 ? (
             <Card pad={18} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>

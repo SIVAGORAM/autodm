@@ -132,7 +132,7 @@ function CustomerRow({ customer, status, pending, onLifecycle }: {
             aria-label={`${status === 'SUSPENDED' ? 'Reactivation' : 'Suspension'} reason for ${customer.email}`}
             style={{ width: 'min(245px,68vw)', minHeight: 36, padding: '0 9px', color: 'var(--text)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }} />
         </label>}
-        {status === 'PENDING_DELETION' ? <span title="Use the account deletion review workflow."><Btn variant="ghost" disabled>Deletion pending</Btn></span>
+        {status === 'PENDING_DELETION' ? <span title="The account is disabled and its queued deletion will run after active work drains."><Btn variant="ghost" disabled>Deletion queued</Btn></span>
           : <Btn variant="ghost" disabled={pending || reason.trim().length < 10}
             onClick={() => {
               const action = status === 'SUSPENDED' ? 'reactivate' : 'suspend';

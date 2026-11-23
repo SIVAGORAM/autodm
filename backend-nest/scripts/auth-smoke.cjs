@@ -74,6 +74,10 @@ function cookieValue(cookie, name) {
   return (cookie || '').split(';').map((part) => part.trim()).find((part) => part.startsWith(prefix))?.slice(prefix.length);
 }
 
+function cookieHeader(headers, name) {
+  return headers.find((value) => value.startsWith(`${name}=`));
+}
+
 function isExpiredCookieHeader(headers, name) {
   const header = headers.find((value) => value.startsWith(`${name}=;`));
   const expires = header?.match(/expires=([^;]+)/i)?.[1];
@@ -104,9 +108,17 @@ async function main() {
   assert.equal(signup.json?.data?.user?.email, email);
   assert.equal('accessToken' in (signup.json?.data || {}), false, 'access token must not be returned in JSON');
   assert.equal('refreshToken' in (signup.json?.data || {}), false, 'refresh token must not be returned in JSON');
-  assert.ok(signup.setCookies.some((value) => /^access_token=/.test(value)), 'access cookie should be set');
-  assert.ok(signup.setCookies.some((value) => /^refresh_token=/.test(value)), 'refresh cookie should be set');
+  const accessCookie = cookieHeader(signup.setCookies, 'access_token');
+  const refreshCookie = cookieHeader(signup.setCookies, 'refresh_token');
+  assert.ok(accessCookie, 'access cookie should be set');
+  assert.ok(refreshCookie, 'refresh cookie should be set');
   assert.ok(signup.setCookies.every((value) => /httponly/i.test(value)), 'auth cookies should be HttpOnly');
+  assert.match(accessCookie, /(?:^|;\s*)path=\/(?:;|$)/i, 'access cookie should be sent to frontend API routes');
+  assert.match(accessCookie, /(?:^|;\s*)max-age=900(?:;|$)/i, 'access cookie should expire after 15 minutes');
+  assert.match(refreshCookie, /(?:^|;\s*)path=\/api\/auth(?:;|$)/i, 'refresh cookie should be restricted to auth endpoints');
+  assert.match(refreshCookie, /(?:^|;\s*)max-age=2592000(?:;|$)/i, 'refresh cookie should expire after 30 days');
+  assert.match(accessCookie, /(?:^|;\s*)samesite=lax(?:;|$)/i, 'access cookie should use SameSite=Lax');
+  assert.match(refreshCookie, /(?:^|;\s*)samesite=lax(?:;|$)/i, 'refresh cookie should use SameSite=Lax');
   const initialCookies = mergeCookies('', signup.setCookies);
   const initialRefreshToken = cookieValue(initialCookies, 'refresh_token');
   assert.ok(initialRefreshToken);

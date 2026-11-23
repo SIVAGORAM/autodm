@@ -1,5 +1,5 @@
 import { Job } from 'bullmq';
-import { dmQueueJobId } from './queue.constants';
+import { CLICK_TO_DIRECT_AD_MESSAGE_WINDOW_MS, dmQueueJobId, messageWindowState, STANDARD_MESSAGE_WINDOW_MS, standardMessageWindowState } from './queue.constants';
 
 describe('BullMQ send job identifiers', () => {
   it('generates deterministic, queue-safe IDs for colon-delimited event keys', () => {
@@ -21,5 +21,38 @@ describe('BullMQ send job identifiers', () => {
 
     expect(validateId(dmQueueJobId('event:ig-user:comment:fu:step'))).not.toThrow();
     expect(validateId('comment:ig-user:comment:fu:step')).toThrow('Custom Id cannot contain :');
+  });
+});
+
+describe('standardMessageWindowState', () => {
+  const now = Date.parse('2026-11-23T12:00:00.000Z');
+
+  it('allows a DM or story reply while the standard response window is open', () => {
+    expect(standardMessageWindowState(new Date(now - STANDARD_MESSAGE_WINDOW_MS + 1), now)).toBe('ELIGIBLE');
+  });
+
+  it('marks the message expired at the 24-hour boundary', () => {
+    expect(standardMessageWindowState(new Date(now - STANDARD_MESSAGE_WINDOW_MS), now)).toBe('EXPIRED');
+  });
+
+  it.each([undefined, '', 'not-a-date', now + 6 * 60_000])('fails closed when the message time is missing or invalid (%s)', (messageAt) => {
+    expect(standardMessageWindowState(messageAt as any, now)).toBe('UNKNOWN');
+  });
+});
+
+describe('Click-to-Direct ad message window', () => {
+  const now = Date.parse('2026-11-23T12:00:00.000Z');
+
+  it('extends only explicitly marked Click-to-Direct messages to seven days', () => {
+    expect(messageWindowState(new Date(now - 6 * 24 * 60 * 60 * 1000), 'CLICK_TO_DIRECT_AD', now)).toBe('ELIGIBLE');
+    expect(messageWindowState(new Date(now - STANDARD_MESSAGE_WINDOW_MS - 1), 'STANDARD', now)).toBe('EXPIRED');
+  });
+
+  it('expires an ad-started message at the seven-day boundary', () => {
+    expect(messageWindowState(new Date(now - CLICK_TO_DIRECT_AD_MESSAGE_WINDOW_MS), 'CLICK_TO_DIRECT_AD', now)).toBe('EXPIRED');
+  });
+
+  it.each([undefined, '', 'not-a-date', now + 6 * 60_000])('fails closed for missing or unverifiable ad message times (%s)', (messageAt) => {
+    expect(messageWindowState(messageAt as any, 'CLICK_TO_DIRECT_AD', now)).toBe('UNKNOWN');
   });
 });

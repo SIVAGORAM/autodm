@@ -9,6 +9,8 @@ const productionEnv = () => ({
   ENCRYPTION_KEY: 'c'.repeat(40),
   META_APP_ID: 'meta-app-id',
   META_APP_SECRET: 'meta-app-secret',
+  INSTAGRAM_APP_ID: 'instagram-app-id',
+  INSTAGRAM_APP_SECRET: 'instagram-app-secret',
   META_WEBHOOK_VERIFY_TOKEN: 'a-secure-random-webhook-verification-token',
   RAZORPAY_KEY_ID: 'rzp_live_example',
   RAZORPAY_KEY_SECRET: 'razorpay-secret',
@@ -19,6 +21,7 @@ const productionEnv = () => ({
   COOKIE_SECURE: true,
   PUBLIC_URL: 'https://api.example.com',
   CORS_ORIGIN: 'https://app.example.com',
+  INSTAGRAM_OAUTH_REDIRECT_URI: 'https://app.example.com/api/instagram/callback',
   NODE_ENV: 'production',
 });
 
@@ -45,11 +48,49 @@ describe('production environment validation', () => {
 
   it('keeps Unified Login disabled by default and validates its configuration ID when supplied', () => {
     expect(validateEnv(productionEnv()).META_UNIFIED_LOGIN_ENABLED).toBe(false);
+    expect(validateEnv(productionEnv()).META_UNIFIED_TOKEN_REFRESH_ENABLED).toBe(false);
     expect(validateEnv({ ...productionEnv(), META_UNIFIED_LOGIN_CONFIG_ID: '1848584173153195' }).META_UNIFIED_LOGIN_CONFIG_ID)
       .toBe('1848584173153195');
     const log = jest.spyOn(console, 'error').mockImplementation(() => {});
     expect(() => validateEnv({ ...productionEnv(), META_UNIFIED_LOGIN_CONFIG_ID: '1848-abcd' }))
       .toThrow('Invalid environment configuration');
+    log.mockRestore();
+  });
+
+  it('requires Instagram product credentials as a pair and validates the frontend callback URI', () => {
+    const base = productionEnv();
+    expect(validateEnv({ ...base, INSTAGRAM_APP_ID: 'instagram-id', INSTAGRAM_APP_SECRET: 'instagram-secret' }))
+      .toMatchObject({ INSTAGRAM_APP_ID: 'instagram-id', INSTAGRAM_APP_SECRET: 'instagram-secret' });
+
+    const log = jest.spyOn(console, 'error').mockImplementation(() => {});
+    expect(() => validateEnv({ ...base, INSTAGRAM_APP_ID: '', INSTAGRAM_APP_SECRET: '' })).toThrow('Invalid environment configuration');
+    expect(() => validateEnv({ ...base, INSTAGRAM_OAUTH_REDIRECT_URI: '' })).toThrow('Invalid environment configuration');
+    expect(() => validateEnv({ ...base, INSTAGRAM_APP_ID: 'instagram-id', INSTAGRAM_APP_SECRET: '' })).toThrow('Invalid environment configuration');
+    expect(() => validateEnv({ ...base, INSTAGRAM_OAUTH_REDIRECT_URI: 'http://app.example.com/api/instagram/callback' }))
+      .toThrow('Invalid environment configuration');
+    expect(() => validateEnv({ ...base, INSTAGRAM_OAUTH_REDIRECT_URI: 'https://app.example.com/api/auth/callback' }))
+      .toThrow('Invalid environment configuration');
+    expect(() => validateEnv({ ...base, INSTAGRAM_OAUTH_REDIRECT_URI: 'https://preview.example.com/api/instagram/callback' }))
+      .toThrow('Invalid environment configuration');
+    expect(validateEnv({ ...base, CORS_ORIGIN: 'https://app.example.com,https://preview.example.com', INSTAGRAM_OAUTH_REDIRECT_URI: 'https://preview.example.com/api/instagram/callback' }))
+      .toMatchObject({ INSTAGRAM_OAUTH_REDIRECT_URI: 'https://preview.example.com/api/instagram/callback' });
+    log.mockRestore();
+  });
+
+  it('validates encryption key rotation inputs', () => {
+    const oldKey = 'old-encryption-key-that-is-also-at-least-32-characters';
+    const newKey = 'new-encryption-key-that-is-also-at-least-32-characters';
+    expect(validateEnv({ ...productionEnv(), ENCRYPTION_KEY: newKey, ENCRYPTION_FALLBACK_KEYS: oldKey }))
+      .toMatchObject({ ENCRYPTION_KEY: newKey, ENCRYPTION_FALLBACK_KEYS: oldKey });
+    expect(validateEnv({ ...productionEnv(), ENCRYPTION_KEY: `${newKey},${oldKey}` }))
+      .toMatchObject({ ENCRYPTION_KEY: `${newKey},${oldKey}` });
+
+    const log = jest.spyOn(console, 'error').mockImplementation(() => {});
+    expect(() => validateEnv({ ...productionEnv(), ENCRYPTION_KEY: `${newKey},short-key` })).toThrow('Invalid environment configuration');
+    expect(() => validateEnv({ ...productionEnv(), ENCRYPTION_KEY: `${newKey},${newKey}` })).toThrow('Invalid environment configuration');
+    expect(() => validateEnv({ ...productionEnv(), ENCRYPTION_FALLBACK_KEYS: 'short-key' })).toThrow('Invalid environment configuration');
+    expect(() => validateEnv({ ...productionEnv(), ENCRYPTION_FALLBACK_KEYS: `${oldKey},${oldKey}` })).toThrow('Invalid environment configuration');
+    expect(() => validateEnv({ ...productionEnv(), ENCRYPTION_FALLBACK_KEYS: `${oldKey},` })).toThrow('Invalid environment configuration');
     log.mockRestore();
   });
 
@@ -69,6 +110,12 @@ describe('production environment validation', () => {
       .toThrow('Invalid environment configuration');
     expect(() => validateEnv({ ...productionEnv(), NODE_ENV: 'development', META_UNIFIED_LOGIN_ENABLED: true, META_APP_SECRET: '' }))
       .toThrow('Invalid environment configuration');
+    expect(() => validateEnv({ ...productionEnv(), NODE_ENV: 'development', META_UNIFIED_TOKEN_REFRESH_ENABLED: true }))
+      .toThrow('Invalid environment configuration');
+    expect(validateEnv({
+      ...productionEnv(), NODE_ENV: 'development', META_UNIFIED_LOGIN_ENABLED: true,
+      META_UNIFIED_LOGIN_CONFIG_ID: '1848584173153195', META_UNIFIED_TOKEN_REFRESH_ENABLED: true,
+    }).META_UNIFIED_TOKEN_REFRESH_ENABLED).toBe(true);
     log.mockRestore();
   });
 

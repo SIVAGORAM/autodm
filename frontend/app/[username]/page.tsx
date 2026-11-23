@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { cache } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import { ExternalLink, Link2 } from 'lucide-react';
 import { getPublicSiteUrl } from '../../lib/site-url';
@@ -13,13 +14,24 @@ const API_BASE = resolveApiBase(process.env.NEXT_PUBLIC_API_URL, {
   production: process.env.NODE_ENV === 'production',
 }) as string;
 
-async function loadProfile(username: string): Promise<PublicProfile | null> {
+const loadProfile = cache(async (username: string): Promise<PublicProfile | null> => {
+  let response: Response;
   try {
-    const response = await fetch(`${API_BASE}/api/public/profiles/${encodeURIComponent(username)}`, { cache: 'no-store' });
-    if (!response.ok) return null;
+    response = await fetch(`${API_BASE}/api/public/profiles/${encodeURIComponent(username)}`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(5_000),
+    });
+  } catch {
+    throw new Error('The public profile service is temporarily unavailable.');
+  }
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error('The public profile service is temporarily unavailable.');
+  try {
     return await response.json() as PublicProfile;
-  } catch { return null; }
-}
+  } catch {
+    throw new Error('The public profile service returned an invalid response.');
+  }
+});
 
 export async function generateMetadata({ params }: { params: Promise<{ username: string }> }): Promise<Metadata> {
   const { username } = await params;

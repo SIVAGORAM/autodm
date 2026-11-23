@@ -18,7 +18,7 @@ Install Docker Desktop with Docker Compose, then run from the repository root:
 docker compose up --build
 ```
 
-The stack starts PostgreSQL, Redis, Mailpit, the active Nest API, its BullMQ worker, and the Next.js frontend. The API applies checked-in Prisma migrations to the local PostgreSQL volume on startup. Open `http://localhost:3000`; the API readiness check is at `http://localhost:4000/ready`. Verification and reset emails are captured locally at `http://localhost:8025` and are never sent to real recipients.
+The stack starts PostgreSQL, Redis, Mailpit, the active Nest API, its BullMQ worker, and the Next.js frontend. The API applies checked-in Prisma migrations to the local PostgreSQL volume on startup. The Compose worker processes the durable email outbox through Mailpit, so verification and reset emails are captured at `http://localhost:8025` and are never sent to real recipients. Instagram delivery and scheduled maintenance remain disabled by default; the worker will not send DMs or process queued Instagram events. Open `http://localhost:3000`; the API readiness check is at `http://localhost:4000/ready`.
 
 The Compose credentials and keys are fixed development-only values for services published on local ports. Never reuse them outside this local stack. The stack does not configure Meta OAuth/webhooks or Razorpay; those features require test-account credentials. Stop containers with `docker compose down`. This retains the database and Redis volumes.
 
@@ -42,6 +42,15 @@ In a second terminal, start the worker:
 cd backend-nest
 npm run worker:dev
 ```
+
+In development, this command only checks worker startup by default; it does not process Instagram delivery or email jobs. To test signup and password-reset email locally, opt in to the email-only worker after confirming that the API points to an isolated development database and a test SMTP service such as Mailpit:
+
+```powershell
+$env:RUN_MAIL_OUTBOX_WORKER_IN_DEVELOPMENT="true"
+npm run worker:dev
+```
+
+This email-only option does not enable Instagram delivery. See `backend-nest/RUN.md` before enabling any worker that can send provider messages.
 
 In a third terminal, use `frontend/.env.local.example` as the template and set `NEXT_PUBLIC_API_URL=http://localhost:4000`, then run:
 

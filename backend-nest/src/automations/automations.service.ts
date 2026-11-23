@@ -67,6 +67,10 @@ export class AutomationsService {
     }
   }
 
+  private supportsPublicCommentReply(triggerType: string) {
+    return ['POST_COMMENT', 'ANY_POST'].includes(triggerType);
+  }
+
   private needsWebhookSubscription(triggerType: string) {
     return ['POST_COMMENT', 'ANY_POST', 'STORY_REPLY', 'DM'].includes(triggerType);
   }
@@ -105,6 +109,7 @@ export class AutomationsService {
 
   async create(userId: string, userPlan: string, dto: CreateAutomationDto) {
     const account = await this.assertOwnsAccount(userId, dto.igAccountId);
+    const supportsPublicCommentReply = this.supportsPublicCommentReply(dto.triggerType);
     this.enforceCommentFollowUpPolicy(dto.triggerType, dto.followUps);
     if (dto.status === 'LIVE') this.requireWebhookSubscription(dto.triggerType, account.webhookSubscribedAt);
     this.enforcePlan(userPlan, dto);
@@ -118,8 +123,10 @@ export class AutomationsService {
       const automation = await tx.automation.create({
         data: {
           igAccountId: dto.igAccountId, name: dto.name, triggerType: dto.triggerType, mediaId: dto.mediaId ?? null,
-          matchMode: dto.matchMode, keywords: dto.keywords, publicReplies: dto.publicReplies,
-          replyToComment: dto.replyToComment, askToFollow: dto.askToFollow, collectEmail: dto.collectEmail,
+          matchMode: dto.matchMode, keywords: dto.keywords,
+          publicReplies: supportsPublicCommentReply ? dto.publicReplies : [],
+          replyToComment: supportsPublicCommentReply && dto.replyToComment,
+          askToFollow: dto.askToFollow, collectEmail: dto.collectEmail,
           trackClicks: dto.trackClicks, dmBlocks: dto.dmBlocks as object, status: dto.status,
         },
       });
@@ -228,6 +235,7 @@ export class AutomationsService {
   async update(userId: string, userPlan: string, id: string, dto: UpdateAutomationDto) {
     const existing = await this.assertOwnsAutomation(userId, id);
     const effectiveTriggerType = dto.triggerType ?? existing.triggerType;
+    const supportsPublicCommentReply = this.supportsPublicCommentReply(effectiveTriggerType);
     let storedFollowUps: Array<{ id: string; condition: string }> | undefined;
     if (dto.followUps || dto.triggerType) {
       storedFollowUps = await this.prisma.followUp.findMany({
@@ -271,6 +279,12 @@ export class AutomationsService {
       dto.mediaId === undefined ? existing.mediaId : dto.mediaId,
     );
     const data: Record<string, unknown> = { ...dto };
+    if (!supportsPublicCommentReply) {
+      // Clear legacy or client-submitted comment-only settings when changing
+      // to a message trigger. Story replies and incoming DMs have no comment.
+      data.replyToComment = false;
+      data.publicReplies = [];
+    }
     if (dto.dmBlocks) data.dmBlocks = dto.dmBlocks as object;
     delete (data as any).igAccountId;
     delete data.followUps;

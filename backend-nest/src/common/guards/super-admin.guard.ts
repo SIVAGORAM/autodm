@@ -12,9 +12,9 @@ export class SuperAdminGuard implements CanActivate {
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { role: true, deletionRequestedAt: true, adminMfaEnabledAt: true },
+      select: { role: true, deletionRequestedAt: true, suspendedAt: true, adminMfaEnabledAt: true },
     });
-    if (user?.role !== 'SUPER_ADMIN' || user.deletionRequestedAt) {
+    if (user?.role !== 'SUPER_ADMIN' || user.deletionRequestedAt || user.suspendedAt) {
       throw new ForbiddenException('Super administrator access required.');
     }
     if (!user.adminMfaEnabledAt) throw new ForbiddenException('Administrator MFA setup is required.');

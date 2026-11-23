@@ -105,7 +105,7 @@
 .matchMark { width: 28px; height: 28px; flex: none; display: grid; place-items: center; background: var(--lime); color: #202518; }
 .matchCard > div:nth-child(2) { min-width: 0; flex: 1; }
 .matchCard p { margin: 5px 0 0; color: #f5f6f2; font-size: 14px; }
-.matchState { flex: none; color: #d7eb9d; font-size: 10px; font-weight: 700; letter-spacing: .05em; }
+.matchState { flex: none; color: #d7eb9d; font-size: 11px; font-weight: 600; }
 .replyCard { padding: 14px 15px 11px; }
 .replyLabel { display: flex; align-items: center; gap: 8px; }
 .replyLabel svg { color: var(--lime); }
@@ -155,7 +155,7 @@
 .activityEntry > div { min-width: 0; display: grid; gap: 4px; }
 .activityEntry strong { font-size: 13px; font-weight: 590; }
 .activityEntry small { color: #c0c9bd; font-size: 12px; }
-.activityStatus { margin-left: auto; color: #d8eab0; font-size: 10px; font-weight: 650; letter-spacing: .04em; }
+.activityStatus { margin-left: auto; color: #d8eab0; font-size: 11px; font-weight: 600; }
 .activityNote { margin: 0; padding: 12px 19px; color: #bbc4b7; font-size: 11px; }
 
 .useCases { width: min(1160px, calc(100% - 64px)); margin: auto; padding: clamp(72px, 9vw, 118px) 0; display: grid; grid-template-columns: .78fr 1.22fr; align-items: start; gap: clamp(40px, 8vw, 105px); }
@@ -205,7 +205,7 @@
 .scopeTop h2 { margin-top: 29px; font-size: clamp(40px, 4.8vw, 61px); }
 .scopeBody > p { max-width: 530px; margin: 0; color: var(--muted); font-size: 15px; line-height: 1.75; }
 .scopeRows { margin-top: 24px; border-top: 1px solid var(--line); }
-.scopeRows > div { min-height: 57px; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); }
+.scopeRows > div { min-height: 57px; display: grid; grid-template-columns: 20px minmax(0, 1fr) minmax(120px, .75fr); align-items: center; gap: 10px; border-bottom: 1px solid var(--line); }
 .scopeRows svg { color: var(--olive); }
 .scopeRows strong { font-size: 13px; font-weight: 580; }
 .scopeRows span:last-child { color: var(--muted); font-size: 12px; text-align: right; }
@@ -363,7 +363,7 @@
 @media (max-width: 390px) {
   .headerInner, .heroInner, .audienceLine, .storyInner, .useCases, .scopeSection, .faqSection, .lastCallInner, .footerMain, .footerBottom, .pricingInner { width: calc(100% - 32px); }
   .hero { padding-top: 40px; }
-  .hero h1 { font-size: clamp(40px, 10.6vw, 43px); }
+  .hero h1 { font-size: clamp(36px, 10.6vw, 41px); }
   .faqTitle h2 { font-size: 35px; }
   .previewNotice { display: grid; grid-template-columns: 8px minmax(0, 1fr); justify-content: initial; gap: 5px 8px; text-align: left; }
   .noticeMark { grid-column: 1; grid-row: 1; margin-top: 5px; }

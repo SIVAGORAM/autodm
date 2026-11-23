@@ -18,6 +18,21 @@ import { metaScopedUserId, verifyMetaSignedRequest } from './meta-signed-request
 import { SkipThrottle } from '@nestjs/throttler';
 import { DashboardEventsService } from '../queue/dashboard-events.service';
 
+const SAFE_META_OAUTH_ERRORS = new Set([
+  'access_denied', 'invalid_request', 'unauthorized_client', 'unsupported_response_type',
+  'invalid_scope', 'server_error', 'temporarily_unavailable', 'interaction_required',
+  'login_required',
+]);
+
+function safeMetaOAuthError(value: unknown): string {
+  return typeof value === 'string' && SAFE_META_OAUTH_ERRORS.has(value) ? value : 'other';
+}
+
+function safeMetaOAuthCode(value: unknown): string {
+  const code = typeof value === 'number' ? String(value) : value;
+  return typeof code === 'string' && /^\d{1,6}$/.test(code) ? code : 'none';
+}
+
 @Controller('api/instagram')
 export class InstagramController {
   private readonly log = new Logger(InstagramController.name);
@@ -34,7 +49,7 @@ export class InstagramController {
   // Signed, short-lived state ties the callback to the user and initiating browser.
   @Get('auth-url')
   @UseGuards(JwtAuthGuard, VerifiedEmailGuard)
-  async authUrl(@CurrentUser('userId') userId: string, @Query('mode') requestedMode: string, @Res({ passthrough: true }) res: FastifyReply) {
+  async authUrl(@CurrentUser('userId') userId: string, @Query('mode') requestedMode: string, @Req() req: FastifyRequest, @Res({ passthrough: true }) res: FastifyReply) {
     if (requestedMode === 'UNIFIED_LOGIN' && !this.ig.unifiedLoginEnabled) {
       throw new BadRequestException('Unified Instagram Login is not enabled.');
     }
@@ -44,7 +59,7 @@ export class InstagramController {
       { sub: userId, nonce, loginMode },
       { secret: this.config.getOrThrow('JWT_ACCESS_SECRET'), expiresIn: '10m', audience: 'ig-oauth', issuer: 'autodm' },
     );
-    const secure = this.config.get('COOKIE_SECURE', false) === true || this.config.get('COOKIE_SECURE') === 'true';
+    const secure = this.isSecureRequest(req);
     // SameSite=Lax is sent on Instagram's top-level GET redirect back to this callback.
     // A state value copied from another browser will not have this nonce cookie.
     res.setCookie('ig_oauth_state', nonce, {
@@ -64,6 +79,14 @@ export class InstagramController {
       success: true,
       data: {
         unifiedLoginEnabled: this.ig.unifiedLoginEnabled,
+        instagramLoginAppId: this.ig.instagramLoginAppId,
+        instagramLoginUsesMetaFallback: this.ig.instagramLoginUsesMetaFallback,
+        unifiedLoginAppId: this.ig.unifiedLoginAppId,
+        // Configuration IDs, like App IDs, are public OAuth parameters. Return
+        // the configured value even while the flow is disabled so operators
+        // can diagnose staging/deployment drift without enabling the flow.
+        unifiedLoginConfigId: this.ig.unifiedLoginConfigId,
+        oauthRedirectUri: this.ig.oauthRedirectUri,
         webhookCallbackUrl: `${publicUrl}/webhooks/instagram`,
       },
     };
@@ -79,14 +102,22 @@ export class InstagramController {
   ) {
     const frontend = this.config.get('CORS_ORIGIN', 'http://localhost:3000').split(',')[0];
     const stateCookie = req.cookies?.ig_oauth_state;
-    const secure = this.config.get('COOKIE_SECURE', false) === true || this.config.get('COOKIE_SECURE') === 'true';
+    const secure = this.isSecureRequest(req);
+    let stage = 'provider_callback';
     res.clearCookie('ig_oauth_state', { path: '/api/instagram/callback', secure, sameSite: 'lax' });
     try {
-      if (error) throw new BadRequestException(error);
+      if (error) {
+        // OAuth providers may include arbitrary descriptions. Log only bounded,
+        // allowlisted error categories and a numeric provider code.
+        const query = req.query as Record<string, unknown> | undefined;
+        this.log.warn(`Meta Instagram OAuth returned error=${safeMetaOAuthError(error)} code=${safeMetaOAuthCode(query?.error_code)}`);
+        throw new BadRequestException('Meta did not complete Instagram authorization.');
+      }
       if (!code || !state) throw new BadRequestException('Missing code or state');
 
       let userId: string;
       let loginMode: InstagramLoginMode;
+      stage = 'state_validation';
       try {
         const payload: any = await this.jwt.verifyAsync(state, {
           secret: this.config.getOrThrow('JWT_ACCESS_SECRET'), audience: 'ig-oauth', issuer: 'autodm',
@@ -107,6 +138,7 @@ export class InstagramController {
         throw new BadRequestException('Unified Instagram Login is no longer enabled. Restart the connection using the available login method.');
       }
 
+      stage = 'account_validation';
       const initiatingUser = await this.prisma.user.findUnique({
         where: { id: userId },
         select: { isVerified: true, deletionRequestedAt: true },
@@ -115,6 +147,7 @@ export class InstagramController {
         throw new BadRequestException('This account is unavailable. Sign in again and restart Instagram connection.');
       }
 
+      stage = 'code_exchange';
       const { accessToken, igUserId, username, expiresInSec, clientBusinessId, unifiedConfigId, accounts: grantedAccounts } = await this.ig.exchangeCodeForToken(code, loginMode);
       const accounts = grantedAccounts?.length ? grantedAccounts : [{ igUserId, username }];
       const accountIds = new Set(accounts.map((account) => account.igUserId));
@@ -125,6 +158,7 @@ export class InstagramController {
 
       // Serialize link callbacks for this user so concurrent OAuth windows
       // cannot both pass the account-cap check and exceed the plan limit.
+      stage = 'account_persistence';
       let linked = false;
       for (let attempt = 0; attempt < 3 && !linked; attempt++) {
         try {
@@ -190,11 +224,25 @@ export class InstagramController {
       void this.dashboardEvents.publish(userId, 'instagram');
       return res.redirect(`${frontend}/dashboard/instagram?connected=1${webhookError ? '&webhook_error=1' : ''}`, 302);
     } catch (e: unknown) {
-      this.log.warn(`IG callback failed (${safeErrorLabel(e)})`);
-      // The user sees a clean, friendly message — never raw internals.
-      const friendly = 'We couldn\'t connect your Instagram account. Please try again, and make sure it\'s a professional (Business or Creator) account.';
-      return res.redirect(`${frontend}/dashboard/instagram?error=${encodeURIComponent(friendly)}`, 302);
+      this.log.warn(`IG callback failed stage=${stage} (${safeErrorLabel(e)})`);
+      // Return fixed UI codes only. Never reflect provider-controlled text into
+      // the browser URL or dashboard banner.
+      const result = error === 'access_denied' ? 'cancelled' : 'connect_failed';
+      return res.redirect(`${frontend}/dashboard/instagram?error=${result}`, 302);
     }
+  }
+
+  private isSecureRequest(req?: FastifyRequest): boolean {
+    const forwardedProto = req?.headers?.['x-forwarded-proto'];
+    const firstForwardedProto = Array.isArray(forwardedProto)
+      ? forwardedProto[0]
+      : forwardedProto?.split(',')[0]?.trim();
+    const configuredSecure = this.config.get('COOKIE_SECURE', false) === true || this.config.get('COOKIE_SECURE') === 'true';
+    // OAuth state is browser-bound and follows the same HTTPS proxy path as
+    // session cookies. Mark it Secure behind TLS-terminating hosts even when
+    // the Nest process itself receives plain HTTP from the local proxy hop.
+    return configuredSecure || req?.protocol === 'https' || firstForwardedProto?.toLowerCase() === 'https' ||
+      this.config.get('NODE_ENV') === 'production';
   }
 
   @Get('accounts')
@@ -202,7 +250,7 @@ export class InstagramController {
   async accounts(@CurrentUser('userId') userId: string) {
     const accounts = await this.prisma.igAccount.findMany({
       where: { userId },
-      select: { id: true, username: true, igUserId: true, isActive: true, tokenExpiresAt: true, webhookSubscribedAt: true, createdAt: true },
+      select: { id: true, username: true, igUserId: true, isActive: true, loginMode: true, tokenExpiresAt: true, webhookSubscribedAt: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     });
     const webhookEvents = accounts.length

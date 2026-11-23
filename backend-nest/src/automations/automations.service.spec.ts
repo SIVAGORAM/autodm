@@ -138,6 +138,29 @@ describe('AutomationsService webhook subscription requirements', () => {
   });
 });
 
+describe('AutomationsService comment-only public replies', () => {
+  it('clears comment-only reply settings from a Story Reply automation on create', async () => {
+    const created = { id: 'automation-story' };
+    const transaction = { automation: { create: jest.fn().mockResolvedValue(created) } };
+    const prisma: any = {
+      igAccount: { findUnique: jest.fn().mockResolvedValue({ id: 'account-1', userId: 'user-1', webhookSubscribedAt: new Date() }) },
+      $transaction: jest.fn((callback: (tx: typeof transaction) => Promise<unknown>) => callback(transaction)),
+    };
+    const service = new AutomationsService(prisma, {} as any, {} as any, {} as any, {} as any);
+
+    await service.create('user-1', 'CREATOR', {
+      igAccountId: 'account-1', name: 'Story reply', triggerType: 'STORY_REPLY',
+      matchMode: 'KEYWORDS', keywords: ['guide'], publicReplies: ['Thanks for commenting'], replyToComment: true,
+      askToFollow: false, collectEmail: false, trackClicks: false,
+      dmBlocks: [{ type: 'text', text: 'Here is the guide.' }], status: 'DRAFT', followUps: [],
+    });
+
+    expect(transaction.automation.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ replyToComment: false, publicReplies: [] }),
+    }));
+  });
+});
+
 describe('AutomationsService worker availability requirements', () => {
   it('does not create a live automation when delivery processing is offline', async () => {
     const prisma: any = {

@@ -10,6 +10,7 @@ const createNextConfig = require('../next.config.js');
   assert.equal(production.distDir, '.next', 'Production builds must keep the standalone output directory.');
   assert.notEqual(development.distDir, production.distDir, 'Development and production output must never overlap.');
   assert.equal(production.output, 'standalone', 'Production must retain the standalone output directory.');
+  assert.equal(production.experimental.cpus, 2, 'Static generation must use a bounded worker count.');
 
   const originalApiUrl = process.env.NEXT_PUBLIC_API_URL;
   const originalNodeEnv = process.env.NODE_ENV;

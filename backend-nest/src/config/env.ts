@@ -9,8 +9,12 @@ export const envSchema = z.object({
   JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('30d'),
   ENCRYPTION_KEY: z.string().min(32),
+  ENCRYPTION_FALLBACK_KEYS: z.string().default(''),
   META_APP_ID: z.string().default(''),
   META_APP_SECRET: z.string().default(''),
+  INSTAGRAM_APP_ID: z.string().default(''),
+  INSTAGRAM_APP_SECRET: z.string().default(''),
+  INSTAGRAM_OAUTH_REDIRECT_URI: z.string().default(''),
   META_WEBHOOK_VERIFY_TOKEN: z.string().default('change-me'),
   META_GRAPH_VERSION: z.string().default('v26.0'),
   META_HTTPS_PROXY: z.preprocess((value) => value === '' ? undefined : value, z.string().url().optional())
@@ -20,6 +24,10 @@ export const envSchema = z.object({
       return protocol === 'http:' || protocol === 'https:';
     }, 'META_HTTPS_PROXY must use HTTP or HTTPS'),
   META_UNIFIED_LOGIN_ENABLED: z.preprocess(
+    (value) => typeof value === 'boolean' ? value : value === 'true' ? true : value === 'false' ? false : undefined,
+    z.boolean(),
+  ).default(false),
+  META_UNIFIED_TOKEN_REFRESH_ENABLED: z.preprocess(
     (value) => typeof value === 'boolean' ? value : value === 'true' ? true : value === 'false' ? false : undefined,
     z.boolean(),
   ).default(false),
@@ -65,6 +73,58 @@ export const envSchema = z.object({
   RAZORPAY_KEY_SECRET: z.string().default(''),
   RAZORPAY_WEBHOOK_SECRET: z.string().default(''),
 }).superRefine((env, ctx) => {
+  // Older local/deployed configs may keep the primary and prior keys in one
+  // comma-separated value. Continue to accept that format while validating
+  // each key; new configs should put prior keys in ENCRYPTION_FALLBACK_KEYS.
+  const primaryKeys = env.ENCRYPTION_KEY.split(',').map((key) => key.trim());
+  if (primaryKeys.some((key) => !key)) {
+    ctx.addIssue({ code: 'custom', path: ['ENCRYPTION_KEY'], message: 'ENCRYPTION_KEY key entries must be comma-separated non-empty values.' });
+  }
+  if (primaryKeys.some((key) => key.length < 32)) {
+    ctx.addIssue({ code: 'custom', path: ['ENCRYPTION_KEY'], message: 'Each primary/fallback encryption key must contain at least 32 characters.' });
+  }
+  const fallbackKeys = env.ENCRYPTION_FALLBACK_KEYS ? env.ENCRYPTION_FALLBACK_KEYS.split(',').map((key) => key.trim()) : [];
+  if (fallbackKeys.some((key) => !key)) {
+    ctx.addIssue({ code: 'custom', path: ['ENCRYPTION_FALLBACK_KEYS'], message: 'Fallback encryption keys must be comma-separated non-empty values.' });
+  }
+  if (fallbackKeys.some((key) => key.length < 32)) {
+    ctx.addIssue({ code: 'custom', path: ['ENCRYPTION_FALLBACK_KEYS'], message: 'Each fallback encryption key must contain at least 32 characters.' });
+  }
+  const allEncryptionKeys = [...primaryKeys, ...fallbackKeys];
+  if (new Set(allEncryptionKeys).size !== allEncryptionKeys.length) {
+    ctx.addIssue({ code: 'custom', path: ['ENCRYPTION_FALLBACK_KEYS'], message: 'Fallback encryption keys must be unique and must not repeat ENCRYPTION_KEY.' });
+  }
+  if (Boolean(env.INSTAGRAM_APP_ID.trim()) !== Boolean(env.INSTAGRAM_APP_SECRET.trim())) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['INSTAGRAM_APP_ID'],
+      message: 'Configure the Instagram product App ID and App Secret together, or leave both blank to use the legacy META_APP_ID/META_APP_SECRET fallback.',
+    });
+  }
+  if (env.INSTAGRAM_OAUTH_REDIRECT_URI.trim()) {
+    try {
+      const redirect = new URL(env.INSTAGRAM_OAUTH_REDIRECT_URI);
+      if (!['http:', 'https:'].includes(redirect.protocol) || !redirect.hostname || redirect.username || redirect.password ||
+          redirect.search || redirect.hash || redirect.pathname !== '/api/instagram/callback') {
+        throw new Error('invalid OAuth callback URI shape');
+      }
+      if (env.NODE_ENV === 'production' && redirect.protocol !== 'https:') {
+        throw new Error('production callback must use HTTPS');
+      }
+      const frontendOrigins = env.CORS_ORIGIN.split(',').flatMap((value) => {
+        try { return [new URL(value.trim()).origin]; } catch { return []; }
+      });
+      if (!frontendOrigins.includes(redirect.origin)) {
+        throw new Error('OAuth callback host must match a configured frontend origin');
+      }
+    } catch {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['INSTAGRAM_OAUTH_REDIRECT_URI'],
+        message: 'INSTAGRAM_OAUTH_REDIRECT_URI must use a configured CORS_ORIGIN plus /api/instagram/callback (HTTPS in production), without credentials, query, or fragment.',
+      });
+    }
+  }
   const cloudinaryValues = [env.CLOUDINARY_CLOUD_NAME, env.CLOUDINARY_API_KEY, env.CLOUDINARY_API_SECRET];
   const cloudinaryCount = cloudinaryValues.filter(Boolean).length;
   if (cloudinaryCount > 0 && cloudinaryCount < cloudinaryValues.length) {
@@ -81,10 +141,20 @@ export const envSchema = z.object({
       ctx.addIssue({ code: 'custom', path: ['META_APP_SECRET'], message: 'Unified Login requires the Meta app secret' });
     }
   }
+  if (env.META_UNIFIED_TOKEN_REFRESH_ENABLED && !env.META_UNIFIED_LOGIN_ENABLED) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['META_UNIFIED_TOKEN_REFRESH_ENABLED'],
+      message: 'Unified token refresh requires META_UNIFIED_LOGIN_ENABLED=true.',
+    });
+  }
   if (env.NODE_ENV !== 'production') return;
   const required: Array<[keyof typeof env, string]> = [
-    ['META_APP_ID', 'Instagram OAuth app ID'],
-    ['META_APP_SECRET', 'Instagram OAuth app secret'],
+    ['META_APP_ID', 'Meta app ID'],
+    ['META_APP_SECRET', 'Meta app secret'],
+    ['INSTAGRAM_APP_ID', 'Instagram product App ID'],
+    ['INSTAGRAM_APP_SECRET', 'Instagram product App Secret'],
+    ['INSTAGRAM_OAUTH_REDIRECT_URI', 'Instagram OAuth callback URL'],
     ['META_WEBHOOK_VERIFY_TOKEN', 'Meta webhook verification token'],
     ['RAZORPAY_KEY_ID', 'Razorpay key ID'],
     ['RAZORPAY_KEY_SECRET', 'Razorpay key secret'],

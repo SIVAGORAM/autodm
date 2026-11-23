@@ -157,8 +157,13 @@ export class AuthController {
     const configuredSecure = envSecure === true || envSecure === 'true';
     // Preserve an explicit secure-cookie requirement even if proxy headers are
     // absent or malformed. HTTPS requests may opt into secure cookies locally.
-    const secure = configuredSecure || isHttps;
-    const sameSite: 'none' | 'lax' = secure ? 'none' : 'lax';
+    // Never issue transport credentials without Secure in production, even if
+    // an upstream proxy strips the original scheme headers before Nest sees it.
+    const secure = configuredSecure || isHttps || this.config.get('NODE_ENV') === 'production';
+    // Browser requests now use the frontend's same-origin /api proxy, so the
+    // session cookies do not need SameSite=None. Lax also blocks cross-site
+    // subrequests; the API separately enforces an exact Origin allowlist.
+    const sameSite: 'lax' = 'lax';
     return { secure, sameSite };
   }
 
@@ -175,12 +180,12 @@ export class AuthController {
   private setAdminMfaChallengeCookie(res: FastifyReply, challenge: string, req?: FastifyRequest) {
     const { secure, sameSite } = this.resolveCookieOptions(req);
     res.setCookie('admin_mfa_challenge', challenge, {
-      httpOnly: true, secure, sameSite, path: '/api/auth/admin-mfa', maxAge: 5 * 60,
+      httpOnly: true, secure, sameSite: 'lax', path: '/api/auth/admin-mfa', maxAge: 5 * 60,
     });
   }
 
   private clearAdminMfaChallengeCookie(res: FastifyReply, req?: FastifyRequest) {
-    const { secure, sameSite } = this.resolveCookieOptions(req);
-    res.clearCookie('admin_mfa_challenge', { httpOnly: true, secure, sameSite, path: '/api/auth/admin-mfa' });
+    const { secure } = this.resolveCookieOptions(req);
+    res.clearCookie('admin_mfa_challenge', { httpOnly: true, secure, sameSite: 'lax', path: '/api/auth/admin-mfa' });
   }
 }

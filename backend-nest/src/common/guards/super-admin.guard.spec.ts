@@ -17,6 +17,11 @@ describe('SuperAdminGuard', () => {
     await expect(guard.canActivate(context)).rejects.toThrow('Super administrator access required.');
   });
 
+  it('rejects a super admin suspended between authentication and authorization checks', async () => {
+    prisma.user.findUnique.mockResolvedValue({ role: 'SUPER_ADMIN', deletionRequestedAt: null, suspendedAt: new Date() });
+    await expect(guard.canActivate(context)).rejects.toThrow('Super administrator access required.');
+  });
+
   it('allows an active persisted super admin', async () => {
     prisma.user.findUnique.mockResolvedValue({ role: 'SUPER_ADMIN', deletionRequestedAt: null, adminMfaEnabledAt: new Date() });
     await expect(guard.canActivate(context)).resolves.toBe(true);

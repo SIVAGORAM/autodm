@@ -24,6 +24,8 @@ services:
         value: v26.0
       - key: META_UNIFIED_LOGIN_ENABLED
         value: "false"
+      - key: META_UNIFIED_TOKEN_REFRESH_ENABLED
+        value: "false"
       - key: WEBHOOK_PAYLOAD_RETENTION_DAYS
         value: "30"
       - key: UNVERIFIED_ACCOUNT_RETENTION_DAYS
@@ -43,9 +45,17 @@ services:
         sync: false
       - key: ENCRYPTION_KEY
         sync: false
+      - key: ENCRYPTION_FALLBACK_KEYS
+        sync: false
       - key: META_APP_ID
         sync: false
       - key: META_APP_SECRET
+        sync: false
+      - key: INSTAGRAM_APP_ID
+        sync: false
+      - key: INSTAGRAM_APP_SECRET
+        sync: false
+      - key: INSTAGRAM_OAUTH_REDIRECT_URI
         sync: false
       - key: META_WEBHOOK_VERIFY_TOKEN
         sync: false
@@ -127,6 +137,11 @@ services:
           type: web
           name: relayo-api
           envVarKey: ENCRYPTION_KEY
+      - key: ENCRYPTION_FALLBACK_KEYS
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: ENCRYPTION_FALLBACK_KEYS
       - key: META_APP_ID
         fromService:
           type: web
@@ -137,6 +152,21 @@ services:
           type: web
           name: relayo-api
           envVarKey: META_APP_SECRET
+      - key: INSTAGRAM_APP_ID
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: INSTAGRAM_APP_ID
+      - key: INSTAGRAM_APP_SECRET
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: INSTAGRAM_APP_SECRET
+      - key: INSTAGRAM_OAUTH_REDIRECT_URI
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: INSTAGRAM_OAUTH_REDIRECT_URI
       - key: META_WEBHOOK_VERIFY_TOKEN
         fromService:
           type: web
@@ -149,6 +179,11 @@ services:
           type: web
           name: relayo-api
           envVarKey: META_UNIFIED_LOGIN_ENABLED
+      - key: META_UNIFIED_TOKEN_REFRESH_ENABLED
+        fromService:
+          type: web
+          name: relayo-api
+          envVarKey: META_UNIFIED_TOKEN_REFRESH_ENABLED
       - key: META_UNIFIED_LOGIN_CONFIG_ID
         fromService:
           type: web

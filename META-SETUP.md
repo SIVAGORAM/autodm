@@ -83,14 +83,27 @@ in the configuration. The token belongs to the customer's business portfolio
 and stops working if the customer removes the app or moves the Instagram
 account to another portfolio.
 
-HeyLaunch keeps legacy Instagram Login as the default. Unified Login is offered
-as a separate connect option only when `META_UNIFIED_LOGIN_ENABLED=true`; this
+HeyLaunch keeps legacy Instagram Login available for existing integrations.
+When `META_UNIFIED_LOGIN_ENABLED=true`, it is the primary connect option for a
+new account; an existing account keeps its login method as the primary option
+when adding another account. The alternate method remains explicit, and this
 does not migrate or invalidate existing accounts. The Unified Login URL uses
 the Meta app ID, configuration ID, exact HTTPS callback, `response_type=code`,
 and a server-bound OAuth state. The code is exchanged server-to-server for a
 Business Integration System User access token. The production redirect must be
-registered in the same Meta configuration as:
-`https://<your-api-domain>/api/instagram/callback`.
+registered in the same Meta configuration as `INSTAGRAM_OAUTH_REDIRECT_URI`,
+using the stable frontend origin so the browser-bound state cookie reaches the
+callback through the `/api` proxy.
+
+The Unified Login authorization request follows Meta's documented redirect URL
+shape: `client_id`, `config_id`, the exact configured `redirect_uri`,
+`response_type=code`, `override_default_response_type=true`, `prompt=login`,
+and the signed `state`. Permissions come from the selected configuration; the
+request does not add a `scope` parameter. Meta documents the override for
+Business Integration System User authorization-code flows in the JavaScript
+SDK; HeyLaunch also sends it on its manual OAuth URL so the configured response
+type is not replaced. Confirm this parameter behavior with an authorized Meta
+staging login before enabling the flow for customers.
 
 The Unified Login grant handler discovers all Instagram professional accounts
 shared by the customer, validates the complete account list, checks account
@@ -102,26 +115,56 @@ verified. Existing Instagram Login accounts are not migrated by this flow.
 
 ### 4. Configure credentials
 
-For the currently implemented legacy flow, the Instagram product's app ID and
-secret are used by `META_APP_ID` and `META_APP_SECRET` in
-`backend-nest/.env`.
+Business Login for Instagram uses the Instagram product's App ID and App Secret.
+Set them as `INSTAGRAM_APP_ID` and `INSTAGRAM_APP_SECRET` in the backend
+environment. Development can temporarily fall back to `META_APP_ID` and
+`META_APP_SECRET` when both Instagram-specific values are blank, but production
+validation requires the explicit Instagram product credentials. Do not use the
+generic Meta app credentials unless they are confirmed to match the Instagram
+product's Business Login settings.
+
+For the Instagram Login flow, HeyLaunch sends `enable_fb_login=false`. Meta's
+default is `true`, which displays a Facebook Login option inside Instagram's
+authorization window. If that option is used, Meta can continue into Facebook's
+OIDC login instead of the Instagram-permission flow HeyLaunch expects. A Meta
+page showing only `openid` is therefore a signal to inspect the active login
+mode and deployed App ID; it is not evidence that Instagram authorization
+succeeded. The configured `INSTAGRAM_APP_ID` must match the Instagram App ID
+shown in the Instagram product's Business Login settings, and the exact
+`redirect_uri` must be registered there.
 
 Unified Login uses the **Meta app ID and Meta app secret**, plus the
 configuration ID (`config_id`) created in the dashboard. They are distinct
-configuration values from the Instagram product credentials used by the legacy
-flow. Do not put secrets in the frontend environment or commit them. Set
+credentials from the Instagram product credentials used by Business Login for
+Instagram. `META_APP_SECRET` is also used to validate Meta webhook signatures.
+Do not put secrets in the frontend environment or commit them. Set
 `META_UNIFIED_LOGIN_ENABLED=true` and `META_UNIFIED_LOGIN_CONFIG_ID` in the
 backend environment only after the Meta configuration, app-level Instagram
 webhook, redirect URI, and permissions have been verified.
 
 ### 5. Set the OAuth redirect URI
-- Add the exact backend callback URL in the selected login configuration:
-  https://<your-api-domain>/api/instagram/callback
-- Local testing with a public HTTPS tunnel:
-  https://<your-tunnel-domain>/api/instagram/callback
-- Use a stable, publicly reachable HTTPS API domain for the production OAuth
-  and webhook callbacks. Temporary tunnel URLs can change and are suitable only
-  for controlled development tests.
+- OAuth begins on the frontend and sets a browser-bound state cookie there. The
+  callback must return through that same frontend origin so the Next.js `/api`
+  rewrite forwards the cookie to Nest. Set `INSTAGRAM_OAUTH_REDIRECT_URI` to
+  `https://<stable-frontend-domain>/api/instagram/callback` and register that
+  exact URI in the Instagram Business Login settings and, when used, the Meta
+  Unified Login configuration.
+- If `INSTAGRAM_OAUTH_REDIRECT_URI` is blank, the backend derives it from the
+  first origin in `CORS_ORIGIN`. Ensure that is the actual frontend origin and
+  that `frontend/next.config.js` rewrites `/api/*` to the API. Do not use the API
+  host as the callback when the login was initiated through a different frontend
+  domain: the state cookie is host-only and will not reach the API domain.
+- Local testing must use a stable, publicly reachable HTTPS frontend/tunnel
+  origin and register its exact callback URI. The API's `PUBLIC_URL` remains the
+  API origin and is still used for Meta webhook/deauthorization callbacks.
+- The authenticated Instagram setup card displays the active OAuth App ID,
+  Unified Login configuration ID when enabled, and exact callback URI. These
+  are public identifiers for matching the deployed backend to Meta; secrets are
+  never returned to the browser.
+- If `INSTAGRAM_APP_ID` is blank, the card warns that Instagram Login is falling
+  back to `META_APP_ID`. Confirm the fallback is the Instagram product App ID
+  from Instagram Business Login settings; Facebook Login and Instagram product
+  identifiers may differ.
 
 ### 6. Set up webhooks
 - App-level webhook configuration and per-account subscription are separate steps.
@@ -160,9 +203,11 @@ webhook, redirect URI, and permissions have been verified.
   authorized test account before launch. The comment webhook payload includes
   the media product type. However, Meta's current IG Media reference documents
   the `media_product_type` media-read field only for the separate Instagram API
-  with Facebook Login. HeyLaunch uses Instagram Login and Unified Login, so the
-  media picker labels videos as “Video / Reel” instead of requesting that
-  unsupported field. Specific media selection still uses the owned media ID.
+  with Facebook Login. For Meta Unified Login, HeyLaunch requests this field
+  and can label `REELS` accurately; legacy Instagram Login does not request the
+  Facebook-Login-only field and labels `VIDEO` as “Video / Reel.” Specific media
+  selection still uses the owned media ID. Neither label proves live comment
+  webhook or private-reply delivery.
 
 ### 7. Required callback URLs (Meta needs these for any data-handling app)
 - **Deauthorize callback URL:** `https://<your-api-domain>/api/instagram/deauthorize` (implemented; verifies Meta's signed request, pauses the account automations, and clears the local token)
@@ -200,8 +245,11 @@ webhook, redirect URI, and permissions have been verified.
 ## What maps to which .env value
 | Meta thing | .env variable |
 | --- | --- |
-| Instagram App ID | META_APP_ID |
-| Instagram App Secret | META_APP_SECRET |
+| Meta App ID (Unified Login) | META_APP_ID |
+| Meta App Secret (Unified Login and webhook signatures) | META_APP_SECRET |
+| Instagram product App ID | INSTAGRAM_APP_ID |
+| Instagram product App Secret | INSTAGRAM_APP_SECRET |
+| Frontend-origin OAuth callback | INSTAGRAM_OAUTH_REDIRECT_URI |
 | Verify token (you choose) | META_WEBHOOK_VERIFY_TOKEN |
 | Graph API version (e.g. v26.0) | META_GRAPH_VERSION |
 | Explicit outbound proxy for Meta API calls (optional) | META_HTTPS_PROXY |
@@ -219,7 +267,10 @@ proxy. Do not put proxy credentials in source control or logs.
   (public launch). Start this early — longest lead time in the project.
 
 ## Common mistakes
-- Using the Facebook App ID instead of the Instagram App ID -> OAuth fails.
+- Using the Facebook/Meta App ID instead of the Instagram product App ID for
+  Business Login for Instagram -> OAuth fails. The legacy Instagram Login URL
+  hides its optional Facebook-login route to avoid sending Instagram product
+  credentials into Meta's separate Facebook OIDC flow.
 - Redirect URI not EXACTLY matching (trailing slash, http vs https) -> OAuth fails.
 - Testing with a personal Instagram account -> must be Professional.
 - Forgetting to subscribe the webhook to BOTH comments and messages.

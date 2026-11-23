@@ -19,8 +19,8 @@ const inter = localFont({
 
 export const metadata: Metadata = {
   metadataBase: getPublicSiteUrl(),
-  title: 'HeyLaunch — Start conversations. Launch possibilities.',
-  description: 'Build your online presence, automate Instagram engagement, and turn conversations into customers — all from one platform.',
+  title: 'HeyLaunch — Instagram comment automation for creators',
+  description: 'Set keyword rules for supported Instagram post comments, prepare eligible private replies, and review delivery outcomes in one workspace.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
