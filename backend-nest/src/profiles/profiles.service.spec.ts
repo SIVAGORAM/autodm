@@ -45,6 +45,38 @@ describe('ProfilesService asset consistency', () => {
     }));
   });
 
+  it('rejects non-image and unsupported SVG uploads before contacting storage', async () => {
+    const { service, storage } = makeService(null);
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"></svg>');
+
+    await expect(service.uploadAvatar('user', Buffer.from('not an image')))
+      .rejects.toThrow('The selected file is not a valid supported image.');
+    await expect(service.uploadAvatar('user', svg))
+      .rejects.toThrow('Use a valid JPEG, PNG, or WebP image');
+
+    expect(storage.upload).not.toHaveBeenCalled();
+  });
+
+  it('rejects uploads over five MiB before image decoding or storage', async () => {
+    const { service, storage } = makeService(null);
+
+    await expect(service.uploadAvatar('user', Buffer.alloc(5 * 1024 * 1024 + 1)))
+      .rejects.toThrow('Choose an image smaller than 5 MB.');
+
+    expect(storage.upload).not.toHaveBeenCalled();
+  });
+
+  it('does not upload an avatar for an inactive or non-creator profile owner', async () => {
+    const { service, prisma, storage } = makeService(null);
+    prisma.publicProfile.findUnique.mockResolvedValueOnce({
+      id: 'profile', user: { role: 'INFLUENCER', suspendedAt: new Date(), deletionRequestedAt: null },
+    });
+    const image = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#ffffff' } }).png().toBuffer();
+
+    await expect(service.uploadAvatar('user', image)).rejects.toThrow('Save an active creator profile before uploading a photo.');
+    expect(storage.upload).not.toHaveBeenCalled();
+  });
+
   it('clears the current asset and queues its cleanup in one serializable transaction', async () => {
     const { service, prisma, tx } = makeService('heylaunch/avatars/user/current');
 
@@ -77,6 +109,27 @@ describe('ProfilesService username routing', () => {
     });
 
     expect(prisma.profileHandle.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+describe('ProfilesService moderation lock', () => {
+  it('prevents a creator from republishing a profile restricted by an administrator', async () => {
+    const tx = {
+      user: { findUnique: jest.fn().mockResolvedValue({ id: 'user-1', role: 'INFLUENCER', suspendedAt: null, deletionRequestedAt: null }) },
+      publicProfile: { findUnique: jest.fn().mockResolvedValue({
+        id: 'profile-1', moderationBlockedAt: new Date(), currentHandle: { username: 'creator' },
+      }) },
+      profileHandle: { findFirst: jest.fn() },
+    };
+    const prisma = { $transaction: jest.fn(async (callback: (value: typeof tx) => Promise<unknown>) => callback(tx)) };
+    const service = new ProfilesService(prisma as never, { available: false } as never);
+    const input = {
+      username: 'creator', displayName: 'Creator', bio: null, visibility: 'PUBLIC', appearance: 'NEUTRAL',
+      socialLinks: [], customLinks: [],
+    } as never;
+
+    await expect(service.saveProfile('user-1', input)).rejects.toThrow('This profile is restricted while it is reviewed by HeyLaunch.');
+    expect(tx.profileHandle.findFirst).not.toHaveBeenCalled();
   });
 });
 

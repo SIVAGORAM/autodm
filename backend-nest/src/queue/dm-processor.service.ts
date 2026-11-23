@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
-import { Job } from 'bullmq';
+import { DelayedError, Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { MetaService, DmButton } from '../meta/meta.service';
 import { EncryptionService } from '../common/encryption.service';
@@ -33,7 +33,7 @@ export class DmProcessorService {
   ) {}
 
   async process(job: DmJob, queueJob?: Job<DmJob>): Promise<void> {
-    if (job.followUpId) return this.processFollowUp(job);
+    if (job.followUpId) return this.processFollowUp(job, queueJob);
     return this.processPrimary(job, queueJob);
   }
 
@@ -305,7 +305,7 @@ export class DmProcessorService {
   }
 
   // ---------- follow-up DM ----------
-  private async processFollowUp(job: DmJob): Promise<void> {
+  private async processFollowUp(job: DmJob, queueJob?: Job<DmJob>): Promise<void> {
     const eventId = runEventId(job);
     const existingRun = await this.prisma.run.findUnique({ where: { triggerEventId: eventId } });
     const canResumeAfterCommentReply = existingRun?.status === 'SKIPPED'
@@ -377,6 +377,26 @@ export class DmProcessorService {
     if (since >= windowMs) {
       await this.recordRun(job, contact.id, 'SKIPPED', `The ${windowMs === CLICK_TO_DIRECT_AD_MESSAGE_WINDOW_MS ? '7-day Click-to-Direct ad' : '24-hour'} messaging window has expired.`);
       return;
+    }
+
+    // Comment-triggered follow-ups only become eligible after the configured
+    // delay from the commenter's latest reply. The webhook and queue updates
+    // can race, so enforce the delay again at send time using the contact's
+    // persisted monotonic lastReplyAt value.
+    if (job.commentId && latestReplyAt) {
+      const delayMs = Math.max(0, fu.delayMinutes) * 60_000;
+      const eligibleAt = latestReplyAt.getTime() + delayMs;
+      const safeWindowEnd = windowStart!.getTime() + windowMs - 60_000;
+      if (eligibleAt > safeWindowEnd) {
+        await this.recordRun(job, contact.id, 'SKIPPED', 'The configured follow-up delay leaves no safe time to send within Instagram’s messaging window.');
+        return;
+      }
+      if (Date.now() < eligibleAt) {
+        if (!queueJob?.token) throw new Error('Cannot defer an early comment follow-up without its BullMQ lock token.');
+        await queueJob.updateData({ ...job, replyReceivedAt: latestReplyAt.toISOString() });
+        await queueJob.moveToDelayed(eligibleAt, queueJob.token);
+        throw new DelayedError();
+      }
     }
 
     // Condition gate.

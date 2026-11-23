@@ -12,7 +12,7 @@ export class AdminOperationsService {
   async overview() {
     const now = new Date();
     const [customers, activeCustomers, suspendedCustomers, deletionRequests, adminAccounts, mfaPendingAdmins,
-      instagramAccounts, activeInstagramAccounts, liveAutomations, failedRuns, openSupport, newEnquiries, failedMail, deadLetters] = await Promise.all([
+      instagramAccounts, activeInstagramAccounts, liveAutomations, failedRuns, openSupport, newEnquiries, failedMail, deadLetters, openProfileReports] = await Promise.all([
       this.prisma.user.count({ where: { role: 'INFLUENCER' } }),
       this.prisma.user.count({ where: { role: 'INFLUENCER', suspendedAt: null, deletionRequestedAt: null } }),
       this.prisma.user.count({ where: { role: 'INFLUENCER', suspendedAt: { not: null }, deletionRequestedAt: null } }),
@@ -27,6 +27,7 @@ export class AdminOperationsService {
       this.prisma.contactEnquiry.count({ where: { status: 'NEW' } }),
       this.prisma.mailOutbox.count({ where: { status: 'FAILED' } }),
       this.prisma.webhookEvent.count({ where: { deadLetterAt: { not: null }, processedAt: null, payloadPurgedAt: null } }),
+      this.prisma.publicProfileReport.count({ where: { status: 'OPEN' } }),
     ]);
 
     const [database, queueHealth] = await Promise.all([
@@ -37,7 +38,7 @@ export class AdminOperationsService {
       generatedAt: now.toISOString(),
       metrics: {
         customers, activeCustomers, suspendedCustomers, deletionRequests, adminAccounts, mfaPendingAdmins,
-        instagramAccounts, activeInstagramAccounts, liveAutomations, failedRuns, openSupport, newEnquiries, failedMail, deadLetters,
+        instagramAccounts, activeInstagramAccounts, liveAutomations, failedRuns, openSupport, newEnquiries, failedMail, deadLetters, openProfileReports,
       },
       services: {
         database: database ? 'healthy' : 'unhealthy',

@@ -33,6 +33,8 @@ describe('InstagramController OAuth callback binding', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    config.get.mockImplementation((key: string, fallback?: unknown) => key === 'COOKIE_SECURE' ? false : key === 'META_APP_SECRET' ? 'test-secret' : fallback);
+    (ig as any).oauthRedirectUri = 'http://localhost:3000/api/instagram/callback';
     prisma.user.findUnique.mockResolvedValue({ isVerified: true, deletionRequestedAt: null });
     prisma.igAccount.count.mockResolvedValue(0);
     prisma.$transaction.mockImplementation((callback: (tx: typeof userTx) => unknown) => callback(userTx));
@@ -70,12 +72,12 @@ describe('InstagramController OAuth callback binding', () => {
     }));
   });
 
-  it('keeps legacy Instagram Login as the default even when Unified Login is enabled', async () => {
+  it('keeps legacy Instagram Login as the default and forces Instagram auth even when Unified Login is enabled', async () => {
     (ig as any).unifiedLoginEnabled = true;
 
     await controller.authUrl('user-1', undefined as any, { protocol: 'http', headers: {} } as any, reply as any);
 
-    expect(ig.buildAuthUrl).toHaveBeenCalledWith(expect.any(String), false, 'INSTAGRAM_LOGIN');
+    expect(ig.buildAuthUrl).toHaveBeenCalledWith(expect.any(String), true, 'INSTAGRAM_LOGIN');
   });
 
   it('exposes Unified Login as available only when its backend feature flag is enabled', () => {
@@ -214,6 +216,25 @@ describe('InstagramController OAuth callback binding', () => {
     expect(reply.redirect).toHaveBeenCalledWith('http://localhost:3000/dashboard/instagram?error=cancelled', 302);
   });
 
+  it('returns OAuth results to the configured callback frontend when several preview origins are allowed', async () => {
+    config.get.mockImplementation((key: string, fallback?: unknown) => {
+      if (key === 'COOKIE_SECURE') return false;
+      if (key === 'CORS_ORIGIN') return 'https://heylaunch.app,https://frontend-fawn-six-26.vercel.app';
+      if (key === 'META_APP_SECRET') return 'test-secret';
+      return fallback;
+    });
+    (ig as any).oauthRedirectUri = 'https://frontend-fawn-six-26.vercel.app/api/instagram/callback';
+
+    await controller.callback('', '', 'access_denied', {
+      query: { error_code: '190' },
+      cookies: {},
+    }, reply as any);
+
+    expect(reply.redirect).toHaveBeenCalledWith(
+      'https://frontend-fawn-six-26.vercel.app/dashboard/instagram?error=cancelled', 302,
+    );
+  });
+
   it('records the failed OAuth callback stage without logging exception contents', async () => {
     const warn = jest.spyOn((controller as any).log, 'warn').mockImplementation(() => undefined);
     ig.exchangeCodeForToken.mockRejectedValueOnce(new Error('provider response contained a private token'));
@@ -265,7 +286,7 @@ describe('InstagramController OAuth callback binding', () => {
     expect(ig.subscribeToWebhooks).toHaveBeenCalledWith('ig-user-1', 'provider-token', 'INSTAGRAM_LOGIN');
     expect(prisma.igAccount.updateMany).toHaveBeenCalledWith({
       where: { userId: 'user-1', igUserId: 'ig-user-1', isActive: true },
-      data: { webhookSubscribedAt: expect.any(Date) },
+      data: { webhookSubscribedAt: expect.any(Date), webhookFields: ['comments', 'messages'] },
     });
     expect(reply.redirect).toHaveBeenCalledWith('http://localhost:3000/dashboard/instagram?connected=1', 302);
     expect(dashboardEvents.publish).toHaveBeenCalledWith('user-1', 'instagram');
@@ -334,7 +355,7 @@ describe('InstagramController OAuth callback binding', () => {
     expect(userTx.igAccount.upsert).toHaveBeenCalled();
     expect(prisma.igAccount.updateMany).toHaveBeenCalledWith({
       where: { userId: 'user-1', igUserId: 'ig-user-1', isActive: true },
-      data: { webhookSubscribedAt: null },
+      data: { webhookSubscribedAt: null, webhookFields: [] },
     });
     expect(reply.redirect).toHaveBeenCalledWith('http://localhost:3000/dashboard/instagram?connected=1&webhook_error=1', 302);
   });

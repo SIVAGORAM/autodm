@@ -5,7 +5,11 @@ import { isPublicIpv4, PublicProfileFaviconService } from './public-profile-favi
 describe('PublicProfileFaviconService', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it.each(['10.1.2.3', '127.0.0.1', '169.254.1.1', '172.20.0.1', '192.168.1.1', '100.64.0.1', '224.0.0.1', '240.0.0.1'])
+  it.each([
+    '10.1.2.3', '127.0.0.1', '169.254.1.1', '172.20.0.1', '192.0.2.1', '192.31.196.1',
+    '192.52.193.1', '192.88.99.1', '192.168.1.1', '192.175.48.1', '198.18.0.1',
+    '100.64.0.1', '224.0.0.1', '240.0.0.1',
+  ])
   ('rejects non-public IPv4 ranges returned by DNS: %s', (ip) => {
     expect(isPublicIpv4(ip)).toBe(false);
   });
@@ -39,6 +43,18 @@ describe('PublicProfileFaviconService', () => {
     const get = jest.spyOn(axios, 'get');
 
     await expect(service.getPng('https://creator.com')).resolves.toBeNull();
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it('does not resolve or fetch after the total discovery deadline', async () => {
+    const service = new PublicProfileFaviconService();
+    const lookup = jest.spyOn(service as any, 'lookupPublicIpv4');
+    const get = jest.spyOn(axios, 'get');
+
+    await expect((service as any).fetchPinned(
+      new URL('https://creator.com/'), 1024, 'image/png', Date.now() - 1,
+    )).resolves.toBeNull();
+    expect(lookup).not.toHaveBeenCalled();
     expect(get).not.toHaveBeenCalled();
   });
 
@@ -87,6 +103,7 @@ describe('PublicProfileFaviconService', () => {
     expect(get).toHaveBeenCalledTimes(2);
     expect(get).toHaveBeenNthCalledWith(1, 'https://creator.com/', expect.objectContaining({
       timeout: 3000, maxRedirects: 0, proxy: false, maxContentLength: 256 * 1024,
+      signal: expect.any(AbortSignal),
     }));
     expect(get).toHaveBeenNthCalledWith(2, 'https://creator.com/assets/brand.png', expect.objectContaining({
       timeout: 3000, maxRedirects: 0, responseType: 'arraybuffer',

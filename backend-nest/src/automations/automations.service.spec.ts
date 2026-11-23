@@ -46,6 +46,52 @@ describe('AutomationsService list metrics', () => {
 });
 
 describe('AutomationsService comment trigger selection', () => {
+  it('does not create a NEXT_POST automation that the webhook processor cannot run', async () => {
+    const prisma: any = { igAccount: { findUnique: jest.fn() }, automation: { create: jest.fn() }, $transaction: jest.fn() };
+    const service = new AutomationsService(prisma, {} as any, {} as any, {} as any, {} as any);
+
+    await expect(service.create('user-1', 'CREATOR', { triggerType: 'NEXT_POST' } as any))
+      .rejects.toThrow('This automation trigger is not supported');
+    expect(prisma.igAccount.findUnique).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when Live Comment is disabled for the Meta app', async () => {
+    const prisma: any = { igAccount: { findUnique: jest.fn() }, automation: { create: jest.fn() }, $transaction: jest.fn() };
+    const service = new AutomationsService(prisma, {} as any, {} as any, { liveCommentsEnabled: false } as any, {} as any);
+
+    await expect(service.create('user-1', 'CREATOR', { triggerType: 'LIVE_COMMENT' } as any))
+      .rejects.toThrow('Live comment automations are not enabled for this Meta app yet');
+    expect(prisma.igAccount.findUnique).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('creates a Live Comment draft only when the feature is enabled and forbids follow-ups', async () => {
+    const created = { id: 'live-automation', triggerType: 'LIVE_COMMENT' };
+    const transaction = { automation: { create: jest.fn().mockResolvedValue(created) } };
+    const prisma: any = {
+      igAccount: { findUnique: jest.fn().mockResolvedValue({
+        id: 'account-1', userId: 'user-1', webhookFields: ['live_comments'],
+      }) },
+      $transaction: jest.fn((callback: (tx: typeof transaction) => Promise<unknown>) => callback(transaction)),
+    };
+    const service = new AutomationsService(prisma, {} as any, {} as any, { liveCommentsEnabled: true } as any, {} as any);
+    const input = {
+      igAccountId: 'account-1', name: 'Live comment guide', triggerType: 'LIVE_COMMENT',
+      matchMode: 'KEYWORDS', keywords: ['guide'], publicReplies: [], replyToComment: false,
+      askToFollow: false, collectEmail: false, trackClicks: false,
+      dmBlocks: [{ type: 'text', text: 'Here is the guide.' }], status: 'DRAFT', followUps: [],
+    } as any;
+
+    await expect(service.create('user-1', 'CREATOR', input)).resolves.toEqual(created);
+    expect(transaction.automation.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ triggerType: 'LIVE_COMMENT', replyToComment: false, publicReplies: [] }),
+    }));
+    await expect(service.create('user-1', 'CREATOR', {
+      ...input, followUps: [{ condition: 'DELAY', delayMinutes: 60 }],
+    })).rejects.toThrow('Live comment automations cannot use follow-ups');
+  });
+
   it('requires a selected post for newly created POST_COMMENT automations', async () => {
     const prisma: any = {
       igAccount: { findUnique: jest.fn().mockResolvedValue({ id: 'account-1', userId: 'user-1', webhookSubscribedAt: null }) },
@@ -132,7 +178,7 @@ describe('AutomationsService webhook subscription requirements', () => {
       matchMode: 'KEYWORDS', keywords: ['hello'], publicReplies: [], replyToComment: false,
       askToFollow: false, collectEmail: false, trackClicks: false,
       dmBlocks: [{ type: 'text', text: 'Thanks for reaching out.' }], status: 'LIVE', followUps: [],
-    })).rejects.toThrow('Instagram comment and message webhooks are not confirmed');
+    })).rejects.toThrow('webhook is not confirmed');
 
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });

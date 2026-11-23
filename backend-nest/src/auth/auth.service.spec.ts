@@ -37,7 +37,7 @@ describe('AuthService signup transaction', () => {
       }));
       expect(mailOutbox.queueVerification).toHaveBeenCalledWith(tx, user.id, email, expect.stringMatching(/^\d{6}$/), expect.any(Date));
       expect(tx.refreshToken.create).toHaveBeenCalledWith({
-        data: { id: expect.any(String), tokenHash: hashRefreshToken('refresh-jwt'), userId: user.id, expiresAt: expect.any(Date) },
+        data: { id: expect.any(String), tokenHash: hashRefreshToken('refresh-jwt'), userId: user.id, familyId: expect.any(String), expiresAt: expect.any(Date) },
       });
       expect(JSON.stringify(tx.refreshToken.create.mock.calls[0][0])).not.toContain('refresh-jwt');
       expect(result).toEqual(expect.objectContaining({ user, verificationEmailQueued: true, accessToken: 'access-jwt', refreshToken: 'refresh-jwt' }));
@@ -134,8 +134,28 @@ describe('AuthService verification email delivery status', () => {
 });
 
 describe('AuthService refresh rotation', () => {
-  it('allows only one concurrent use and commits replay family revocation', async () => {
-    const liveRows: any[] = [{ id: 'old-jti', tokenHash: hashRefreshToken('old-token'), userId: 'user-1', expiresAt: new Date(Date.now() + 60_000) }];
+  it('revokes the replayed family when the old refresh-token row is already gone', async () => {
+    const prisma: any = {
+      refreshToken: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const familyId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const jwt: any = { verifyAsync: jest.fn().mockResolvedValue({ sub: 'user-1', jti: 'old-jti', fid: familyId }) };
+    const service = new AuthService(
+      prisma, jwt, { getOrThrow: () => 'secret' } as any, {} as any, {} as any,
+    );
+
+    await expect(service.refresh('old-token')).rejects.toThrow('Token reuse detected');
+    expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1', familyId } });
+  });
+
+  it('allows only one concurrent use and revokes only the replayed device session', async () => {
+    const liveRows: any[] = [
+      { id: 'old-jti', tokenHash: hashRefreshToken('old-token'), userId: 'user-1', familyId: 'family-a', expiresAt: new Date(Date.now() + 60_000) },
+      { id: 'other-session', tokenHash: hashRefreshToken('other-token'), userId: 'user-1', familyId: 'family-b', expiresAt: new Date(Date.now() + 60_000) },
+    ];
     const tx: any = {
       refreshToken: {
         deleteMany: jest.fn(async ({ where }: any) => {
@@ -145,22 +165,22 @@ describe('AuthService refresh rotation', () => {
             liveRows.splice(index, 1);
             return { count: 1 };
           }
-          const count = liveRows.length;
-          liveRows.splice(0, liveRows.length);
-          return { count };
+          const matches = liveRows.filter((row) => row.userId === where.userId && row.familyId === where.familyId);
+          for (const row of matches) liveRows.splice(liveRows.indexOf(row), 1);
+          return { count: matches.length };
         }),
         create: jest.fn(async ({ data }: any) => { liveRows.push(data); return data; }),
       },
     };
     let signId = 0;
     const jwt: any = {
-      verifyAsync: jest.fn().mockResolvedValue({ sub: 'user-1', jti: 'old-jti' }),
+      verifyAsync: jest.fn().mockResolvedValue({ sub: 'user-1', jti: 'old-jti', fid: 'family-a' }),
       signAsync: jest.fn(async () => `signed-${++signId}`),
     };
     const prisma: any = {
       refreshToken: {
         findUnique: jest.fn().mockResolvedValue({
-          id: 'old-jti', tokenHash: hashRefreshToken('old-token'), userId: 'user-1', expiresAt: new Date(Date.now() + 60_000),
+          id: 'old-jti', tokenHash: hashRefreshToken('old-token'), userId: 'user-1', familyId: 'family-a', expiresAt: new Date(Date.now() + 60_000),
           user: { id: 'user-1', email: 'creator@example.test', role: 'INFLUENCER' },
         }),
       },
@@ -173,8 +193,9 @@ describe('AuthService refresh rotation', () => {
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
     expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
     expect(tx.refreshToken.create).toHaveBeenCalledTimes(1);
-    // Reuse revokes the successor token, even when the two uses race.
-    expect(liveRows).toHaveLength(0);
+    // The successor is revoked, but another browser/device stays signed in.
+    expect(liveRows).toEqual([expect.objectContaining({ id: 'other-session', familyId: 'family-b' })]);
+    expect(tx.refreshToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1', familyId: 'family-a' } });
   });
 
   it('commits password replacement and session revocation in one transaction', async () => {

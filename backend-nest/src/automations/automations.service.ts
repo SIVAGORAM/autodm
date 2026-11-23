@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DM_QUEUE_TOKEN } from '../queue/queue.constants';
 import { DmJob, runEventId } from '../queue/queue.constants';
 import { DmQuotaService } from '../common/dm-quota.service';
-import { CreateAutomationDto, UpdateAutomationDto } from './automations.dto';
+import { CreateAutomationDto, UpdateAutomationDto, supportedTriggerTypes } from './automations.dto';
 import { computeHealth } from './health';
 import { PLANS, Tier } from '../common/plan.config';
 import { automationRestriction } from '../common/automation-entitlement';
@@ -16,6 +16,7 @@ import { InstagramService } from '../instagram/instagram.service';
 import { hasFreshWorkerHeartbeat } from '../queue/worker-health';
 
 const unsupportedFollowUpConditions = new Set(['BOUGHT', 'NOT_BOUGHT', 'FORM_NOT_SUBMITTED']);
+const supportedTriggerTypeSet = new Set<string>(supportedTriggerTypes);
 
 @Injectable()
 export class AutomationsService {
@@ -62,6 +63,9 @@ export class AutomationsService {
   }
 
   private enforceCommentFollowUpPolicy(triggerType: string, followUps: Array<{ condition: string }> | undefined) {
+    if (triggerType === 'LIVE_COMMENT' && followUps?.length) {
+      throw new BadRequestException('Live comment automations cannot use follow-ups. Instagram permits a private reply only while the broadcast is live.');
+    }
     if (['POST_COMMENT', 'ANY_POST'].includes(triggerType) && followUps?.some((step) => step.condition === 'NO_REPLY')) {
       throw new BadRequestException('A comment private reply cannot be followed by an unsolicited message. The commenter must reply first; this follow-up condition is not available for comment automations.');
     }
@@ -71,14 +75,33 @@ export class AutomationsService {
     return ['POST_COMMENT', 'ANY_POST'].includes(triggerType);
   }
 
-  private needsWebhookSubscription(triggerType: string) {
-    return ['POST_COMMENT', 'ANY_POST', 'STORY_REPLY', 'DM'].includes(triggerType);
+  private requiredWebhookField(triggerType: string): string | null {
+    if (['POST_COMMENT', 'ANY_POST'].includes(triggerType)) return 'comments';
+    if (triggerType === 'LIVE_COMMENT') return 'live_comments';
+    if (['STORY_REPLY', 'DM'].includes(triggerType)) return 'messages';
+    return null;
   }
 
-  private requireWebhookSubscription(triggerType: string, subscribedAt: Date | null | undefined) {
-    if (this.needsWebhookSubscription(triggerType) && !subscribedAt) {
-      throw new BadRequestException('Instagram comment and message webhooks are not confirmed for this account. Set up webhooks from the Instagram account page before turning on this automation.');
+  private assertTriggerAvailable(triggerType: string) {
+    const enabled = this.instagram.liveCommentsEnabled;
+    if (triggerType === 'LIVE_COMMENT' && !enabled) {
+      throw new BadRequestException('Live comment automations are not enabled for this Meta app yet. Configure the live_comments webhook field and permissions, then enable META_LIVE_COMMENTS_ENABLED.');
     }
+  }
+
+  private requireWebhookSubscription(triggerType: string, fields: string[] | null | undefined, subscribedAt?: Date | null) {
+    const required = this.requiredWebhookField(triggerType);
+    const confirmedFields = fields ?? (subscribedAt ? ['comments', 'messages'] : []);
+    if (required && !confirmedFields.includes(required)) {
+      throw new BadRequestException(`The Instagram ${required} webhook is not confirmed for this account. Set up webhooks from the Instagram account page before turning on this automation.`);
+    }
+  }
+
+  private accountHasWebhookField(account: { webhookSubscribedAt?: Date | null; webhookFields?: string[] }, triggerType: string): boolean {
+    const required = this.requiredWebhookField(triggerType);
+    if (!required) return true;
+    const fields = account.webhookFields ?? (account.webhookSubscribedAt ? ['comments', 'messages'] : []);
+    return fields.includes(required);
   }
 
   private async requireDeliveryWorker() {
@@ -108,10 +131,14 @@ export class AutomationsService {
   }
 
   async create(userId: string, userPlan: string, dto: CreateAutomationDto) {
+    if (!supportedTriggerTypeSet.has(dto.triggerType)) {
+      throw new BadRequestException('This automation trigger is not supported. Choose a comment, story reply, or incoming message trigger.');
+    }
+    this.assertTriggerAvailable(dto.triggerType);
     const account = await this.assertOwnsAccount(userId, dto.igAccountId);
     const supportsPublicCommentReply = this.supportsPublicCommentReply(dto.triggerType);
     this.enforceCommentFollowUpPolicy(dto.triggerType, dto.followUps);
-    if (dto.status === 'LIVE') this.requireWebhookSubscription(dto.triggerType, account.webhookSubscribedAt);
+    if (dto.status === 'LIVE') this.requireWebhookSubscription(dto.triggerType, account.webhookFields, account.webhookSubscribedAt);
     this.enforcePlan(userPlan, dto);
     await this.verifySpecificCommentMedia(account, dto.triggerType, dto.mediaId);
     if (dto.status === 'LIVE') {
@@ -149,7 +176,7 @@ export class AutomationsService {
     const items = await this.prisma.automation.findMany({
       where: { igAccount: { userId } },
       orderBy: { createdAt: 'desc' },
-      include: { igAccount: { select: { id: true, tokenExpiresAt: true, isActive: true, webhookSubscribedAt: true } }, _count: { select: { runs: true, followUps: true } } },
+      include: { igAccount: { select: { id: true, tokenExpiresAt: true, isActive: true, webhookSubscribedAt: true, webhookFields: true } }, _count: { select: { runs: true, followUps: true } } },
     });
     const since = new Date(Date.now() - 86400000);
     if (!items.length) return [];
@@ -176,7 +203,7 @@ export class AutomationsService {
         ?? automationRestriction(plan, { ...a, followUpCount: a._count.followUps });
       const health = computeHealth({
         status: a.status, tokenExpiresAt: a.igAccount.tokenExpiresAt, recentFailures, planRestriction,
-        webhookSubscriptionMissing: this.needsWebhookSubscription(a.triggerType) && !a.igAccount.webhookSubscribedAt,
+        webhookSubscriptionMissing: !this.accountHasWebhookField(a.igAccount, a.triggerType),
         deliveryWorkerUnavailable,
       });
       return { ...a, sentCount, health };
@@ -188,7 +215,7 @@ export class AutomationsService {
     const [a, user, activeAccountIds] = await Promise.all([
       this.prisma.automation.findUnique({
       where: { id },
-        include: { igAccount: { select: { username: true, tokenExpiresAt: true, webhookSubscribedAt: true } }, followUps: { orderBy: { order: 'asc' } }, trackedLinks: true, _count: { select: { runs: true } } },
+        include: { igAccount: { select: { username: true, tokenExpiresAt: true, webhookSubscribedAt: true, webhookFields: true } }, followUps: { orderBy: { order: 'asc' } }, trackedLinks: true, _count: { select: { runs: true } } },
       }),
       this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true, planExpiresAt: true, trialEndsAt: true } }),
       this.activeAccountIds(userId),
@@ -204,7 +231,7 @@ export class AutomationsService {
       ...a,
       health: computeHealth({
         status: a.status, tokenExpiresAt: a.igAccount.tokenExpiresAt, recentFailures, planRestriction,
-        webhookSubscriptionMissing: this.needsWebhookSubscription(a.triggerType) && !a.igAccount.webhookSubscribedAt,
+        webhookSubscriptionMissing: !this.accountHasWebhookField(a.igAccount, a.triggerType),
         deliveryWorkerUnavailable,
       }),
     };
@@ -235,6 +262,17 @@ export class AutomationsService {
   async update(userId: string, userPlan: string, id: string, dto: UpdateAutomationDto) {
     const existing = await this.assertOwnsAutomation(userId, id);
     const effectiveTriggerType = dto.triggerType ?? existing.triggerType;
+    if (dto.triggerType && !supportedTriggerTypeSet.has(dto.triggerType)) {
+      throw new BadRequestException('This automation trigger is not supported. Choose a comment, story reply, or incoming message trigger.');
+    }
+    const triggerIsSupported = supportedTriggerTypeSet.has(effectiveTriggerType);
+    const willBeLive = dto.status === 'LIVE' || (dto.status === undefined && existing.status === 'LIVE');
+    if (dto.triggerType === 'LIVE_COMMENT' || (willBeLive && effectiveTriggerType === 'LIVE_COMMENT')) {
+      this.assertTriggerAvailable(effectiveTriggerType);
+    }
+    if (!triggerIsSupported && willBeLive) {
+      throw new BadRequestException('This legacy automation trigger is no longer supported and cannot remain live. Pause it or change it to a supported trigger first.');
+    }
     const supportsPublicCommentReply = this.supportsPublicCommentReply(effectiveTriggerType);
     let storedFollowUps: Array<{ id: string; condition: string }> | undefined;
     if (dto.followUps || dto.triggerType) {
@@ -253,10 +291,10 @@ export class AutomationsService {
         }
       }
     }
-    if (dto.status === 'LIVE' || existing.status === 'LIVE') {
-      this.requireWebhookSubscription(effectiveTriggerType, existing.igAccount.webhookSubscribedAt);
+    if (willBeLive) {
+      this.requireWebhookSubscription(effectiveTriggerType, existing.igAccount.webhookFields, existing.igAccount.webhookSubscribedAt);
     }
-    if (dto.followUps || (dto.triggerType && ['POST_COMMENT', 'ANY_POST'].includes(effectiveTriggerType))) {
+    if (dto.followUps || (dto.triggerType && ['POST_COMMENT', 'ANY_POST', 'LIVE_COMMENT'].includes(effectiveTriggerType))) {
       const followUps = dto.followUps ?? storedFollowUps ?? [];
       this.enforceCommentFollowUpPolicy(effectiveTriggerType, followUps);
     }
@@ -376,7 +414,11 @@ export class AutomationsService {
   async setStatus(userId: string, userPlan: string, id: string, status: 'DRAFT' | 'LIVE' | 'PAUSED') {
     const existing = await this.assertOwnsAutomation(userId, id);
     if (status === 'LIVE') {
-      this.requireWebhookSubscription(existing.triggerType, existing.igAccount.webhookSubscribedAt);
+      if (!supportedTriggerTypeSet.has(existing.triggerType)) {
+        throw new BadRequestException('This legacy automation trigger is no longer supported. Change it to a supported trigger before activating it.');
+      }
+      this.assertTriggerAvailable(existing.triggerType);
+      this.requireWebhookSubscription(existing.triggerType, existing.igAccount.webhookFields, existing.igAccount.webhookSubscribedAt);
       const followUps = await this.prisma.followUp.findMany({ where: { automationId: id }, select: { condition: true } });
       this.enforceCommentFollowUpPolicy(existing.triggerType, followUps);
       const followUpCount = await this.prisma.followUp.count({ where: { automationId: id } });

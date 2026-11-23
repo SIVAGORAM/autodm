@@ -108,6 +108,44 @@ describe('WebhookService durable intake', () => {
     expect(delay).toBeLessThanOrEqual(15 * 60_000 + 1_000);
   });
 
+  it('schedules follow-ups from the latest persisted reply after an out-of-order message webhook', async () => {
+    const staleReplyAt = new Date(Date.now() - 20 * 60_000);
+    const latestReplyAt = new Date(Date.now() - 2 * 60_000);
+    const contact = { id: 'contact-1', igScopedId: 'person-1', username: 'viewer' };
+    const prisma: any = {
+      igAccount: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'account-row-1', igUserId: 'ig-business-1', userId: 'user-1', isActive: true }),
+        findMany: jest.fn().mockResolvedValue([{ id: 'account-row-1' }]),
+      },
+      user: { findUnique: jest.fn().mockResolvedValue({ plan: 'FREE', deletionRequestedAt: null, suspendedAt: null }) },
+      contact: {
+        upsert: jest.fn().mockResolvedValue(contact),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findUnique: jest.fn().mockResolvedValue({ lastReplyAt: latestReplyAt }),
+      },
+      automation: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = new WebhookService(
+      prisma, { add: jest.fn() } as any, { consume: jest.fn() } as any,
+      { publish: jest.fn().mockResolvedValue(undefined) } as any, {} as any, {} as any,
+    );
+    const schedule = jest.spyOn(service as any, 'scheduleCommentFollowUps').mockResolvedValue(undefined);
+
+    await (service as any).onMessage({ id: 'ig-business-1' }, {
+      sender: { id: 'person-1' },
+      message: { mid: 'message-1', text: 'hello' },
+      timestamp: staleReplyAt.getTime(),
+    });
+
+    expect(prisma.contact.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: { lastReplyAt: staleReplyAt },
+    }));
+    expect(prisma.contact.findUnique).toHaveBeenCalledWith({
+      where: { id: 'contact-1' }, select: { lastReplyAt: true },
+    });
+    expect(schedule).toHaveBeenCalledWith(expect.objectContaining({ id: 'account-row-1' }), contact, latestReplyAt);
+  });
+
   it('uses a queue-safe hashed send ID and respects a legacy in-flight ID during rollout', async () => {
     const { queue, service } = setup();
     queue.add = jest.fn().mockResolvedValue({ id: 'dm-job' });
@@ -199,6 +237,35 @@ describe('WebhookService durable intake', () => {
       skipDuplicates: true,
     });
     expect(queue.addBulk).toHaveBeenCalledTimes(1);
+  });
+
+  it('durably deduplicates the documented live_comments webhook field', async () => {
+    const { prisma, queue, service } = setup();
+    const change = {
+      field: 'live_comments',
+      value: { comment_id: 'live-comment-1', text: 'guide', from: { id: 'viewer-1' }, media: { id: 'live-1' } },
+    };
+    prisma.webhookEvent.findMany.mockResolvedValue([{
+      id: 'live-event-row', eventId: 'live_comment:ig-business-1:live-comment-1',
+      payload: { entry: [{ id: 'ig-business-1', changes: [{ ...change, value: { ...change.value, id: 'live-comment-1' } }] }] },
+      processedAt: null, nextAttemptAt: null, deadLetterAt: null,
+    }]);
+
+    await service.accept({ entry: [{ id: 'ig-business-1', changes: [change, change] }] });
+
+    expect(prisma.webhookEvent.createMany).toHaveBeenCalledWith({
+      data: [{
+        eventId: 'live_comment:ig-business-1:live-comment-1',
+        igUserId: 'ig-business-1',
+        igAccountId: 'account-row-1',
+        payload: { entry: [{ id: 'ig-business-1', changes: [{ ...change, value: { ...change.value, id: 'live-comment-1' } }] }] },
+      }],
+      skipDuplicates: true,
+    });
+    expect(queue.addBulk).toHaveBeenCalledWith([expect.objectContaining({
+      name: 'process-webhook-event',
+      data: { webhookEventId: 'live-event-row' },
+    })]);
   });
 
   it('expands documented comment value arrays into independently deduplicated events', async () => {

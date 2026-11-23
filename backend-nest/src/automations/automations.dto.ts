@@ -23,12 +23,20 @@ const followUpSchema = z.object({
   dmBlocks: z.array(blockSchema).min(1),
 });
 
+// These are the trigger types currently routed by WebhookService. Keep the
+// database enum's legacy values readable for existing rows, but do not accept
+// them in new or edited API payloads.
+export const supportedTriggerTypes = ['POST_COMMENT', 'ANY_POST', 'STORY_REPLY', 'LIVE_COMMENT', 'DM'] as const;
+
 export const createAutomationSchema = z.object({
   igAccountId: z.string().uuid(),
   name: z.string().min(1).max(120),
-  triggerType: z.enum(['POST_COMMENT', 'NEXT_POST', 'ANY_POST', 'STORY_REPLY', 'LIVE_COMMENT', 'DM']),
+  triggerType: z.enum(supportedTriggerTypes),
   mediaId: z.string().trim().min(1).max(128).optional().nullable(),
-  matchMode: z.enum(['KEYWORDS', 'ANY', 'AI_INTENT']).default('KEYWORDS'),
+  // AI_INTENT remains in the database enum for legacy rows, but there is no
+  // intent-classification service. Do not let API clients create or restore
+  // an automation mode that cannot be executed.
+  matchMode: z.enum(['KEYWORDS', 'ANY']).default('KEYWORDS'),
   keywords: z.array(z.string().min(1)).default([]),
   publicReplies: z.array(z.string().min(1)).max(3).default([]),
   replyToComment: z.boolean().default(false),

@@ -2,6 +2,7 @@ import { SetMetadata } from '@nestjs/common';
 
 export const ADMIN_PERMISSIONS = [
   'SUPPORT_MANAGE',
+  'PROFILE_MODERATE',
   'CONTACT_MANAGE',
   'MAIL_READ',
   'OPERATIONS_READ',

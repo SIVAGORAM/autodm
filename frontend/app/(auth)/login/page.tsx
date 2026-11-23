@@ -19,7 +19,22 @@ export default function LoginPage() {
   const [mfaCode, setMfaCode] = useState('');
   const [mfaSetup, setMfaSetup] = useState<{ secret: string; otpauthUri: string } | null>(null);
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
-  const [pendingAdminUser, setPendingAdminUser] = useState<any>(null);
+
+  // Confirm the browser can use the HTTP-only session cookies before entering
+  // the protected dashboard. This catches proxy/cookie configuration problems
+  // on the sign-in screen instead of showing a successful login then bouncing.
+  const confirmBrowserSession = async () => {
+    setLoading(true);
+    try {
+      const response = await authApi.me();
+      setUser(response.data.data.user);
+      router.replace('/dashboard');
+    } catch {
+      setError('Your sign-in was accepted, but HeyLaunch could not verify the browser session. Check the site/API deployment and cookie settings, then try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,8 +49,7 @@ export default function LoginPage() {
         setAdminStep('verify');
         setError('Enter the code from your authenticator app or a recovery code.');
       } else {
-        setUser(res.data.data.user);
-        router.push('/dashboard');
+        await confirmBrowserSession();
       }
     } catch (err: any) {
       setError(getApiErrorMessage(err, 'Login failed. Check your email and password, then try again.'));
@@ -61,13 +75,11 @@ export default function LoginPage() {
     try {
       if (adminStep === 'setup') {
         const response = await authApi.confirmAdminMfaSetup(mfaCode.trim());
-        setPendingAdminUser(response.data.data.user);
         setRecoveryCodes(response.data.data.recoveryCodes ?? []);
         setAdminStep('recovery');
       } else {
-        const response = await authApi.verifyAdminMfa(mfaCode.trim());
-        setUser(response.data.data.user);
-        router.push('/dashboard');
+        await authApi.verifyAdminMfa(mfaCode.trim());
+        await confirmBrowserSession();
       }
     } catch (err: any) {
       setError(getApiErrorMessage(err, 'MFA verification failed. Check the code and try again.'));
@@ -123,7 +135,7 @@ export default function LoginPage() {
             <div style={{ padding: 14, border: `1px solid ${AC.line}`, borderRadius: 10, background: 'var(--surface)', display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
               {recoveryCodes.map((code) => <code key={code} style={{ color: AC.ink, fontSize: 13 }}>{code}</code>)}
             </div>
-            <button type="button" onClick={() => { if (pendingAdminUser) setUser(pendingAdminUser); router.push('/dashboard'); }} style={{ height: 48, borderRadius: 11, background: AC.teal, color: 'white', fontWeight: 600, border: 0, cursor: 'pointer' }}>I saved these codes — continue</button>
+            <button type="button" disabled={loading} onClick={() => void confirmBrowserSession()} style={{ height: 48, borderRadius: 11, background: AC.teal, color: 'white', fontWeight: 600, border: 0, cursor: loading ? 'wait' : 'pointer', opacity: loading ? .7 : 1 }}>I saved these codes — continue</button>
           </div>}
           {adminStep === 'credentials' && <p style={{ textAlign: 'center', marginTop: 24, fontSize: 14.5, color: AC.muted }}>
             New to HeyLaunch? <Link href="/signup" style={{ color: AC.teal, fontWeight: 600, textDecoration: 'none' }}>Create an account</Link>

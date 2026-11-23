@@ -14,7 +14,7 @@ import { ThemeToggle } from '../../components/theme-toggle';
 import type { LucideIcon } from 'lucide-react';
 import { LayoutDashboard, Send, Instagram, BarChart2, FileText, CreditCard, Settings, Bell, HelpCircle, LogOut, ChevronRight, Menu, X, Sparkles, UsersRound, ShieldAlert, LifeBuoy, Mail, MessageSquareText, Link2 } from 'lucide-react';
 
-type AdminPermission = 'SUPPORT_MANAGE' | 'CONTACT_MANAGE' | 'MAIL_READ' | 'OPERATIONS_READ';
+type AdminPermission = 'SUPPORT_MANAGE' | 'PROFILE_MODERATE' | 'CONTACT_MANAGE' | 'MAIL_READ' | 'OPERATIONS_READ';
 const nav: Array<{ href: string; label: string; icon: LucideIcon; adminOnly?: boolean; superAdminOnly?: boolean; permission?: AdminPermission }> = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
   { href: '/dashboard/automations', label: 'Automations', icon: Send },
@@ -29,6 +29,7 @@ const nav: Array<{ href: string; label: string; icon: LucideIcon; adminOnly?: bo
   { href: '/dashboard/admin/webhooks', label: 'Operations', icon: ShieldAlert, adminOnly: true, permission: 'OPERATIONS_READ' },
   { href: '/dashboard/admin/mail', label: 'Mail delivery', icon: Mail, adminOnly: true, permission: 'MAIL_READ' },
   { href: '/dashboard/admin/support', label: 'Support inbox', icon: LifeBuoy, adminOnly: true, permission: 'SUPPORT_MANAGE' },
+  { href: '/dashboard/admin/profile-reports', label: 'Profile reports', icon: ShieldAlert, adminOnly: true, permission: 'PROFILE_MODERATE' },
   { href: '/dashboard/admin/enquiries', label: 'Contact enquiries', icon: MessageSquareText, adminOnly: true, permission: 'CONTACT_MANAGE' },
   { href: '/dashboard/admin', label: 'Command center', icon: LayoutDashboard, superAdminOnly: true },
   { href: '/dashboard/admin/team', label: 'Admin team', icon: UsersRound, superAdminOnly: true },
@@ -44,6 +45,7 @@ const crumbs: Record<string, string> = {
   '/dashboard/admin/webhooks': 'Webhook operations',
   '/dashboard/admin/mail': 'Mail delivery',
   '/dashboard/admin/support': 'Support inbox',
+  '/dashboard/admin/profile-reports': 'Profile reports',
   '/dashboard/admin/enquiries': 'Contact enquiries',
   '/dashboard/admin': 'Command center',
   '/dashboard/admin/team': 'Admin team',

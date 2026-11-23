@@ -9,6 +9,10 @@ const MAX_ICON_BYTES = 256 * 1024;
 const MAX_REDIRECTS = 2;
 const FETCH_TIMEOUT_MS = 3_000;
 const DNS_TIMEOUT_MS = 1_500;
+// Bound the complete discovery (HTML plus up to eight icon candidates and
+// redirects), not just each individual network hop. Per-request timeouts alone
+// allow one public endpoint request to hold a worker for many sequential hops.
+const MAX_DISCOVERY_TIME_MS = 10_000;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const NEGATIVE_CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 512;
@@ -35,8 +39,9 @@ export function isPublicIpv4(address: string): boolean {
   const blocked: Array<[number, number]> = [
     [0x00000000, 8], [0x0a000000, 8], [0x64400000, 10], [0x7f000000, 8],
     [0xa9fe0000, 16], [0xac100000, 12], [0xc0000000, 24], [0xc0000200, 24],
-    [0xc0586300, 24], [0xc0a80000, 16], [0xc6120000, 15], [0xc6336400, 24],
-    [0xcb007100, 24], [0xe0000000, 4], [0xf0000000, 4],
+    [0xc01fc400, 24], [0xc034c100, 24], [0xc0586300, 24], [0xc0a80000, 16],
+    [0xc0af3000, 24], [0xc6120000, 15], [0xc6336400, 24], [0xcb007100, 24],
+    [0xe0000000, 4], [0xf0000000, 4],
   ];
   return !blocked.some(([network, prefix]) => {
     const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
@@ -60,7 +65,7 @@ export class PublicProfileFaviconService {
 
     const pending = this.inFlight.get(key);
     if (pending) return pending;
-    const operation = this.discoverAndFetch(url).catch(() => null).then((png) => {
+    const operation = this.discoverAndFetch(url, Date.now() + MAX_DISCOVERY_TIME_MS).catch(() => null).then((png) => {
       this.cache.set(key, { png, expiresAt: Date.now() + (png ? CACHE_TTL_MS : NEGATIVE_CACHE_TTL_MS) });
       while (this.cache.size > MAX_CACHE_ENTRIES) {
         const oldest = this.cache.keys().next().value;
@@ -81,12 +86,14 @@ export class PublicProfileFaviconService {
       !ipv4Number(hostname) && !hostname.includes(':');
   }
 
-  private async lookupPublicIpv4(hostname: string): Promise<string[]> {
+  private async lookupPublicIpv4(hostname: string, deadline: number): Promise<string[]> {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) return [];
     let timeout: NodeJS.Timeout | undefined;
     const records = await Promise.race([
       dns.lookup(hostname, { all: true, verbatim: true }),
       new Promise<never>((_resolve, reject) => {
-        timeout = setTimeout(() => reject(new Error('Favicon DNS lookup timed out')), DNS_TIMEOUT_MS);
+        timeout = setTimeout(() => reject(new Error('Favicon DNS lookup timed out')), Math.min(DNS_TIMEOUT_MS, remainingMs));
       }),
     ]).finally(() => { if (timeout) clearTimeout(timeout); });
     // Reject the whole DNS answer if it contains a non-public IPv4 result. Pinning
@@ -96,14 +103,19 @@ export class PublicProfileFaviconService {
     return [...new Set(ipv4.map((record) => record.address))];
   }
 
-  private async fetchPinned(url: URL, maxBytes: number, accept: string, redirects = 0): Promise<{ status: number; contentType: string; body: Buffer; url: URL } | null> {
-    if (!this.isAllowedUrl(url)) return null;
-    const addresses = await this.lookupPublicIpv4(url.hostname);
+  private async fetchPinned(url: URL, maxBytes: number, accept: string, deadline: number, redirects = 0): Promise<{ status: number; contentType: string; body: Buffer; url: URL } | null> {
+    if (Date.now() >= deadline || !this.isAllowedUrl(url)) return null;
+    const addresses = await this.lookupPublicIpv4(url.hostname, deadline);
     if (!addresses.length) return null;
 
     let response: AxiosResponse<ArrayBuffer> | null = null;
     let lastError: unknown;
     for (const address of addresses.slice(0, 3)) {
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) break;
+      const requestTimeoutMs = Math.min(FETCH_TIMEOUT_MS, remainingMs);
+      const abortController = new AbortController();
+      const timeout = setTimeout(() => abortController.abort(), requestTimeoutMs);
       const agent = new https.Agent({
         keepAlive: false,
         lookup: ((_hostname: string, options: { all?: boolean }, callback: (error: NodeJS.ErrnoException | null, address: string | Array<{ address: string; family: number }>, family?: number) => void) => {
@@ -114,7 +126,8 @@ export class PublicProfileFaviconService {
       try {
         response = await axios.get<ArrayBuffer>(url.toString(), {
           responseType: 'arraybuffer',
-          timeout: FETCH_TIMEOUT_MS,
+          timeout: requestTimeoutMs,
+          signal: abortController.signal,
           maxRedirects: 0,
           maxContentLength: maxBytes,
           maxBodyLength: maxBytes,
@@ -127,6 +140,7 @@ export class PublicProfileFaviconService {
       } catch (error) {
         lastError = error;
       } finally {
+        clearTimeout(timeout);
         agent.destroy();
       }
     }
@@ -139,7 +153,7 @@ export class PublicProfileFaviconService {
       if (redirects >= MAX_REDIRECTS || typeof location !== 'string') return null;
       let next: URL;
       try { next = new URL(location, url); } catch { return null; }
-      return this.fetchPinned(next, maxBytes, accept, redirects + 1);
+      return this.fetchPinned(next, maxBytes, accept, deadline, redirects + 1);
     }
     if (status !== 200) return null;
     const body = Buffer.from(response.data as ArrayBuffer);
@@ -147,9 +161,9 @@ export class PublicProfileFaviconService {
     return { status, contentType, body, url };
   }
 
-  private async discoverAndFetch(start: URL): Promise<Buffer | null> {
+  private async discoverAndFetch(start: URL, deadline: number): Promise<Buffer | null> {
     const origin = new URL(start.origin);
-    const page = await this.fetchPinned(origin, MAX_HTML_BYTES, 'text/html,application/xhtml+xml;q=0.9');
+    const page = await this.fetchPinned(origin, MAX_HTML_BYTES, 'text/html,application/xhtml+xml;q=0.9', deadline);
     const candidates: URL[] = [];
     if (page && ['text/html', 'application/xhtml+xml'].includes(page.contentType)) {
       const html = page.body.toString('utf8');
@@ -170,7 +184,8 @@ export class PublicProfileFaviconService {
     candidates.push(new URL('/favicon.ico', origin));
 
     for (const candidate of candidates.slice(0, 8)) {
-      const response = await this.fetchPinned(candidate, MAX_ICON_BYTES, 'image/png,image/jpeg,image/webp,image/avif,image/gif,image/x-icon,image/vnd.microsoft.icon');
+      if (Date.now() >= deadline) break;
+      const response = await this.fetchPinned(candidate, MAX_ICON_BYTES, 'image/png,image/jpeg,image/webp,image/avif,image/gif,image/x-icon,image/vnd.microsoft.icon', deadline);
       if (!response || !RASTER_MIME_TYPES.has(response.contentType)) continue;
       try {
         return await sharp(response.body, { failOn: 'error', limitInputPixels: 1_000_000 })

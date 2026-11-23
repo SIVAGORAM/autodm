@@ -1,6 +1,5 @@
 // store/authStore.ts
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import { authApi } from '../services/api';
 
 interface User {
@@ -8,7 +7,7 @@ interface User {
   name: string;
   email: string;
   role: string;
-  adminPermissions?: Array<'SUPPORT_MANAGE' | 'CONTACT_MANAGE' | 'MAIL_READ' | 'OPERATIONS_READ'>;
+  adminPermissions?: Array<'SUPPORT_MANAGE' | 'PROFILE_MODERATE' | 'CONTACT_MANAGE' | 'MAIL_READ' | 'OPERATIONS_READ'>;
   plan?: 'FREE' | 'CREATOR' | 'PRO' | 'AGENCY' | 'PAID';
   profilePicUrl?: string | null;
   isVerified?: boolean;
@@ -29,40 +28,40 @@ interface AuthState {
   fetchMe: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, _get) => ({
-      user: null,
-      isLoading: false,
-      isAuthenticated: false,
-      isFetched: false,
+// Previous releases persisted the entire user profile and auth flag (including
+// email and admin permissions) in localStorage. The HTTP-only cookie is the
+// session authority, so discard that stale client cache and keep user data in
+// memory only.
+if (typeof window !== 'undefined') {
+  try { window.localStorage.removeItem('auth-storage'); } catch { /* storage may be disabled */ }
+}
 
-      setUser: (user) => set({ user, isAuthenticated: !!user }),
+export const useAuthStore = create<AuthState>()((set) => ({
+  user: null,
+  isLoading: false,
+  isAuthenticated: false,
+  isFetched: false,
 
-      logout: async () => {
-        try { await authApi.logout(); } catch { /* ignore */ }
-        set({ user: null, isAuthenticated: false });
-        window.location.href = '/login';
-      },
+  setUser: (user) => set({ user, isAuthenticated: !!user }),
 
-      fetchMe: async () => {
-        set({ isLoading: true, isFetched: false });
-        try {
-          const res = await authApi.me();
-          set({ user: res.data.data.user, isAuthenticated: true, isFetched: true });
-        } catch (err) {
-          const status = (err as { response?: { status?: number } } | null)?.response?.status;
-          if (status === 401) set({ user: null, isAuthenticated: false, isFetched: true });
-          else set({ isFetched: true });
-          throw err;
-        } finally {
-          set({ isLoading: false });
-        }
-      },
-    }),
-    {
-      name: 'auth-storage',
-      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
+  logout: async () => {
+    try { await authApi.logout(); } catch { /* ignore */ }
+    set({ user: null, isAuthenticated: false });
+    window.location.href = '/login';
+  },
+
+  fetchMe: async () => {
+    set({ isLoading: true, isFetched: false });
+    try {
+      const res = await authApi.me();
+      set({ user: res.data.data.user, isAuthenticated: true, isFetched: true });
+    } catch (err) {
+      const status = (err as { response?: { status?: number } } | null)?.response?.status;
+      if (status === 401) set({ user: null, isAuthenticated: false, isFetched: true });
+      else set({ isFetched: true });
+      throw err;
+    } finally {
+      set({ isLoading: false });
     }
-  )
-);
+  },
+}));

@@ -16,12 +16,13 @@ import { ArrowLeft, ArrowRight, MessageCircle, Film, Mail, Plus, Trash2, Check }
 const STEPS = ['Trigger', 'Keywords & reply', 'The DM'];
 
 type Btn = { title: string; url: string };
-const paidTriggers = ['ANY_POST', 'STORY_REPLY', 'DM'];
+const paidTriggers = ['ANY_POST', 'STORY_REPLY', 'LIVE_COMMENT', 'DM'];
 
 const triggerOptions = [
   { value: 'POST_COMMENT', label: 'Comment on a post', icon: MessageCircle, paid: false },
   { value: 'ANY_POST', label: 'Comment on any post', icon: MessageCircle, paid: true },
   { value: 'STORY_REPLY', label: 'Story reply', icon: Film, paid: true },
+  { value: 'LIVE_COMMENT', label: 'Comment during a live broadcast', icon: MessageCircle, paid: true },
   { value: 'DM', label: 'Incoming DM', icon: Mail, paid: true },
 ];
 
@@ -51,8 +52,13 @@ export default function NewAutomationPage() {
 
   const accountsQ = useQuery({
     queryKey: ['ig-accounts'],
-    queryFn: async () => (await instagramApi.accounts()).data.data as { id: string; username: string; isActive: boolean }[],
+    queryFn: async () => (await instagramApi.accounts()).data.data as { id: string; username: string; isActive: boolean; webhookFields?: string[] }[],
   });
+  const loginOptionsQ = useQuery({
+    queryKey: ['instagram-login-options'],
+    queryFn: async () => (await instagramApi.loginOptions()).data.data as { liveCommentsEnabled?: boolean },
+  });
+  const liveCommentsEnabled = loginOptionsQ.data?.liveCommentsEnabled === true;
   const activeAccounts = (accountsQ.data ?? []).filter((account) => account.isActive);
   const igAccountId = activeAccounts.some((account) => account.id === selectedIgAccountId)
     ? selectedIgAccountId
@@ -99,6 +105,7 @@ export default function NewAutomationPage() {
       if (!dmText.trim()) return 'Write the DM message.';
       const bad = buttons.find((b) => (b.title.trim() && !b.url.trim()) || (!b.title.trim() && b.url.trim()));
       if (bad) return 'Each button needs both a label and a URL.';
+      if (triggerType === 'LIVE_COMMENT' && followUps.some((item) => item.text.trim())) return 'Live comment automations cannot use follow-ups. Instagram permits a private reply only while the broadcast is live.';
       if (['POST_COMMENT', 'ANY_POST'].includes(triggerType) && followUps.some((item) => item.condition === 'NO_REPLY')) return 'A comment private reply cannot be followed by an unsolicited message. Choose another condition; the commenter must reply first.';
     }
     return null;
@@ -159,7 +166,7 @@ export default function NewAutomationPage() {
               <div>
                 <Label>When someone…</Label>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  {triggerOptions.map((o) => {
+                  {triggerOptions.filter((option) => option.value !== 'LIVE_COMMENT' || liveCommentsEnabled).map((o) => {
                     const locked = o.paid && !isPaid;
                     const active = triggerType === o.value;
                     const Icon = o.icon;
@@ -182,6 +189,8 @@ export default function NewAutomationPage() {
                 </div>
               </div>
               {triggerType === 'ANY_POST' && <p role="status" className="text-xs leading-relaxed text-muted-foreground">Meta’s current Webhooks and Private Replies guides document Reel comment events and replies. HeyLaunch has not yet verified a real Reel event and reply on an authorized staging account, so delivery remains unverified.</p>}
+              {triggerType === 'LIVE_COMMENT' && <p role="status" className="text-xs leading-relaxed text-muted-foreground">HeyLaunch attempts one private reply for a matching comment from this live broadcast. Meta may reject it if processing reaches Instagram after the broadcast ends. Delivery requires the live_comments webhook for this account; follow-ups are unavailable.</p>}
+              {triggerType === 'LIVE_COMMENT' && !selectedAccount?.webhookFields?.includes('live_comments') && <p role="status" className="text-xs leading-relaxed text-amber-700 dark:text-amber-300">This Instagram account has not confirmed the live_comments webhook. Set up webhooks on the Instagram page before activating this automation.</p>}
               {['POST_COMMENT', 'ANY_POST'].includes(triggerType) && <p className="text-xs leading-relaxed text-muted-foreground">Each comment can trigger one DM. A rule for the exact post takes priority over “Any post”; if multiple rules at the same priority match, the oldest automation handles it.</p>}
               {['DM', 'STORY_REPLY'].includes(triggerType) && <p className="text-xs leading-relaxed text-muted-foreground">If multiple active rules match the same message, the oldest automation handles it.</p>}
               {triggerType === 'POST_COMMENT' && (

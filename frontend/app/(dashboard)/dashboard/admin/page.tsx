@@ -21,7 +21,7 @@ const metricLabels: Record<string, string> = {
   customers: 'Registered customers', activeCustomers: 'Active customers', suspendedCustomers: 'Suspended',
   deletionRequests: 'Deletion requests', adminAccounts: 'Active administrators', mfaPendingAdmins: 'Admins needing MFA', instagramAccounts: 'Instagram accounts',
   activeInstagramAccounts: 'Connected accounts', liveAutomations: 'Live automations', failedRuns: 'Failed runs',
-  openSupport: 'Open support requests', newEnquiries: 'New contact enquiries', failedMail: 'Failed email deliveries', deadLetters: 'Webhook dead letters',
+  openSupport: 'Open support requests', openProfileReports: 'Open profile reports', newEnquiries: 'New contact enquiries', failedMail: 'Failed email deliveries', deadLetters: 'Webhook dead letters',
 };
 
 export default function AdminCommandCenterPage() {
@@ -75,10 +75,11 @@ export default function AdminCommandCenterPage() {
         </Card>
         <Card>
           <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 12px', fontSize: 16, color: 'var(--text)' }}><AlertTriangle size={17} aria-hidden /> Needs attention</h2>
-          {data.metrics.deadLetters + data.metrics.failedMail + data.metrics.failedRuns + data.metrics.deletionRequests + data.metrics.mfaPendingAdmins + data.metrics.newEnquiries === 0
+          {data.metrics.deadLetters + data.metrics.failedMail + data.metrics.failedRuns + data.metrics.deletionRequests + data.metrics.mfaPendingAdmins + data.metrics.newEnquiries + data.metrics.openProfileReports === 0
             ? <p style={{ color: 'var(--text-muted)', fontSize: 13.5, margin: 0 }}>No tracked backlog or failure counts are currently reported.</p>
             : <div style={{ display: 'grid', gap: 9, color: 'var(--text-muted)', fontSize: 13.5 }}>
               {data.metrics.deadLetters > 0 && <Link href="/dashboard/admin/webhooks">{data.metrics.deadLetters} webhook dead letter(s) need review</Link>}
+              {data.metrics.openProfileReports > 0 && <Link href="/dashboard/admin/profile-reports">{data.metrics.openProfileReports} public profile report(s) need review</Link>}
               {data.metrics.failedMail > 0 && <Link href="/dashboard/admin/mail">{data.metrics.failedMail} failed email delivery record(s)</Link>}
               {data.metrics.newEnquiries > 0 && <Link href="/dashboard/admin/enquiries">{data.metrics.newEnquiries} new contact enquiry/enquiries</Link>}
               {data.metrics.failedRuns > 0 && <Link href="/dashboard/logs">{data.metrics.failedRuns} failed automation run(s)</Link>}

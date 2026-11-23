@@ -62,7 +62,7 @@ describe('InstagramAccountLifecycleService', () => {
     expect(pendingJob.remove).toHaveBeenCalledTimes(1);
     expect(prisma.igAccount.updateMany).toHaveBeenCalledWith({
       where: { id: 'account-1', userId: 'owner-1' },
-      data: { isActive: false, accessTokenEnc: '', tokenExpiresAt: null, webhookSubscribedAt: null, lastAlertAt: null },
+      data: { isActive: false, accessTokenEnc: '', tokenExpiresAt: null, webhookSubscribedAt: null, webhookFields: [], lastAlertAt: null },
     });
     expect(prisma.automation.updateMany.mock.invocationCallOrder[0])
       .toBeLessThan(prisma.igAccount.updateMany.mock.invocationCallOrder[0]);
@@ -115,7 +115,7 @@ describe('InstagramAccountLifecycleService', () => {
     });
     expect(tx.igAccount.updateMany).toHaveBeenCalledWith({
       where: { id: 'account-1', igUserId: '123456789' },
-      data: { isActive: false, accessTokenEnc: '', tokenExpiresAt: null, webhookSubscribedAt: null, lastAlertAt: null },
+      data: { isActive: false, accessTokenEnc: '', tokenExpiresAt: null, webhookSubscribedAt: null, webhookFields: [], lastAlertAt: null },
     });
     expect(tx.igAccount.deleteMany).toHaveBeenCalledWith({ where: { igUserId: '123456789' } });
     expect(tx.dmQuotaReservation.deleteMany).toHaveBeenCalledWith({
@@ -170,7 +170,7 @@ describe('InstagramAccountLifecycleService', () => {
     });
     expect(tx.igAccount.updateMany).toHaveBeenCalledWith({
       where: { igUserId: '123456789' },
-      data: { isActive: false, accessTokenEnc: '', tokenExpiresAt: null, webhookSubscribedAt: null, lastAlertAt: null },
+      data: { isActive: false, accessTokenEnc: '', tokenExpiresAt: null, webhookSubscribedAt: null, webhookFields: [], lastAlertAt: null },
     });
   });
 

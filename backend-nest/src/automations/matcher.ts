@@ -35,7 +35,7 @@ function escapeRegex(s: string): string {
 export interface MatchResult {
   matched: boolean;
   keyword?: string;
-  needsAi?: boolean; // caller should run the LLM intent check
+  needsAi?: boolean; // legacy marker; no AI intent service is currently wired
 }
 
 export function matchComment(input: MatchInput): MatchResult {

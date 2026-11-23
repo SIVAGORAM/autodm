@@ -27,15 +27,17 @@ export class InstagramService {
 
   private get httpOptions() { return metaHttpOptions(this.config.get<string>('META_HTTPS_PROXY')); }
 
-  async subscribeToWebhooks(igUserId: string, token: string, loginMode: InstagramLoginMode = 'INSTAGRAM_LOGIN'): Promise<void> {
+  async subscribeToWebhooks(igUserId: string, token: string, loginMode: InstagramLoginMode = 'INSTAGRAM_LOGIN'): Promise<string[]> {
     const version = this.config.get<string>('META_GRAPH_VERSION') ?? 'v26.0';
     const host = loginMode === 'UNIFIED_LOGIN' ? 'graph.facebook.com' : 'graph.instagram.com';
+    const subscribedFields = this.liveCommentsEnabled ? ['comments', 'messages', 'live_comments'] : ['comments', 'messages'];
     try {
       await axios.post(`https://${host}/${version}/${encodeURIComponent(igUserId)}/subscribed_apps`, null, {
-        params: { subscribed_fields: 'comments,messages', access_token: token },
+        params: { subscribed_fields: subscribedFields.join(','), access_token: token },
         timeout: 15_000,
         ...this.httpOptions,
       });
+      return subscribedFields;
     } catch (err: any) {
       const status = Number.isInteger(err?.response?.status) ? err.response.status : 'network';
       const rawCode = err?.response?.data?.error?.code ?? err?.response?.data?.code;
@@ -60,6 +62,7 @@ export class InstagramService {
   private get instagramAppSecret() { return this.config.get<string>('INSTAGRAM_APP_SECRET')?.trim() || this.appSecret; }
   get unifiedLoginEnabled() { return this.config.get<boolean>('META_UNIFIED_LOGIN_ENABLED') === true || this.config.get('META_UNIFIED_LOGIN_ENABLED') === 'true'; }
   get unifiedTokenRefreshEnabled() { return this.config.get<boolean>('META_UNIFIED_TOKEN_REFRESH_ENABLED') === true || this.config.get('META_UNIFIED_TOKEN_REFRESH_ENABLED') === 'true'; }
+  get liveCommentsEnabled() { return this.config.get<boolean>('META_LIVE_COMMENTS_ENABLED') === true || this.config.get('META_LIVE_COMMENTS_ENABLED') === 'true'; }
   private get unifiedConfigId() { return this.config.get<string>('META_UNIFIED_LOGIN_CONFIG_ID') ?? ''; }
   // These identifiers are public OAuth parameters, not credentials. Exposing
   // them to the authenticated setup panel helps operators match the deployed
@@ -97,10 +100,9 @@ export class InstagramService {
         config_id: this.unifiedConfigId,
         redirect_uri: this.redirectUri,
         response_type: 'code',
-        // Unified Login uses a Business Integration System User token. Meta's
-        // Facebook Login for Business flow requires this override so the
-        // config's default response type cannot replace the authorization-code
-        // response that our server-side exchange expects.
+        // This configuration uses a Business Integration System User token.
+        // Meta requires this override so the config's default response types
+        // do not replace the authorization-code flow used by our callback.
         override_default_response_type: 'true',
         prompt: 'login',
         state,

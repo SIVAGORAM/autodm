@@ -26,6 +26,14 @@ export default function VerifyPage() {
 
   useEffect(() => {
     let active = true;
+    authApi.me()
+      .then((result) => {
+        if (active) setUser(result.data.data.user);
+      })
+      .catch((err: any) => {
+        if (active && err.response?.status === 401) setSessionExpired(true);
+        // The verification-email status request below reports its own errors.
+      });
     authApi.verificationEmailStatus()
       .then((result) => {
         if (active) setMailStatus(result.data.data.status);

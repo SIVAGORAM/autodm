@@ -4,6 +4,10 @@ export const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   DIRECT_URL: z.string().url().optional(),
   REDIS_URL: z.string().url(),
+  REDIS_REQUIRE_NOEVICTION: z.preprocess(
+    (value) => typeof value === 'boolean' ? value : value === 'true' ? true : value === 'false' ? false : undefined,
+    z.boolean(),
+  ).default(false),
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
   JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
@@ -28,6 +32,10 @@ export const envSchema = z.object({
     z.boolean(),
   ).default(false),
   META_UNIFIED_TOKEN_REFRESH_ENABLED: z.preprocess(
+    (value) => typeof value === 'boolean' ? value : value === 'true' ? true : value === 'false' ? false : undefined,
+    z.boolean(),
+  ).default(false),
+  META_LIVE_COMMENTS_ENABLED: z.preprocess(
     (value) => typeof value === 'boolean' ? value : value === 'true' ? true : value === 'false' ? false : undefined,
     z.boolean(),
   ).default(false),
@@ -149,6 +157,9 @@ export const envSchema = z.object({
     });
   }
   if (env.NODE_ENV !== 'production') return;
+  if (!env.REDIS_REQUIRE_NOEVICTION) {
+    ctx.addIssue({ code: 'custom', path: ['REDIS_REQUIRE_NOEVICTION'], message: 'Production requires Redis maxmemory-policy noeviction for BullMQ durability.' });
+  }
   const required: Array<[keyof typeof env, string]> = [
     ['META_APP_ID', 'Meta app ID'],
     ['META_APP_SECRET', 'Meta app secret'],

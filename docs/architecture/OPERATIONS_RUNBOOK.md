@@ -5,7 +5,7 @@ This runbook describes only operational controls verified in the repository. It 
 ## Service health
 
 1. Check API liveness at `GET /health`. A successful response confirms only that the API process answers.
-2. Check API readiness at `GET /ready`. A `503` means the database and/or Redis probe failed; inspect the individual `checks` fields and the host's API logs.
+2. Check API readiness at `GET /ready`. A `503` means a required dependency is unavailable or Redis queue durability is not confirmed; inspect the individual `checks` fields and redacted API logs. Production requires `checks.redisQueuePolicy: ok` (`maxmemory_policy:noeviction`). If it reports `unsafe_or_unavailable`, disable Eviction for the Redis database in Upstash Console, then recheck readiness. The worker also refuses to start unless it can verify the policy.
 3. A verified administrator can inspect `GET /api/admin/health/worker` or the dashboard's Webhook operations page. `status: stale` or `unavailable` means the worker heartbeat is missing/old or Redis could not be read. The endpoint also reports waiting, active, delayed, and failed queue counts.
 4. If the worker is stale, inspect the worker service's platform status and redacted logs, verify its configured Redis/database environment references, and use the hosting provider's restart procedure. Recheck heartbeat and queue movement after recovery. Do not copy credentials into tickets or chat.
 
@@ -14,9 +14,18 @@ The API health endpoints and admin page do not send alerts. Until external monit
 ## Instagram provider connectivity
 
 - `GET /api/instagram/accounts/:id/media` and webhook-subscription setup require outbound HTTPS from the API process to Meta Graph endpoints. A provider-network failure is returned as HTTP `503`; the automation builder displays a retryable network/proxy message.
-- Check outbound connectivity from the API service itself, including the `HTTP_PROXY`, `HTTPS_PROXY`, or `ALL_PROXY` configuration inherited by that process. A configured but unreachable proxy can prevent requests from reaching Meta even while `/ready` reports the database and queue as healthy.
-- Correct the service's approved proxy/network configuration, restart the API if its environment changed, then retry media loading. Do not disable or bypass an organization/network proxy as a troubleshooting shortcut.
+- Meta requests explicitly disable Axios's generic `HTTP_PROXY`, `HTTPS_PROXY`, and `ALL_PROXY` discovery. Check direct outbound HTTPS from the API service first; `/ready` does not check Meta connectivity.
+- If the hosting network requires an outbound proxy, configure the optional `META_HTTPS_PROXY` origin in the API service's secret environment. The Render Blueprint passes that value to the worker as well. Use an approved reachable HTTP(S) proxy with no URL path, query, or fragment, then restart affected services and retry. Do not copy proxy credentials into tickets or chat.
 - Meta media loading and account webhook subscription are separate operations. A connected account with an unconfirmed webhook subscription cannot reliably trigger automations; use the dashboard's setup action only after outbound connectivity is working, then confirm receipt of a controlled staging event before enabling customer automations.
+
+## Instagram OAuth connection failures
+
+- Use the authenticated dashboard's `GET /api/instagram/login-options` response to confirm the deployed login mode, public App IDs, configuration ID, and exact redirect URI. Never include `state`, authorization codes, or tokens in a support ticket.
+- For `INSTAGRAM_LOGIN`, the authorization URL must start at `https://www.instagram.com/oauth/authorize`; this code requests the Instagram Business Login permissions and exchanges the code using the Instagram product credentials (`INSTAGRAM_APP_ID`/`INSTAGRAM_APP_SECRET`, falling back to `META_APP_ID`/`META_APP_SECRET` only for older deployments). Confirm the Instagram Login product is configured for that same app.
+- For `UNIFIED_LOGIN`, the URL starts at `https://www.facebook.com/dialog/oauth` and includes a Business Login configuration ID. Confirm the App ID, App Secret, configuration ID, products, and permissions belong to the same Meta app. Do not infer that a Facebook-hosted intermediate OIDC page means Unified Login was configured correctly.
+- For either flow, Meta's registered redirect URI must exactly match the dashboard value, including scheme, host, path, and trailing-slash behavior. The callback host must match the frontend origin that started OAuth so the browser can return the state cookie through the same-origin `/api` proxy. Prefer a stable frontend domain for production; preview domains require matching callback/CORS configuration and may change.
+- The callback logs only a failure stage, safe exception class, and bounded Meta error category/code. A generic provider error page before callback may leave no callback log. If Meta supplies `error`, `error_code`, or `error_subcode`, capture those fields only; redact `state`, `code`, and all token values. If there is no callback entry, inspect the generated authorization URL and Meta app/configuration pairing before investigating session cookies.
+- Cookie roles are intentionally separate: `access_token` is the short-lived HeyLaunch session cookie (`Path=/`); `refresh_token` is the rotated HeyLaunch session cookie (`Path=/api/auth`) and is not sent to Instagram routes; `ig_oauth_state` is a ten-minute HttpOnly, SameSite=Lax browser-binding cookie scoped to `/api/instagram/callback`, then cleared by the callback. Meta/Instagram account access tokens are encrypted in the database after a successful callback, not stored as browser cookies. Do not loosen cookie paths or SameSite settings as an OAuth workaround.
 
 ## Failed webhook receipts
 

@@ -65,10 +65,12 @@ export class InstagramController {
     res.setCookie('ig_oauth_state', nonce, {
       httpOnly: true, secure, sameSite: 'lax', path: '/api/instagram/callback', maxAge: 10 * 60,
     });
-    // If they already have an account linked, they're adding another — force the
-    // IG login/account chooser so they can pick a different account (no Incognito).
+    // Always force the Instagram credential prompt. Without this, an existing
+    // browser session can take Meta's Facebook/OIDC shortcut even when the
+    // Instagram Login URL hides its Facebook-login option. This makes first
+    // connect and add-account use the same predictable Instagram flow.
     const existing = await this.prisma.igAccount.count({ where: { userId } });
-    return { success: true, data: { url: this.ig.buildAuthUrl(state, existing > 0, loginMode), loginMode } };
+    return { success: true, data: { url: this.ig.buildAuthUrl(state, loginMode === 'INSTAGRAM_LOGIN' || existing > 0, loginMode), loginMode } };
   }
 
   @Get('login-options')
@@ -79,6 +81,7 @@ export class InstagramController {
       success: true,
       data: {
         unifiedLoginEnabled: this.ig.unifiedLoginEnabled,
+        liveCommentsEnabled: this.ig.liveCommentsEnabled,
         instagramLoginAppId: this.ig.instagramLoginAppId,
         instagramLoginUsesMetaFallback: this.ig.instagramLoginUsesMetaFallback,
         unifiedLoginAppId: this.ig.unifiedLoginAppId,
@@ -100,7 +103,7 @@ export class InstagramController {
     @Req() req: any,
     @Res() res: FastifyReply,
   ) {
-    const frontend = this.config.get('CORS_ORIGIN', 'http://localhost:3000').split(',')[0];
+    const frontend = this.oauthReturnOrigin();
     const stateCookie = req.cookies?.ig_oauth_state;
     const secure = this.isSecureRequest(req);
     let stage = 'provider_callback';
@@ -207,13 +210,13 @@ export class InstagramController {
       for (const account of accounts) {
         await this.prisma.igAccount.updateMany({
           where: { userId, igUserId: account.igUserId, isActive: true },
-          data: { webhookSubscribedAt: null },
+            data: { webhookSubscribedAt: null, webhookFields: [] },
         });
         try {
-          await this.ig.subscribeToWebhooks(account.igUserId, accessToken, loginMode);
+          const webhookFields = await this.ig.subscribeToWebhooks(account.igUserId, accessToken, loginMode) ?? ['comments', 'messages'];
           await this.prisma.igAccount.updateMany({
             where: { userId, igUserId: account.igUserId, isActive: true },
-            data: { webhookSubscribedAt: new Date() },
+            data: { webhookSubscribedAt: new Date(), webhookFields },
           });
         } catch {
           webhookError = true;
@@ -245,12 +248,35 @@ export class InstagramController {
       this.config.get('NODE_ENV') === 'production';
   }
 
+  /**
+   * Return OAuth visitors to the frontend origin that owns the configured
+   * callback URL. Deployments can allow several Vercel preview origins; always
+   * redirecting to the first CORS origin can strand a successful login on a
+   * different host whose browser session cookies are absent.
+   */
+  private oauthReturnOrigin(): string {
+    const allowedOrigins = this.config.get('CORS_ORIGIN', 'http://localhost:3000')
+      .split(',')
+      .map((value: string) => {
+        try { return new URL(value.trim()).origin; } catch { return ''; }
+      })
+      .filter(Boolean);
+    const fallback = allowedOrigins[0] ?? 'http://localhost:3000';
+
+    try {
+      const callbackOrigin = new URL(this.ig.oauthRedirectUri).origin;
+      return allowedOrigins.includes(callbackOrigin) ? callbackOrigin : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
   @Get('accounts')
   @UseGuards(JwtAuthGuard, VerifiedEmailGuard)
   async accounts(@CurrentUser('userId') userId: string) {
     const accounts = await this.prisma.igAccount.findMany({
       where: { userId },
-      select: { id: true, username: true, igUserId: true, isActive: true, loginMode: true, tokenExpiresAt: true, webhookSubscribedAt: true, createdAt: true },
+      select: { id: true, username: true, igUserId: true, isActive: true, loginMode: true, tokenExpiresAt: true, webhookSubscribedAt: true, webhookFields: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     });
     const webhookEvents = accounts.length
@@ -290,10 +316,10 @@ export class InstagramController {
     const account = await this.prisma.igAccount.findUnique({ where: { id } });
     if (!account || account.userId !== userId || !account.isActive) throw new BadRequestException('Active Instagram account not found.');
     const token = this.enc.decrypt(account.accessTokenEnc);
-    await this.ig.subscribeToWebhooks(account.igUserId, token, account.loginMode);
-    await this.prisma.igAccount.update({ where: { id }, data: { webhookSubscribedAt: new Date() } });
+    const webhookFields = await this.ig.subscribeToWebhooks(account.igUserId, token, account.loginMode);
+    await this.prisma.igAccount.update({ where: { id }, data: { webhookSubscribedAt: new Date(), webhookFields } });
     void this.dashboardEvents.publish(userId, 'instagram');
-    return { success: true, data: { webhookSubscribed: true } };
+    return { success: true, data: { webhookSubscribed: true, webhookFields } };
   }
 
   @Delete('accounts/:id')

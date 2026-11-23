@@ -84,11 +84,11 @@ export class WebhookService {
       if (!igUserId) continue;
 
       for (const change of Array.isArray(entry.changes) ? entry.changes : []) {
-        if (change?.field !== 'comments') continue;
+        if (change?.field !== 'comments' && change?.field !== 'live_comments') continue;
         for (const candidate of commentValues(change.value)) {
           const value = normalizeCommentValue(candidate);
           if (!value) continue;
-          const eventId = `comment:${igUserId}:${value.id}`;
+          const eventId = `${change.field === 'live_comments' ? 'live_comment' : 'comment'}:${igUserId}:${value.id}`;
           events.push({ eventId, igUserId, payload: { entry: [{ id: igUserId, changes: [{ ...change, value }] }] } });
         }
       }
@@ -165,7 +165,7 @@ export class WebhookService {
       page: Math.min(Math.max(page, 1), 100_000),
       events: rows.slice(0, take).map((event: typeof rows[number]) => ({
         id: event.id,
-        type: event.eventId.startsWith('comment:') ? 'comment' : 'message',
+        type: event.eventId.startsWith('comment:') || event.eventId.startsWith('live_comment:') ? 'comment' : 'message',
         attempts: event.attempts,
         redriveCount: event.redriveCount,
         payloadAvailable: !event.payloadPurgedAt,
@@ -342,7 +342,7 @@ export class WebhookService {
         },
       });
       if (deadLettered) {
-        const eventType = event.eventId.startsWith('comment:') ? 'comment' : 'message';
+        const eventType = event.eventId.startsWith('comment:') || event.eventId.startsWith('live_comment:') ? 'comment' : 'message';
         this.log.error(`Instagram ${eventType} webhook moved to dead letter after ${attempt.attempts} attempts`);
       }
       throw error;
@@ -353,7 +353,8 @@ export class WebhookService {
     const entries = Array.isArray(payload?.entry) ? payload.entry : [];
     for (const entry of entries) {
       for (const change of entry.changes ?? []) {
-        if (change.field === 'comments') await this.onComment(entry, change.value);
+        if (change.field === 'comments') await this.onComment(entry, change.value, false);
+        if (change.field === 'live_comments') await this.onComment(entry, change.value, true);
       }
       for (const msg of entry.messaging ?? []) {
         await this.onMessage(entry, msg);
@@ -361,7 +362,8 @@ export class WebhookService {
     }
   }
 
-  private async onComment(entry: any, value: any) {
+  private async onComment(entry: any, value: any, liveComment: boolean) {
+    if (liveComment && !this.instagram.liveCommentsEnabled) return;
     const igUserId = typeof entry?.id === 'string' ? entry.id : '';
     const normalized = normalizeCommentValue(value);
     if (!normalized) return;
@@ -395,7 +397,7 @@ export class WebhookService {
       where: {
         igAccountId: account.id,
         status: 'LIVE',
-        triggerType: { in: ['POST_COMMENT', 'ANY_POST'] },
+        triggerType: liveComment ? 'LIVE_COMMENT' : { in: ['POST_COMMENT', 'ANY_POST'] },
       },
     });
     // Meta may omit a carousel's parent album ID from the webhook. Resolve it
@@ -420,8 +422,10 @@ export class WebhookService {
     for (const a of automations) {
       if (a.mediaId && a.mediaId !== mediaId) continue;
       const res = matchComment({ text, matchMode: a.matchMode as MatchMode, keywords: a.keywords });
-      if (!res.matched) continue; // AI_INTENT deferral handled in a later pass
-      const triggerEventId = `comment:${igUserId}:${commentId}`;
+      // Legacy AI_INTENT rows remain readable, but no intent service is
+      // configured. They never match semantically; only executable rules run.
+      if (!res.matched) continue;
+      const triggerEventId = `${liveComment ? 'live-comment' : 'comment'}:${igUserId}:${commentId}`;
       const restriction = accountRestriction ?? automationRestriction(plan, a, { includeFollowUps: false });
       if (restriction) {
         await this.recordSkipped(a.id, account.id, triggerEventId, null, restriction);
@@ -494,7 +498,17 @@ export class WebhookService {
       where: { id: contact.id, OR: [{ lastReplyAt: null }, { lastReplyAt: { lt: replyAt } }] },
       data: { lastReplyAt: replyAt },
     });
-    await this.scheduleCommentFollowUps(account, contact, replyAt);
+    // The provider can deliver message webhooks out of order. Use the
+    // monotonic timestamp now stored in Postgres when calculating follow-up
+    // delays; scheduling from this event's raw timestamp could shorten a
+    // delay after a newer reply was already recorded.
+    const latestContact = await this.prisma.contact.findUnique({
+      where: { id: contact.id },
+      select: { lastReplyAt: true },
+    });
+    if (latestContact?.lastReplyAt) {
+      await this.scheduleCommentFollowUps(account, contact, latestContact.lastReplyAt);
+    }
 
     // A story reply arrives as a message with reply_to.story; a plain DM does not.
     const kind = msg.message?.reply_to?.story ? 'STORY_REPLY' : 'DM';
@@ -618,7 +632,10 @@ export class WebhookService {
     // During rollout, don't create a second job when an older worker already
     // queued this event under its pre-hash ID.
     if (await this.dmQueue.getJob(job.triggerEventId)) return;
-    await this.dmQueue.add('send', job, { jobId: dmQueueJobId(job.triggerEventId) });
+    await this.dmQueue.add('send', job, {
+      jobId: dmQueueJobId(job.triggerEventId),
+      ...(job.triggerType === 'LIVE_COMMENT' ? { attempts: 1 } : {}),
+    });
   }
 
 }

@@ -37,6 +37,49 @@ function setup(existingIds: string[], triggerType = 'DM', conditions: string[] =
 }
 
 describe('AutomationsService.update follow-up integrity', () => {
+  it('does not activate Live Comment while the feature flag is disabled', async () => {
+    const { service, prisma } = setup([], 'LIVE_COMMENT');
+
+    await expect(service.setStatus('user-a', 'CREATOR', automationId, 'LIVE'))
+      .rejects.toThrow('Live comment automations are not enabled for this Meta app yet');
+    expect(prisma.automation.update).not.toHaveBeenCalled();
+  });
+
+  it('does not allow Live Comment to remain live during an edit while disabled', async () => {
+    const { service, prisma, tx } = setup([], 'LIVE_COMMENT');
+    prisma.automation.findUnique.mockResolvedValue({
+      id: automationId, igAccountId: 'account-a', triggerType: 'LIVE_COMMENT', mediaId: null, status: 'LIVE',
+      igAccount: { userId: 'user-a', webhookSubscribedAt: new Date() },
+    });
+
+    await expect(service.update('user-a', 'CREATOR', automationId, { name: 'Rename' }))
+      .rejects.toThrow('Live comment automations are not enabled for this Meta app yet');
+    expect(tx.automation.update).not.toHaveBeenCalled();
+  });
+
+  it('allows a Live Comment automation to be explicitly paused while disabled', async () => {
+    const { service, prisma, tx } = setup([], 'LIVE_COMMENT');
+    prisma.automation.findUnique.mockResolvedValue({
+      id: automationId, igAccountId: 'account-a', triggerType: 'LIVE_COMMENT', mediaId: null, status: 'LIVE',
+      igAccount: { userId: 'user-a', webhookSubscribedAt: null },
+    });
+
+    await service.update('user-a', 'CREATOR', automationId, { status: 'PAUSED' });
+    expect(tx.automation.update).toHaveBeenCalledWith({ where: { id: automationId }, data: { status: 'PAUSED', replyToComment: false, publicReplies: [] } });
+  });
+
+  it('allows a supported automation to be paused when its webhook subscription is missing', async () => {
+    const { service, prisma, tx } = setup([], 'POST_COMMENT');
+    prisma.automation.findUnique.mockResolvedValue({
+      id: automationId, igAccountId: 'account-a', triggerType: 'POST_COMMENT', mediaId: 'media-a', status: 'LIVE',
+      igAccount: { userId: 'user-a', igUserId: 'ig-user-a', webhookSubscribedAt: null, accessTokenEnc: 'encrypted-token', loginMode: 'INSTAGRAM_LOGIN' },
+    });
+
+    await service.update('user-a', 'CREATOR', automationId, { status: 'PAUSED' });
+
+    expect(tx.automation.update).toHaveBeenCalledWith({ where: { id: automationId }, data: { status: 'PAUSED' } });
+  });
+
   it('clears comment-only reply settings when a post automation changes to Story Reply', async () => {
     const { service, tx } = setup([], 'POST_COMMENT');
 
@@ -246,7 +289,7 @@ describe('AutomationsService.update follow-up integrity', () => {
     });
 
     await expect(service.setStatus('user-a', 'CREATOR', automationId, 'LIVE'))
-      .rejects.toThrow('Instagram comment and message webhooks are not confirmed');
+      .rejects.toThrow('webhook is not confirmed');
 
     expect(prisma.automation.update).not.toHaveBeenCalled();
   });

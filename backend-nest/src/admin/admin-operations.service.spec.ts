@@ -2,7 +2,7 @@ import { AdminOperationsService } from './admin-operations.service';
 
 describe('AdminOperationsService', () => {
   function setup() {
-    const values = [12, 10, 1, 1, 2, 1, 8, 7, 4, 3, 2, 4, 1, 1];
+    const values = [12, 10, 1, 1, 2, 1, 8, 7, 4, 3, 2, 4, 1, 1, 5];
     const prisma: any = {
       user: { count: jest.fn().mockImplementation(() => Promise.resolve(values.shift())) },
       igAccount: { count: jest.fn().mockImplementation(() => Promise.resolve(values.shift())) },
@@ -12,6 +12,7 @@ describe('AdminOperationsService', () => {
       contactEnquiry: { count: jest.fn().mockImplementation(() => Promise.resolve(values.shift())) },
       mailOutbox: { count: jest.fn().mockImplementation(() => Promise.resolve(values.shift())) },
       webhookEvent: { count: jest.fn().mockImplementation(() => Promise.resolve(values.shift())) },
+      publicProfileReport: { count: jest.fn().mockImplementation(() => Promise.resolve(values.shift())) },
       $queryRaw: jest.fn().mockResolvedValue([{ '?column?': 1 }]),
       adminAuditEvent: { count: jest.fn().mockResolvedValue(1), findMany: jest.fn().mockResolvedValue([{ id: 'audit-1' }]) },
       payment: {
@@ -32,7 +33,7 @@ describe('AdminOperationsService', () => {
     expect(result.metrics).toEqual({
       customers: 12, activeCustomers: 10, suspendedCustomers: 1, deletionRequests: 1, adminAccounts: 2, mfaPendingAdmins: 1,
       instagramAccounts: 8, activeInstagramAccounts: 7, liveAutomations: 4, failedRuns: 3,
-      openSupport: 2, newEnquiries: 4, failedMail: 1, deadLetters: 1,
+      openSupport: 2, newEnquiries: 4, failedMail: 1, deadLetters: 1, openProfileReports: 5,
     });
     expect(result.services).toEqual({ database: 'healthy', queue: 'healthy', worker: 'healthy' });
     expect(result.queue).toMatchObject({ waiting: 2, active: 1, failed: 3 });

@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { instagramApi, paymentApi } from '../../../../services/api';
+import { getApiErrorMessage, instagramApi, paymentApi } from '../../../../services/api';
+import { AUTH_URL_MISMATCH, LOGIN_OPTIONS_INCOMPLETE, parseInstagramLoginOptions, validateMetaAuthorizationUrl } from '../../../../lib/instagram-login-config.cjs';
 import { RL, Card, Pill, Btn, Empty, Skel, PageHead } from '../../../../components/rl-kit';
 import { Instagram, Plus, AlertCircle, Unlink, CheckCircle2, X, Sparkles, Lock } from 'lucide-react';
 
 type LoginMode = 'INSTAGRAM_LOGIN' | 'UNIFIED_LOGIN';
-type IgAccount = { id: string; username: string; igUserId: string; isActive: boolean; loginMode: LoginMode; tokenExpiresAt?: string; webhookSubscribedAt?: string | null; lastWebhookAt?: string | null };
+type IgAccount = { id: string; username: string; igUserId: string; isActive: boolean; loginMode: LoginMode; tokenExpiresAt?: string; webhookSubscribedAt?: string | null; webhookFields?: string[]; lastWebhookAt?: string | null };
 
 function getTokenExpiry(expiresAt: string | undefined, now: number) {
   if (!expiresAt) return null;
@@ -88,7 +89,10 @@ export default function InstagramPage() {
   }, [params, router]);
 
   useEffect(() => {
-    if (!banner) return;
+    // Keep connection/configuration errors visible until the creator dismisses
+    // them. Success notices can remain brief; OAuth failures often need a
+    // follow-up check of the Meta app settings shown on this page.
+    if (!banner || banner.tone === 'error') return;
     const t = setTimeout(() => setBanner(null), 5000);
     return () => clearTimeout(t);
   }, [banner]);
@@ -97,11 +101,10 @@ export default function InstagramPage() {
     queryKey: ['ig-accounts'], queryFn: async () => (await instagramApi.accounts()).data.data as IgAccount[],
     refetchInterval: 30_000, refetchIntervalInBackground: false,
   });
-  const { data: loginOptions, isError: loginOptionsError, refetch: refetchLoginOptions } = useQuery({
-    queryKey: ['instagram-login-options'], queryFn: async () => (await instagramApi.loginOptions()).data.data as {
-      unifiedLoginEnabled: boolean; instagramLoginAppId: string; instagramLoginUsesMetaFallback: boolean;
-      unifiedLoginAppId: string; unifiedLoginConfigId: string;
-      oauthRedirectUri: string; webhookCallbackUrl: string;
+  const { data: loginOptions, isError: loginOptionsFailed, error: loginOptionsError, refetch: refetchLoginOptions } = useQuery({
+    queryKey: ['instagram-login-options'], queryFn: async () => {
+      const response = await instagramApi.loginOptions();
+      return parseInstagramLoginOptions(response.data?.data);
     },
   });
   const sub = useQuery({
@@ -109,9 +112,18 @@ export default function InstagramPage() {
   });
 
   const connect = useMutation({
-    mutationFn: async (mode: 'INSTAGRAM_LOGIN' | 'UNIFIED_LOGIN') => (await instagramApi.getAuthUrl(mode)).data.data.url as string,
+    mutationFn: async (mode: 'INSTAGRAM_LOGIN' | 'UNIFIED_LOGIN') => {
+      const options = loginOptions ?? parseInstagramLoginOptions((await instagramApi.loginOptions()).data?.data);
+      const response = await instagramApi.getAuthUrl(mode);
+      return validateMetaAuthorizationUrl(response.data?.data?.url, mode, options, window.location.origin);
+    },
     onSuccess: (url) => { window.location.href = url; },
-    onError: () => setBanner({ tone: 'error', msg: 'Could not start the connect flow. Please try again.' }),
+    onError: (error) => setBanner({
+      tone: 'error',
+      msg: error instanceof Error && error.message === AUTH_URL_MISMATCH
+        ? error.message
+        : getApiErrorMessage(error, 'Could not start the connect flow. Check the Meta login configuration and try again.'),
+    }),
   });
   const disconnect = useMutation({
     mutationFn: (id: string) => instagramApi.disconnect(id),
@@ -122,7 +134,7 @@ export default function InstagramPage() {
     mutationFn: (id: string) => instagramApi.subscribeWebhooks(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['ig-accounts'] });
-      setBanner({ tone: 'success', msg: 'Instagram comment and message webhooks are set up.' });
+      setBanner({ tone: 'success', msg: loginOptions?.liveCommentsEnabled ? 'Instagram comment, message, and live-comment webhooks are set up.' : 'Instagram comment and message webhooks are set up.' });
     },
     onError: (error: any) => {
       const message = error?.response?.data?.message;
@@ -157,9 +169,11 @@ export default function InstagramPage() {
     <div style={{ maxWidth: 680 }}>
       <PageHead title="Instagram" sub={`Connect the professional accounts your automations run on. ${isPaidPlan ? `${planName}: up to ${cap} accounts.` : `Free: ${cap} account — upgrade for more.`}`} />
 
-      {loginOptionsError && (
+      {loginOptionsFailed && (
         <div role="alert" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14, padding: '12px 14px', borderRadius: 10, background: 'var(--error-soft)', color: 'var(--error)' }}>
-          <span>Could not load the available Meta login method. Retry before connecting so HeyLaunch uses the configured flow.</span>
+          <span>{loginOptionsError instanceof Error && loginOptionsError.message === LOGIN_OPTIONS_INCOMPLETE
+            ? loginOptionsError.message
+            : getApiErrorMessage(loginOptionsError, 'Could not load the available Meta login method. Retry before connecting so HeyLaunch uses the configured flow.')}</span>
           <Btn variant="ghost" onClick={() => void refetchLoginOptions()}>Retry</Btn>
         </div>
       )}
@@ -189,7 +203,7 @@ export default function InstagramPage() {
             <div style={{ minWidth: 0 }}>
               <strong style={{ color: RL.ink, fontSize: 14 }}>Finish Meta webhook setup before relying on automations</strong>
               <p style={{ color: RL.muted, fontSize: 13, lineHeight: 1.55, margin: '6px 0 8px' }}>
-                Configure this callback and the comments and messages fields once in Meta Developers. Then use “Set up webhooks” once for each connected professional account; HeyLaunch remembers a successful account subscription and offers setup again if it fails. The callback must be publicly reachable over HTTPS. Meta sends comment notifications only for media owned by public accounts. For production delivery, the app must be Live with the required access for these fields, and you should confirm delivery with an authorized test event.
+                Configure this callback and the comments and messages fields once in Meta Developers{loginOptions?.liveCommentsEnabled ? ', plus live_comments for live-broadcast automations' : ''}. Then use “Set up webhooks” once for each connected professional account; HeyLaunch remembers the fields Meta accepted for that account and offers setup again if it fails. The callback must be publicly reachable over HTTPS. Meta sends comment notifications only for media owned by public accounts. For production delivery, the app must be Live with the required access for these fields, and you should confirm delivery with an authorized test event.
               </p>
               <code style={{ display: 'block', overflowWrap: 'anywhere', color: RL.ink, fontSize: 12.5, padding: '9px 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)' }}>
                 {loginOptions?.webhookCallbackUrl ?? (loginOptionsError || loginOptions ? 'Callback URL unavailable. Check the backend PUBLIC_URL configuration.' : 'Loading callback URL…')}

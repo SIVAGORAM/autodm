@@ -1,5 +1,6 @@
 const { randomUUID } = require('node:crypto');
 const { PrismaClient } = require('@prisma/client');
+const { validateBootstrapRequest } = require('./bootstrap-super-admin-policy.cjs');
 
 try {
   process.loadEnvFile('.env');
@@ -7,26 +8,21 @@ try {
   if (error.code !== 'ENOENT') throw error;
 }
 
-const emailArg = process.argv.slice(2).find((arg) => !arg.startsWith('--'));
-const flags = new Set(process.argv.slice(2).filter((arg) => arg.startsWith('--')));
-const production = process.env.NODE_ENV === 'production';
-
-if (!emailArg || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailArg) || !flags.has('--confirm=CREATE_SUPER_ADMIN')) {
-  console.error('Usage: npm run admin:bootstrap-super-admin -- <verified-account-email> --confirm=CREATE_SUPER_ADMIN [--allow-production]');
-  process.exit(2);
-}
-if (production && !flags.has('--allow-production')) {
-  console.error('Refusing to bootstrap against NODE_ENV=production without the explicit --allow-production flag.');
-  process.exit(2);
-}
-if (!process.env.DATABASE_URL) {
-  console.error('DATABASE_URL is required. No database was changed.');
+const args = process.argv.slice(2);
+const emailArg = args.find((arg) => !arg.startsWith('--'));
+const flags = new Set(args.filter((arg) => arg.startsWith('--')));
+let bootstrapRequest;
+try {
+  bootstrapRequest = validateBootstrapRequest({ email: emailArg, flags, env: process.env });
+} catch (error) {
+  console.error(error.message || 'Super Admin bootstrap request is invalid. No database was changed.');
+  console.error('Usage: npm run admin:bootstrap-super-admin -- <verified-account-email> --confirm=CREATE_SUPER_ADMIN --confirm-database=<host>/<database> [--allow-production]');
   process.exit(2);
 }
 
 const prisma = new PrismaClient();
 async function main() {
-  const email = emailArg.trim().toLowerCase();
+  const { email, target } = bootstrapRequest;
   await prisma.$transaction(async (tx) => {
     const existingOwner = await tx.user.findFirst({
       where: { role: 'SUPER_ADMIN', deletionRequestedAt: null, suspendedAt: null },
@@ -58,7 +54,7 @@ async function main() {
       },
     });
   }, { isolationLevel: 'Serializable' });
-  console.log('Super Admin provisioned. Sign in with the verified account to manage the admin team.');
+  console.log(`Super Admin provisioned on ${target}. Sign in with the verified account to manage the admin team.`);
 }
 
 main().catch((error) => {

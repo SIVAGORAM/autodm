@@ -8,9 +8,10 @@ import { adminApi } from '../../../../../services/api';
 import { Btn, Card, Empty, PageHead, Pill, Skel } from '../../../../../components/rl-kit';
 import { useAuthStore } from '../../../../../store/authStore';
 
-type AdminPermission = 'SUPPORT_MANAGE' | 'CONTACT_MANAGE' | 'MAIL_READ' | 'OPERATIONS_READ';
+type AdminPermission = 'SUPPORT_MANAGE' | 'PROFILE_MODERATE' | 'CONTACT_MANAGE' | 'MAIL_READ' | 'OPERATIONS_READ';
 const permissionOptions: Array<{ id: AdminPermission; label: string; help: string }> = [
   { id: 'SUPPORT_MANAGE', label: 'Customer support', help: 'Read and update customer support requests.' },
+  { id: 'PROFILE_MODERATE', label: 'Profile moderation', help: 'Review reports and hide public profiles that violate policy.' },
   { id: 'CONTACT_MANAGE', label: 'Contact enquiries', help: 'Read and respond to public contact enquiries.' },
   { id: 'MAIL_READ', label: 'Mail delivery', help: 'Inspect delivery status and safe error details.' },
   { id: 'OPERATIONS_READ', label: 'Operations', help: 'Inspect worker health and webhook dead letters.' },

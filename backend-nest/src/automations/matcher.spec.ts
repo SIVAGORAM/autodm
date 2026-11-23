@@ -32,7 +32,7 @@ describe('matchComment', () => {
   it('ANY mode always matches', () => {
     expect(matchComment({ text: 'whatever', matchMode: 'ANY', keywords: [] }).matched).toBe(true);
   });
-  it('AI_INTENT defers to LLM when no keyword hit', () => {
+  it('legacy AI_INTENT mode does not match semantically without an AI service', () => {
     const r = matchComment({ text: 'how much is it', matchMode: 'AI_INTENT', keywords: ['price'] });
     expect(r.matched).toBe(false);
     expect(r.needsAi).toBe(true);

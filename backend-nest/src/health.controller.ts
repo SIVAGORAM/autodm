@@ -2,8 +2,10 @@ import { Controller, Get, Inject, Res, UseGuards } from '@nestjs/common';
 import { FastifyReply } from 'fastify';
 import { Queue } from 'bullmq';
 import { SkipThrottle, ThrottlerStorage } from '@nestjs/throttler';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from './prisma/prisma.service';
 import { DM_QUEUE_TOKEN } from './queue/queue.constants';
+import { hasNoevictionPolicy } from './queue/redis';
 import { getWorkerHealth } from './queue/worker-health';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { VerifiedEmailGuard } from './common/guards/verified-email.guard';
@@ -11,13 +13,13 @@ import { AdminGuard } from './common/guards/admin.guard';
 import { RequireAdminPermission } from './common/admin-permissions';
 
 type ThrottleHealth = { ping(): Promise<boolean> };
-
 @Controller()
 export class HealthController {
   constructor(
     private prisma: PrismaService,
     @Inject(DM_QUEUE_TOKEN) private dmQueue: Queue,
     @Inject(ThrottlerStorage) private throttleStorage: ThrottleHealth,
+    private config: ConfigService,
   ) {}
 
   /** Liveness only: confirms the HTTP process can respond. */
@@ -36,7 +38,12 @@ export class HealthController {
       this.probe(() => this.dmQueue.getJobCounts()),
       this.probe(() => this.throttleStorage.ping()),
     ]);
-    const ready = database && queue && throttling;
+    const redisQueuePolicyRequired = this.config.get<boolean>('REDIS_REQUIRE_NOEVICTION') === true ||
+      this.config.get('REDIS_REQUIRE_NOEVICTION') === 'true';
+    const queueDurability = !redisQueuePolicyRequired || await this.probe(async () =>
+      hasNoevictionPolicy(await this.dmQueue.client as unknown as { info(section: string): Promise<string> }),
+    );
+    const ready = database && queue && throttling && queueDurability;
     res.status(ready ? 200 : 503);
     return {
       status: ready ? 'ready' : 'not_ready',
@@ -44,6 +51,7 @@ export class HealthController {
         database: database ? 'ok' : 'unavailable',
         queue: queue ? 'ok' : 'unavailable',
         throttling: throttling ? 'ok' : 'unavailable',
+        redisQueuePolicy: !redisQueuePolicyRequired ? 'not_required' : queueDurability ? 'ok' : 'unsafe_or_unavailable',
       },
       ts: new Date().toISOString(),
     };

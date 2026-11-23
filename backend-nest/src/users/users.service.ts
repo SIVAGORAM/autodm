@@ -104,7 +104,7 @@ export class UsersService {
           where: {
             id: account.id,
             isVerified: false,
-            role: { not: 'ADMIN' },
+            role: { notIn: ['ADMIN', 'SUPER_ADMIN'] },
             deletionRequestedAt: null,
             createdAt: { lte: createdBefore },
           },

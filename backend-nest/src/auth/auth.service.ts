@@ -60,11 +60,16 @@ export class AuthService {
       await this.mailOutbox.queueVerification(tx, created.id, email, otpCode, otpExpires);
       const tokens = await this.createTokenPair(created.id, created.email, created.role, 0);
       await tx.refreshToken.create({
-        data: { id: tokens.refreshTokenId, tokenHash: hashRefreshToken(tokens.refreshToken), userId: created.id, expiresAt: tokens.refreshTokenExpiresAt },
+        data: { id: tokens.refreshTokenId, tokenHash: hashRefreshToken(tokens.refreshToken), userId: created.id, familyId: tokens.refreshTokenFamilyId, expiresAt: tokens.refreshTokenExpiresAt },
       });
       return { user: created, tokens };
     });
-    return { user: result.user, verificationEmailQueued: true, ...result.tokens };
+    return {
+      user: result.user,
+      verificationEmailQueued: true,
+      accessToken: result.tokens.accessToken,
+      refreshToken: result.tokens.refreshToken,
+    };
   }
 
   async login(email: string, password: string): Promise<AuthLoginResult> {
@@ -218,7 +223,7 @@ export class AuthService {
   }
 
   async refresh(rawToken: string) {
-    let payload: { sub: string; jti: string; sv?: number };
+    let payload: { sub: string; jti: string; fid?: string; sv?: number };
     try {
       payload = await this.jwt.verifyAsync(rawToken, {
         secret: this.config.getOrThrow('JWT_REFRESH_SECRET'),
@@ -233,9 +238,21 @@ export class AuthService {
     });
     const tokenHash = hashRefreshToken(rawToken);
     if (!stored || stored.tokenHash !== tokenHash) {
-      // Reuse detected — nuke the family.
-      await this.prisma.refreshToken.deleteMany({ where: { userId: payload.sub } });
+      // A rotated row may already be gone by the time replay is checked. New
+      // signed tokens carry their family, so revoke that session even when no
+      // row remains. Legacy tokens can use the still-present row as a fallback.
+      const claimedFamilyId = typeof payload.fid === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.fid)
+        ? payload.fid
+        : undefined;
+      const familyId = claimedFamilyId ?? (stored?.userId === payload.sub ? stored.familyId : undefined);
+      const userId = payload.sub;
+      if (familyId && userId) {
+        await this.prisma.refreshToken.deleteMany({ where: { userId, familyId } });
+      }
       throw new UnauthorizedException('Token reuse detected');
+    }
+    if (stored.userId !== payload.sub || (payload.fid && payload.fid !== stored.familyId)) {
+      throw new UnauthorizedException('Invalid refresh token');
     }
     if (stored.user.deletionRequestedAt || stored.user.suspendedAt) {
       await this.prisma.refreshToken.deleteMany({ where: { userId: stored.user.id } });
@@ -253,20 +270,21 @@ export class AuthService {
       await this.prisma.refreshToken.delete({ where: { id: stored.id } });
       throw new UnauthorizedException('Refresh token expired');
     }
-    const tokens = await this.createTokenPair(stored.user.id, stored.user.email, stored.user.role, stored.user.sessionVersion);
+    const tokens = await this.createTokenPair(stored.user.id, stored.user.email, stored.user.role, stored.user.sessionVersion, stored.familyId);
     const rotated = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.refreshToken.deleteMany({
         where: { id: stored.id, userId: stored.user.id, tokenHash, expiresAt: { gt: new Date() } },
       });
       if (claimed.count !== 1) {
         // Commit family revocation before returning the replay error.
-        await tx.refreshToken.deleteMany({ where: { userId: stored.user.id } });
+        await tx.refreshToken.deleteMany({ where: { userId: stored.user.id, familyId: stored.familyId } });
         return false;
       }
       await tx.refreshToken.create({ data: {
         id: tokens.refreshTokenId,
         tokenHash: hashRefreshToken(tokens.refreshToken),
         userId: stored.user.id,
+        familyId: stored.familyId,
         expiresAt: tokens.refreshTokenExpiresAt,
       } });
       return true;
@@ -439,22 +457,22 @@ export class AuthService {
   private async issueTokens(userId: string, email: string, role: string, sessionVersion: number) {
     const pair = await this.createTokenPair(userId, email, role, sessionVersion);
     await this.prisma.refreshToken.create({
-      data: { id: pair.refreshTokenId, tokenHash: hashRefreshToken(pair.refreshToken), userId, expiresAt: pair.refreshTokenExpiresAt },
+      data: { id: pair.refreshTokenId, tokenHash: hashRefreshToken(pair.refreshToken), userId, familyId: pair.refreshTokenFamilyId, expiresAt: pair.refreshTokenExpiresAt },
     });
     return { accessToken: pair.accessToken, refreshToken: pair.refreshToken };
   }
 
-  private async createTokenPair(userId: string, email: string, role: string, sessionVersion: number) {
+  private async createTokenPair(userId: string, email: string, role: string, sessionVersion: number, familyId: string = randomUUID()) {
     const accessToken = await this.jwt.signAsync(
       { sub: userId, email, role, sv: sessionVersion },
       { secret: this.config.getOrThrow('JWT_ACCESS_SECRET'), expiresIn: this.config.get('JWT_ACCESS_EXPIRES_IN', '15m'), issuer: 'autodm', audience: 'web-client' },
     );
     const jti = randomUUID();
     const refreshToken = await this.jwt.signAsync(
-      { sub: userId, jti, sv: sessionVersion },
+      { sub: userId, jti, fid: familyId, sv: sessionVersion },
       { secret: this.config.getOrThrow('JWT_REFRESH_SECRET'), expiresIn: this.config.get('JWT_REFRESH_EXPIRES_IN', '30d'), issuer: 'autodm', audience: 'web-client' },
     );
     const refreshTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    return { accessToken, refreshToken, refreshTokenId: jti, refreshTokenExpiresAt };
+    return { accessToken, refreshToken, refreshTokenId: jti, refreshTokenFamilyId: familyId, refreshTokenExpiresAt };
   }
 }

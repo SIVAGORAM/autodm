@@ -4,7 +4,7 @@ import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { automationApi } from '../../../../../../services/api';
+import { automationApi, instagramApi } from '../../../../../../services/api';
 import { useAuthStore } from '../../../../../../store/authStore';
 import { InstagramPostSelector } from '../../../../../../components/instagram-post-selector';
 import { AutomationMessagePreview } from '../../../../../../components/automation-message-preview';
@@ -18,9 +18,10 @@ const triggers = [
   { value: 'POST_COMMENT', label: 'Comment on a post' },
   { value: 'ANY_POST', label: 'Comment on any post', paid: true },
   { value: 'STORY_REPLY', label: 'Story reply', paid: true },
+  { value: 'LIVE_COMMENT', label: 'Comment during a live broadcast', paid: true },
   { value: 'DM', label: 'Incoming DM', paid: true },
 ];
-const paidTriggers = ['ANY_POST', 'STORY_REPLY', 'DM'];
+const paidTriggers = ['ANY_POST', 'STORY_REPLY', 'LIVE_COMMENT', 'DM'];
 const supportedTriggers = triggers.map((trigger) => trigger.value);
 const unavailableFollowUpConditions: Record<string, string> = {
   BOUGHT: 'Purchase event (integration unavailable)',
@@ -35,6 +36,8 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
   const user = useAuthStore((state) => state.user) as any;
   const isPaid = ['CREATOR', 'PRO', 'AGENCY'].includes(user?.plan);
   const automation = useQuery({ queryKey: ['automation', id], queryFn: async () => (await automationApi.get(id)).data.data });
+  const loginOptions = useQuery({ queryKey: ['instagram-login-options'], queryFn: async () => (await instagramApi.loginOptions()).data.data as { liveCommentsEnabled?: boolean } });
+  const liveCommentsEnabled = loginOptions.data?.liveCommentsEnabled === true;
 
   const [initializedForId, setInitializedForId] = useState('');
   const [name, setName] = useState('');
@@ -81,7 +84,11 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
       const validButtons = buttons.filter((button) => button.title.trim() && button.url.trim());
       if (validButtons.length) dmBlocks.push({ type: 'buttons', buttons: validButtons });
       return automationApi.update(id, {
-        name: name.trim(), triggerType,
+        name: name.trim(),
+        // Keep an already-disabled Live Comment trigger intact when editing a
+        // paused legacy record; do not silently convert it or ask the API to
+        // activate a feature that is disabled in this deployment.
+        ...(triggerType === 'LIVE_COMMENT' && !liveCommentsEnabled && automation.data?.triggerType === 'LIVE_COMMENT' ? {} : { triggerType }),
         mediaId: triggerType === 'POST_COMMENT' && mediaId.trim() ? mediaId.trim() : null,
         matchMode, keywords,
         publicReplies: supportsPublicCommentReply && replyToComment ? publicReplies.filter((reply) => reply.trim()) : [],
@@ -113,6 +120,8 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
     if (triggerType === 'POST_COMMENT' && !mediaId.trim()) return setError('Choose a specific post. Use “Comment on any post” for account-wide coverage.');
     if (triggerType === 'POST_COMMENT' && !selectedMediaSupported) return setError('Choose a supported Instagram post.');
     if (paidTriggers.includes(triggerType) && !isPaid) return setError('This trigger requires a paid plan.');
+    if (triggerType === 'LIVE_COMMENT' && !liveCommentsEnabled && automation.data?.triggerType !== 'LIVE_COMMENT') return setError('Live Comment is not enabled for this Meta app.');
+    if (triggerType === 'LIVE_COMMENT' && followUps.length > 0) return setError('Live comment automations cannot use follow-ups. Remove the follow-up steps before saving.');
     if (matchMode === 'KEYWORDS' && keywords.length === 0) return setError('Add at least one keyword.');
     if (!isPaid && keywords.length > 1) return setError('Your plan allows one keyword per automation.');
     if (!dmText.trim()) return setError('Write the DM message.');
@@ -165,12 +174,13 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
             <Label htmlFor="trigger-type">When someone…</Label>
             <select id="trigger-type" value={triggerType} onChange={(event) => setTriggerType(event.target.value)} className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground">
               {triggers.map((trigger) => (
-                <option key={trigger.value} value={trigger.value} disabled={!!trigger.paid && !isPaid}>
-                  {trigger.label}{trigger.paid && !isPaid ? ' (paid plan)' : ''}
+                <option key={trigger.value} value={trigger.value} disabled={!!trigger.paid && !isPaid || trigger.value === 'LIVE_COMMENT' && !liveCommentsEnabled && automation.data.triggerType !== 'LIVE_COMMENT'}>
+                  {trigger.label}{trigger.paid && !isPaid ? ' (paid plan)' : trigger.value === 'LIVE_COMMENT' && !liveCommentsEnabled ? ' (not enabled)' : ''}
                 </option>
               ))}
             </select>
           </div>
+          {triggerType === 'LIVE_COMMENT' && <p role="status" className="text-xs leading-relaxed text-muted-foreground">HeyLaunch attempts one private reply for a matching live comment. Meta may reject it if delivery occurs after the broadcast ends. This trigger requires the live_comments webhook and cannot use follow-ups.</p>}
           {triggerType === 'ANY_POST' && <p role="status" className="text-xs leading-relaxed text-muted-foreground">Meta documents comment events and private replies for Reels. Coverage still depends on your account permissions and active comment webhook subscription.</p>}
           {['POST_COMMENT', 'ANY_POST'].includes(triggerType) && <p className="text-xs leading-relaxed text-muted-foreground">Each comment can trigger one DM. A rule for the exact post takes priority over “Any post”; if multiple rules at the same priority match, the oldest automation handles it.</p>}
           {['DM', 'STORY_REPLY'].includes(triggerType) && <p className="text-xs leading-relaxed text-muted-foreground">If multiple active rules match the same message, the oldest automation handles it.</p>}
@@ -230,7 +240,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
           {followUps.some((item) => unavailableFollowUpConditions[item.condition]) && <p role="status" className="text-sm text-amber-700 dark:text-amber-300">A saved follow-up uses a purchase or form event that HeyLaunch does not currently receive. It will be skipped. Choose a supported condition or remove the step.</p>}
           {['POST_COMMENT', 'ANY_POST'].includes(triggerType) && <p className="text-xs text-muted-foreground">Each step is scheduled from the commenter’s reply time, so a late reply can still start the follow-up sequence within the 24-hour window.</p>}
           {['POST_COMMENT', 'ANY_POST'].includes(triggerType) && followUps.some((item) => item.condition === 'NO_REPLY') && <p role="status" className="text-xs text-muted-foreground">Change “If no reply” to another condition. Instagram requires the commenter to respond before HeyLaunch can send a follow-up.</p>}
-          {isPaid && followUps.length < 3 && <Button variant="ghost" onClick={() => setFollowUps((items) => [...items, { condition: 'LINK_NOT_CLICKED', delayMinutes: 60, text: '' }])}><Plus className="h-4 w-4" /> Add follow-up</Button>}
+          {triggerType !== 'LIVE_COMMENT' && isPaid && followUps.length < 3 && <Button variant="ghost" onClick={() => setFollowUps((items) => [...items, { condition: 'LINK_NOT_CLICKED', delayMinutes: 60, text: '' }])}><Plus className="h-4 w-4" /> Add follow-up</Button>}
           {!isPaid && followUps.length === 0 && <p className="text-sm text-muted-foreground">Upgrade to add follow-ups.</p>}
         </section>
 

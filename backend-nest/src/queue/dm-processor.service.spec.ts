@@ -1,6 +1,49 @@
 import { DmProcessorService } from './dm-processor.service';
+import { DelayedError } from 'bullmq';
 
 describe('DmProcessorService delivery recovery', () => {
+  it('re-delays a comment follow-up until its configured delay from the latest reply has elapsed', async () => {
+    const latestReplyAt = new Date(Date.now() - 60_000);
+    const followUp = {
+      id: 'follow-up-1', delayMinutes: 15, condition: 'DELAY',
+      dmBlocks: [{ type: 'text', text: 'Checking in.' }],
+      automationId: 'automation-1',
+      automation: {
+        id: 'automation-1', status: 'LIVE', triggerType: 'POST_COMMENT', followUps: [],
+        igAccount: { id: 'account-1', isActive: true, user: { id: 'owner-1', plan: 'PRO' } },
+      },
+    };
+    const prisma: any = {
+      run: { findUnique: jest.fn().mockResolvedValue(null) },
+      followUp: { findUnique: jest.fn().mockResolvedValue(followUp) },
+      igAccount: { findMany: jest.fn().mockResolvedValue([{ id: 'account-1' }]) },
+      contact: { findUnique: jest.fn().mockResolvedValue({ id: 'contact-1', lastReplyAt: latestReplyAt }) },
+    };
+    const quota: any = { consume: jest.fn(), settle: jest.fn() };
+    const meta: any = { sendDirectMessage: jest.fn() };
+    const service = new DmProcessorService(prisma, meta, {} as any, {} as any, quota, {} as any, { publish: jest.fn() } as any);
+    const job: any = {
+      automationId: 'automation-1', igAccountId: 'account-1', triggerType: 'POST_COMMENT',
+      commentId: 'comment-1', recipientIgsid: 'recipient-1', text: 'Checking in.',
+      triggerEventId: 'comment:ig-user-1:comment-1', followUpId: 'follow-up-1',
+      primarySentAt: new Date(latestReplyAt.getTime() - 21 * 60_000).toISOString(),
+      replyReceivedAt: new Date(latestReplyAt.getTime() - 20 * 60_000).toISOString(),
+    };
+    const updateData = jest.fn().mockResolvedValue(undefined);
+    const moveToDelayed = jest.fn().mockResolvedValue(undefined);
+    const queueJob: any = { token: 'lock-token', updateData, moveToDelayed };
+
+    await expect(service.process(job, queueJob)).rejects.toBeInstanceOf(DelayedError);
+
+    expect(updateData).toHaveBeenCalledWith({ ...job, replyReceivedAt: latestReplyAt.toISOString() });
+    expect(moveToDelayed).toHaveBeenCalledWith(expect.any(Number), 'lock-token');
+    const targetTime = moveToDelayed.mock.calls[0][0];
+    expect(targetTime).toBeGreaterThan(Date.now() + 13 * 60_000);
+    expect(targetTime).toBeLessThanOrEqual(Date.now() + 14 * 60_000);
+    expect(quota.consume).not.toHaveBeenCalled();
+    expect(meta.sendDirectMessage).not.toHaveBeenCalled();
+  });
+
   it.each(['DM', 'STORY_REPLY'])('skips an expired %s message instead of calling Meta', async (triggerType) => {
     const runUpsert = jest.fn().mockResolvedValue({ id: 'run-1', status: 'SKIPPED' });
     const job: any = {

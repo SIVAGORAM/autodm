@@ -46,4 +46,18 @@ describe('InstagramService webhook subscription', () => {
       { params: { subscribed_fields: 'comments,messages', access_token: 'unified-token' }, timeout: 15_000, proxy: false },
     );
   });
+
+  it('subscribes to the Meta live_comments field only when explicitly enabled', async () => {
+    const liveService = new InstagramService({
+      get: jest.fn((key: string) => key === 'META_GRAPH_VERSION' ? 'v26.0' : key === 'META_LIVE_COMMENTS_ENABLED' ? true : undefined),
+    } as any);
+
+    await expect(liveService.subscribeToWebhooks('17841400000000000', 'private-token'))
+      .resolves.toEqual(['comments', 'messages', 'live_comments']);
+    expect(post).toHaveBeenCalledWith(
+      'https://graph.instagram.com/v26.0/17841400000000000/subscribed_apps',
+      null,
+      { params: { subscribed_fields: 'comments,messages,live_comments', access_token: 'private-token' }, timeout: 15_000, proxy: false },
+    );
+  });
 });

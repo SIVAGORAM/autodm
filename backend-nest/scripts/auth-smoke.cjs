@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const { createHash, createHmac, randomUUID } = require('node:crypto');
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
+const { PrismaPg } = require('@prisma/adapter-pg');
 const { PrismaClient } = require('@prisma/client');
 
 const baseUrl = new URL(process.env.API_SMOKE_BASE_URL || 'http://127.0.0.1:4000');
@@ -33,7 +34,9 @@ function policyVersion(name) {
   return match[1];
 }
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL, max: 2 }),
+});
 const email = `auth-smoke-${randomUUID()}@example.invalid`;
 const password = 'Smoke!Pass123';
 const allowedOrigin = process.env.API_SMOKE_ALLOWED_ORIGIN || 'http://localhost:3000';
@@ -144,22 +147,36 @@ async function main() {
   assert.equal(me.response.status, 200, `cookie-authenticated /me failed: ${JSON.stringify(me.json)}`);
   assert.equal(me.json?.data?.user?.email, email);
 
-  const rotated = await request('/api/auth/refresh', {
-    method: 'POST', cookie: initialCookies, origin: allowedOrigin,
-  });
-  assert.equal(rotated.response.status, 201, `refresh failed: ${JSON.stringify(rotated.json)}`);
-  const rotatedCookies = mergeCookies(initialCookies, rotated.setCookies);
+  // Create an independent browser session, then race two refreshes of the
+  // first session against PostgreSQL. Exactly one rotation should win; replay
+  // must revoke that family without logging out the other device.
+  const otherDeviceLogin = await request('/api/auth/login', { method: 'POST', body: { email, password } });
+  assert.equal(otherDeviceLogin.response.status, 201, `second-device login failed: ${JSON.stringify(otherDeviceLogin.json)}`);
+  const otherDeviceCookies = mergeCookies('', otherDeviceLogin.setCookies);
+  const [rotationA, rotationB] = await Promise.all([
+    request('/api/auth/refresh', { method: 'POST', cookie: initialCookies, origin: allowedOrigin }),
+    request('/api/auth/refresh', { method: 'POST', cookie: initialCookies, origin: allowedOrigin }),
+  ]);
+  const rotations = [rotationA, rotationB];
+  const successfulRotation = rotations.find((result) => result.response.status === 201);
+  const rejectedReplay = rotations.find((result) => result.response.status === 401);
+  assert.ok(successfulRotation, `one concurrent refresh should win: ${JSON.stringify(rotations.map((item) => item.json))}`);
+  assert.ok(rejectedReplay, `one concurrent refresh should be rejected: ${JSON.stringify(rotations.map((item) => item.json))}`);
+  assert.equal(rotations.filter((result) => result.response.status === 201).length, 1,
+    'concurrent refreshes must not both rotate a single token');
+  const rotatedCookies = mergeCookies(initialCookies, successfulRotation.setCookies);
   const rotatedRefreshToken = cookieValue(rotatedCookies, 'refresh_token');
   assert.ok(rotatedRefreshToken && rotatedRefreshToken !== initialRefreshToken, 'refresh should rotate the session token');
 
-  const replay = await request('/api/auth/refresh', {
-    method: 'POST', cookie: initialCookies, origin: allowedOrigin,
-  });
-  assert.equal(replay.response.status, 401, 'reusing a rotated refresh token must be rejected');
   const revokedSuccessor = await request('/api/auth/refresh', {
     method: 'POST', cookie: rotatedCookies, origin: allowedOrigin,
   });
   assert.equal(revokedSuccessor.response.status, 401, 'refresh-token reuse should revoke the token family');
+  const otherDeviceRefresh = await request('/api/auth/refresh', {
+    method: 'POST', cookie: otherDeviceCookies, origin: allowedOrigin,
+  });
+  assert.equal(otherDeviceRefresh.response.status, 201,
+    'refresh-token replay on one device must leave another device session valid');
 
   const originlessMutation = await request('/api/auth/logout', { method: 'POST', cookie: initialCookies });
   assert.equal(originlessMutation.response.status, 403, 'cookie-authenticated mutation without Origin must be rejected');

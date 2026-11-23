@@ -70,7 +70,7 @@
 .eyebrow, .eyebrowLight { display: flex; align-items: center; gap: 11px; margin: 0 0 23px; color: var(--muted); font-size: 13px; font-weight: 600; }
 .eyebrowRule { width: 25px; height: 2px; flex: none; background: #728d19; }
 :global(.dark) .eyebrowRule { background: var(--lime); }
-.hero h1 { max-width: 630px; margin: 0; font-size: clamp(54px, 5vw, 74px); font-weight: 540; line-height: .99; letter-spacing: -.073em; }
+.hero h1 { max-width: 630px; margin: 0; font-size: clamp(54px, 5vw, 74px); font-weight: 540; line-height: 1.02; letter-spacing: -.04em; }
 .hero h1 span { color: var(--olive); }
 .heroLead { max-width: 490px; margin: 24px 0 0; color: var(--muted); font-size: 17px; line-height: 1.7; }
 .heroActions { display: flex; flex-wrap: wrap; align-items: center; gap: 23px; margin-top: 29px; }
@@ -122,7 +122,7 @@
 .sectionNumber { display: flex; align-items: center; gap: 14px; margin: 0; color: var(--muted); font-size: 13px; font-weight: 560; }
 .sectionNumber > span { color: var(--olive); font-size: 12px; font-variant-numeric: tabular-nums; }
 .storyContent { display: grid; grid-template-columns: 1.2fr .8fr; align-items: end; gap: clamp(38px, 8vw, 115px); margin-top: 35px; }
-.storyContent h2, .workflowHeader h2, .useCaseIntro h2, .pricingHead h2, .scopeTop h2, .faqTitle h2, .lastCall h2 { margin: 0; font-weight: 530; line-height: 1.03; letter-spacing: -.065em; }
+.storyContent h2, .workflowHeader h2, .useCaseIntro h2, .pricingHead h2, .scopeTop h2, .faqTitle h2, .lastCall h2 { margin: 0; font-weight: 530; line-height: 1.06; letter-spacing: -.04em; }
 .storyContent h2 { max-width: 710px; font-size: clamp(42px, 5.4vw, 72px); }
 .storyContent h2 em, .scopeTop h2 em { color: var(--olive); font-style: normal; }
 .storyAside { max-width: 400px; padding-bottom: 4px; }
@@ -182,7 +182,7 @@
 .planNote { min-height: 41px; margin: 7px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .planFeatured .planNote { color: #d0d7c9; }
 :global(.dark) .planFeatured .planNote { color: #323c1b; }
-.planPrice { margin: 17px 0 20px; font-size: clamp(28px, 2.8vw, 36px); font-weight: 590; letter-spacing: -.055em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.planPrice { margin: 17px 0 20px; font-size: clamp(28px, 2.8vw, 36px); font-weight: 590; letter-spacing: -.03em; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .planPrice span { margin-left: 5px; color: var(--muted); font-size: 12px; font-weight: 450; letter-spacing: 0; }
 .planFeatured .planPrice span { color: #d0d7c9; }
 :global(.dark) .planFeatured .planPrice span { color: #30391e; }
@@ -251,9 +251,6 @@
 }
 
 @media (max-width: 900px) {
-  .heroInner { grid-template-columns: 1fr; gap: 42px; }
-  .heroCopy { max-width: 730px; }
-  .replyPath { justify-self: start; max-width: 680px; }
   .storyContent { grid-template-columns: 1fr .8fr; gap: 40px; }
   .pricingHead { align-items: flex-start; flex-direction: column; gap: 14px; }
   .pricingHead > p { max-width: 540px; }

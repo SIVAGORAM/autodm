@@ -21,7 +21,7 @@ type Subscription = {
 };
 
 const triggerLabels: Record<string, string> = {
-  POST_COMMENT: 'Post comment', NEXT_POST: 'Next post (legacy)', ANY_POST: 'Any post',
+  POST_COMMENT: 'Post comment', NEXT_POST: 'Next post (legacy; unsupported)', ANY_POST: 'Any post',
   STORY_REPLY: 'Story reply', LIVE_COMMENT: 'Live comment', DM: 'Incoming DM',
 };
 const healthTone = (l?: string) => l === 'healthy' ? 'green' : l === 'needs_reconnect' ? 'coral' : l === 'at_risk' ? 'amber' : 'muted';

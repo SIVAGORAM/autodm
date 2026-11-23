@@ -11,11 +11,13 @@ import { ZodExceptionFilter } from './common/filters/zod-exception.filter';
 import { registerFastifyBodyParsers } from './common/register-fastify-body-parsers';
 
 async function bootstrap() {
-  // Trust only the immediate hosting proxy hop. Trusting every forwarded hop
-  // lets clients spoof their IP and undermines IP-based throttling/logging.
+  // Fastify 5 intentionally drops numeric hop-count trust because it accepts
+  // spoofed forwarded headers from direct clients. Trust only loopback and
+  // private/link-local proxy peers used by local containers and the hosting
+  // ingress; public client addresses remain untrusted.
   // Meta may batch many short updates into one signed payload; keep enough
   // room for a 1000-update batch while still bounding per-request memory use.
-  const adapter = new FastifyAdapter({ trustProxy: 1, bodyLimit: 5 * 1024 * 1024 });
+  const adapter = new FastifyAdapter({ trustProxy: ['loopback', 'linklocal', 'uniquelocal'], bodyLimit: 5 * 1024 * 1024 });
   registerFastifyBodyParsers(adapter);
 
   // rawBody:true exposes req.rawBody (Buffer) for webhook signature checks,

@@ -30,6 +30,7 @@ jobs:
       PUBLIC_URL: http://localhost:4000
       CORS_ORIGIN: http://localhost:3000
       RAZORPAY_WEBHOOK_SECRET: ci-only-webhook-signing-key
+      META_APP_SECRET: ci-meta-app-secret-for-webhook-smoke
     services:
       postgres:
         image: postgres:16-alpine
@@ -69,6 +70,14 @@ jobs:
       - name: Install backend dependencies
         working-directory: backend-nest
         run: npm ci
+
+      - name: Validate Render API/worker environment contract
+        working-directory: backend-nest
+        run: npm run check:render-config
+
+      - name: Verify Super Admin bootstrap target safeguards
+        working-directory: backend-nest
+        run: npm run test:admin-bootstrap-policy
 
       - name: Audit backend dependencies
         working-directory: backend-nest
@@ -130,6 +139,7 @@ jobs:
             exit 1
           fi
           npm run test:smoke
+          npm run test:webhook-intake-smoke
           npm run test:dashboard-events-smoke
 
   frontend:

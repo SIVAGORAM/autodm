@@ -6,7 +6,7 @@ import { Worker, Queue } from 'bullmq';
 import { AppModule } from './app.module';
 import { DmProcessorService } from './queue/dm-processor.service';
 import { DM_QUEUE, DmJob } from './queue/queue.constants';
-import { createRedis } from './queue/redis';
+import { assertRedisNoeviction, createRedis } from './queue/redis';
 import { TokenRefreshService } from './instagram/token-refresh.service';
 import { WebhookService } from './webhook/webhook.service';
 import { safeErrorLabel } from './common/safe-error-label';
@@ -15,6 +15,7 @@ import { MailOutboxService } from './mail/mail-outbox.service';
 import { WORKER_HEARTBEAT_INTERVAL_MS, WORKER_HEARTBEAT_KEY, WORKER_HEARTBEAT_TTL_SECONDS } from './queue/worker-health';
 import { areScheduledJobsEnabled } from './common/scheduled-jobs';
 import { isDeliveryWorkerEnabledInEnvironment, isMailOutboxWorkerEnabledInEnvironment } from './queue/worker-startup-policy';
+import { processDmQueueJob } from './queue/worker-job-handler';
 
 // Standalone context: no HTTP server, just DI + the BullMQ worker loop.
 async function bootstrap() {
@@ -40,6 +41,35 @@ async function bootstrap() {
     return;
   }
 
+  const requireNoeviction = config.get<boolean>('REDIS_REQUIRE_NOEVICTION') === true ||
+    config.get('REDIS_REQUIRE_NOEVICTION') === 'true';
+  if (requireNoeviction && (deliveryEnabled || runMaintenanceJobs)) {
+    const policyProbe = createRedis(config.getOrThrow('REDIS_URL'));
+    let safePolicy = false;
+    let policyTimer: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([
+        assertRedisNoeviction(policyProbe),
+        new Promise<never>((_resolve, reject) => {
+          policyTimer = setTimeout(() => reject(new Error('Redis queue durability check timed out')), 5_000);
+        }),
+      ]);
+      safePolicy = true;
+    } catch (error) {
+      log.warn(`Redis queue durability check unavailable (${safeErrorLabel(error)})`);
+    } finally {
+      if (policyTimer) clearTimeout(policyTimer);
+      if (safePolicy) await policyProbe.quit().catch((error) => log.warn(`Redis policy probe shutdown failed (${safeErrorLabel(error)})`));
+      else policyProbe.disconnect();
+    }
+    if (!safePolicy) {
+      log.error('Worker will not start: configure Redis maxmemory-policy=noeviction and verify the provider setting.');
+      await appCtx.close();
+      process.exitCode = 1;
+      return;
+    }
+  }
+
   let worker: Worker | null = null;
   let mailOutboxTimer: NodeJS.Timeout | null = null;
   let activeMailOutboxProcess: Promise<void> | null = null;
@@ -56,11 +86,7 @@ async function bootstrap() {
     heartbeatTimer.unref();
 
     worker = new Worker<any>(DM_QUEUE, async (job) => {
-    if (job.name === 'process-webhook-event') {
-      await webhookProcessor.processEvent(job.data.webhookEventId);
-      return;
-    }
-    await processor.process(job.data as DmJob, job);
+      await processDmQueueJob(job, webhookProcessor, processor);
     }, { connection, concurrency: 10 });
 
     worker.on('completed', (job) => log.debug(`job ${job.id} done`));

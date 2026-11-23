@@ -8,9 +8,12 @@ import { ProfilesService } from '../profiles/profiles.service';
 import { ProfileStorageService } from '../profiles/profile-storage.service';
 import { PublicProfileFaviconController } from '../profiles/public-profile-favicon.controller';
 import { PublicProfileFaviconService } from '../profiles/public-profile-favicon.service';
+import { PublicProfileReportsAdminController } from '../profiles/public-profiles.controller';
+import { PublicProfileReportsService } from '../profiles/public-profile-reports.service';
+import { AdminGuard } from '../common/guards/admin.guard';
 
 @Module({
-  controllers: [UsersController, AccountDeletionController, ProfilesController, PublicProfilesController, PublicProfileFaviconController],
-  providers: [UsersService, ProfilesService, ProfileStorageService, PublicProfileFaviconService],
+  controllers: [UsersController, AccountDeletionController, ProfilesController, PublicProfilesController, PublicProfileReportsAdminController, PublicProfileFaviconController],
+  providers: [UsersService, ProfilesService, ProfileStorageService, PublicProfileFaviconService, PublicProfileReportsService, AdminGuard],
 })
 export class UsersModule {}

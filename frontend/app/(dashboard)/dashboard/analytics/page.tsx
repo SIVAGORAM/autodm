@@ -23,7 +23,7 @@ export default function AnalyticsPage() {
 
   return (
     <div>
-      <PageHead title="Analytics" sub="How your automations are performing. Open any automation for its full click-through and delivery breakdown." />
+      <PageHead title="Analytics" sub="See DM delivery and tracked link activity across your automations. Open an automation for its run history." />
 
       {isError && (
         <Card style={{ marginBottom: 18, borderColor: 'var(--error)' }}>
@@ -75,7 +75,7 @@ export default function AnalyticsPage() {
             })}
           </Card>
           <p style={{ fontSize: 13, color: RL.muted, marginTop: 14, display: 'flex', alignItems: 'center', gap: 7 }}>
-            <MousePointerClick style={{ width: 15, height: 15 }} /> Click-through rates and per-run detail live inside each automation.
+            <MousePointerClick style={{ width: 15, height: 15 }} /> Tracked link clicks and per-run delivery history are available inside each automation.
           </p>
         </>
       )}

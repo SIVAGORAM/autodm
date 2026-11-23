@@ -6,6 +6,7 @@ import { getPublicSiteUrl } from '../../lib/site-url';
 import { resolveApiBase } from '../../lib/api-url-policy.cjs';
 import { ProfileFavicon } from '../../components/profile-favicon';
 import { ProfileAvatar } from '../../components/profile-avatar';
+import { ProfileReportForm } from '../../components/profile-report-form';
 
 type PublicLink = { id: string; kind: 'SOCIAL' | 'CUSTOM'; platform: string | null; title: string; url: string; description: string | null; sortOrder: number };
 type PublicProfile = { username: string; displayName: string; bio: string | null; appearance: 'LIGHT' | 'DARK' | 'NEUTRAL'; avatarUrl: string | null; links: PublicLink[]; redirectTo?: string | null };
@@ -82,7 +83,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
       </section>}
 
       {socials.length === 0 && customLinks.length === 0 && <div className="hl-public-empty"><Link2 size={20} aria-hidden /><p>This creator hasn’t added any links yet.</p></div>}
-      <footer className="hl-public-profile-footer"><a href={getPublicSiteUrl().toString()} rel="noopener noreferrer">Made with <b>HeyLaunch</b></a></footer>
+      <footer className="hl-public-profile-footer"><a href={getPublicSiteUrl().toString()} rel="noopener noreferrer">Made with <b>HeyLaunch</b></a><ProfileReportForm username={profile.username} /></footer>
     </div>
     <style>{`
       .hl-public-profile{--profile-bg:#f3f4f0;--profile-text:#191c19;--profile-muted:#747971;--profile-card:#fff;--profile-border:#e2e5df;min-height:100svh;display:grid;place-items:center;padding:46px 18px 30px;background:radial-gradient(ellipse at 50% -12%,#dff6ad 0,transparent 47%),var(--profile-bg);color:var(--profile-text);font-family:var(--font-inter),Inter,system-ui,sans-serif}

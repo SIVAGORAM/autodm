@@ -46,7 +46,7 @@ export class InstagramAccountLifecycleService {
 
     const result = await this.prisma.igAccount.updateMany({
       where: { id: account.id, userId },
-      data: { isActive: false, accessTokenEnc: '', tokenExpiresAt: null, webhookSubscribedAt: null, lastAlertAt: null },
+      data: { isActive: false, accessTokenEnc: '', tokenExpiresAt: null, webhookSubscribedAt: null, webhookFields: [], lastAlertAt: null },
     });
     if (!result.count) throw new NotFoundException('Account not found.');
     return { success: true };
@@ -67,7 +67,7 @@ export class InstagramAccountLifecycleService {
         await tx.automation.updateMany({ where: { igAccountId: account.id }, data: { status: 'PAUSED' } });
         await tx.igAccount.updateMany({
           where: { id: account.id, igUserId },
-          data: { isActive: false, accessTokenEnc: '', tokenExpiresAt: null, webhookSubscribedAt: null, lastAlertAt: null },
+          data: { isActive: false, accessTokenEnc: '', tokenExpiresAt: null, webhookSubscribedAt: null, webhookFields: [], lastAlertAt: null },
         });
       });
       await this.drainAccountJobs(
@@ -133,7 +133,7 @@ export class InstagramAccountLifecycleService {
         await tx.automation.updateMany({ where: { igAccount: { igUserId } }, data: { status: 'PAUSED' } });
         await tx.igAccount.updateMany({
           where: { igUserId },
-          data: { isActive: false, accessTokenEnc: '', tokenExpiresAt: null, webhookSubscribedAt: null, lastAlertAt: null },
+          data: { isActive: false, accessTokenEnc: '', tokenExpiresAt: null, webhookSubscribedAt: null, webhookFields: [], lastAlertAt: null },
         });
       });
     } catch (error: any) {

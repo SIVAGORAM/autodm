@@ -2,7 +2,7 @@
 // Extends the original model with richer triggers, buttons, follow-ups,
 // contacts, runs and click tracking (from replica/recon.md).
 generator client {
-  provider = "prisma-client-js"
+  provider   = "prisma-client-js"
   engineType = "client"
 }
 
@@ -14,56 +14,57 @@ datasource db {
 
 // ─────────────────────────── Accounts & auth ───────────────────────────
 model User {
-  id                     String    @id @default(uuid())
-  email                  String    @unique
-  passwordHash           String
-  name                   String
-  profilePicUrl          String?
-  role                   UserRole  @default(INFLUENCER)
-  adminPermissions       String[]  @default([])
-  sessionVersion         Int       @default(0)
-  adminMfaEnabledAt      DateTime?
-  adminMfaSecretEnc      String?
-  adminMfaPendingSecretEnc String?
-  adminMfaRecoveryCodeHashes String[] @default([])
-  adminMfaChallengeHash  String?
+  id                         String    @id @default(uuid())
+  email                      String    @unique
+  passwordHash               String
+  name                       String
+  profilePicUrl              String?
+  role                       UserRole  @default(INFLUENCER)
+  adminPermissions           String[]  @default([])
+  sessionVersion             Int       @default(0)
+  adminMfaEnabledAt          DateTime?
+  adminMfaSecretEnc          String?
+  adminMfaPendingSecretEnc   String?
+  adminMfaRecoveryCodeHashes String[]  @default([])
+  adminMfaChallengeHash      String?
   adminMfaChallengeExpiresAt DateTime?
-  adminMfaLastUsedStep   BigInt?
-  isVerified             Boolean   @default(false)
-  otpCode                String?
-  otpExpires             DateTime?
-  otpAttempts            Int       @default(0)
-  passwordResetTokenHash String?
-  passwordResetExpiresAt DateTime?
-  termsVersion          String?
-  termsAcceptedAt       DateTime?
-  privacyVersion        String?
-  privacyAcknowledgedAt DateTime?
-  ageConfirmedAt        DateTime?
-  plan                   PlanTier  @default(FREE)
-  planExpiresAt          DateTime?
-  trialEndsAt            DateTime?
-  trialReminderSent      Boolean   @default(false)
-  deletionRequestedAt    DateTime?
-  suspendedAt            DateTime?
-  suspensionReason       String?
-  dmCount                Int       @default(0) // DMs triggered in the current quota window
-  dmCountResetAt         DateTime? // when dmCount rolls back to 0 (start of next month)
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  adminMfaLastUsedStep       BigInt?
+  isVerified                 Boolean   @default(false)
+  otpCode                    String?
+  otpExpires                 DateTime?
+  otpAttempts                Int       @default(0)
+  passwordResetTokenHash     String?
+  passwordResetExpiresAt     DateTime?
+  termsVersion               String?
+  termsAcceptedAt            DateTime?
+  privacyVersion             String?
+  privacyAcknowledgedAt      DateTime?
+  ageConfirmedAt             DateTime?
+  plan                       PlanTier  @default(FREE)
+  planExpiresAt              DateTime?
+  trialEndsAt                DateTime?
+  trialReminderSent          Boolean   @default(false)
+  deletionRequestedAt        DateTime?
+  suspendedAt                DateTime?
+  suspensionReason           String?
+  dmCount                    Int       @default(0) // DMs triggered in the current quota window
+  dmCountResetAt             DateTime? // when dmCount rolls back to 0 (start of next month)
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
 
-  igAccounts      IgAccount[]
-  refreshTokens   RefreshToken[]
-  payments        Payment[]
-  mailOutbox      MailOutbox[]
-  supportRequests SupportRequest[]
-  supportMessages SupportMessage[]
-  adminAuditEvents AdminAuditEvent[]
-  assignedContactEnquiries ContactEnquiry[] @relation("ContactEnquiryAssignee")
+  igAccounts                     IgAccount[]
+  refreshTokens                  RefreshToken[]
+  payments                       Payment[]
+  mailOutbox                     MailOutbox[]
+  supportRequests                SupportRequest[]
+  supportMessages                SupportMessage[]
+  adminAuditEvents               AdminAuditEvent[]
+  assignedContactEnquiries       ContactEnquiry[]        @relation("ContactEnquiryAssignee")
   authoredContactEnquiryMessages ContactEnquiryMessage[] @relation("ContactEnquiryAdminAuthor")
-  sentAdminInvitations AdminInvitation[] @relation("AdminInvitationInviter")
-  acceptedAdminInvitations AdminInvitation[] @relation("AdminInvitationAcceptedBy")
-  publicProfile    PublicProfile?
+  sentAdminInvitations           AdminInvitation[]       @relation("AdminInvitationInviter")
+  acceptedAdminInvitations       AdminInvitation[]       @relation("AdminInvitationAcceptedBy")
+  publicProfile                  PublicProfile?
+  reviewedPublicProfileReports   PublicProfileReport[]   @relation("PublicProfileReportReviewer")
 
   @@index([trialEndsAt]) // speeds the trial-reminder sweep
   @@index([deletionRequestedAt])
@@ -75,10 +76,12 @@ model RefreshToken {
   id        String   @id @default(uuid())
   tokenHash String   @unique
   userId    String
+  familyId  String   @db.Uuid
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   createdAt DateTime @default(now())
 
+  @@unique([userId, familyId])
   @@index([userId])
   @@map("refresh_tokens")
 }
@@ -119,22 +122,23 @@ model MetaDeauthorizationReceipt {
 
 // Up to 5 per user (paid). Free = 1.
 model IgAccount {
-  id             String    @id @default(uuid())
-  userId         String
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  igUserId       String    @unique
-  username       String
-  loginMode      InstagramLoginMode @default(INSTAGRAM_LOGIN)
-  clientBusinessId String?
-  unifiedConfigId String?
-  pageId         String? // Facebook Page id, for Messenger
-  accessTokenEnc String // AES-256 encrypted
-  tokenExpiresAt DateTime?
+  id                  String             @id @default(uuid())
+  userId              String
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  igUserId            String             @unique
+  username            String
+  loginMode           InstagramLoginMode @default(INSTAGRAM_LOGIN)
+  clientBusinessId    String?
+  unifiedConfigId     String?
+  pageId              String? // Facebook Page id, for Messenger
+  accessTokenEnc      String // AES-256 encrypted
+  tokenExpiresAt      DateTime?
   webhookSubscribedAt DateTime?
-  isActive       Boolean   @default(true)
-  lastAlertAt    DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  webhookFields       String[]           @default([])
+  isActive            Boolean            @default(true)
+  lastAlertAt         DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
   automations   Automation[]
   contacts      Contact[]
@@ -288,15 +292,15 @@ model WebhookEvent {
 }
 
 model DmQuotaReservation {
-  id                 String                    @id @default(uuid())
-  triggerEventId     String                    @unique
-  userId             String
-  automationId       String
-  status             DmQuotaReservationStatus  @default(CONSUMED)
-  monthWindowEndsAt  DateTime?
-  dayWindowEndsAt    DateTime?
-  settledAt          DateTime?
-  createdAt          DateTime                  @default(now())
+  id                String                   @id @default(uuid())
+  triggerEventId    String                   @unique
+  userId            String
+  automationId      String
+  status            DmQuotaReservationStatus @default(CONSUMED)
+  monthWindowEndsAt DateTime?
+  dayWindowEndsAt   DateTime?
+  settledAt         DateTime?
+  createdAt         DateTime                 @default(now())
 
   @@index([userId, createdAt])
   @@index([automationId, createdAt])
@@ -306,23 +310,23 @@ model DmQuotaReservation {
 // Authentication and lifecycle email content is encrypted at rest and expires
 // with the action it represents (OTP/reset token or welcome window).
 model MailOutbox {
-  id            String    @id @default(uuid())
-  userId        String?
-  user          User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  contactEnquiryMessageId String? @unique
-  contactEnquiryMessage ContactEnquiryMessage? @relation(fields: [contactEnquiryMessageId], references: [id], onDelete: SetNull)
-  dedupeKey     String    @unique
-  payloadEnc    String
-  status        String    @default("PENDING")
-  attempts      Int       @default(0)
-  nextAttemptAt DateTime  @default(now())
-  lockedAt      DateTime?
-  expiresAt     DateTime
-  sentAt        DateTime?
-  failedAt      DateTime?
-  lastError     String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                      String                 @id @default(uuid())
+  userId                  String?
+  user                    User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contactEnquiryMessageId String?                @unique
+  contactEnquiryMessage   ContactEnquiryMessage? @relation(fields: [contactEnquiryMessageId], references: [id], onDelete: SetNull)
+  dedupeKey               String                 @unique
+  payloadEnc              String
+  status                  String                 @default("PENDING")
+  attempts                Int                    @default(0)
+  nextAttemptAt           DateTime               @default(now())
+  lockedAt                DateTime?
+  expiresAt               DateTime
+  sentAt                  DateTime?
+  failedAt                DateTime?
+  lastError               String?
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
 
   @@index([status, nextAttemptAt])
   @@index([userId, createdAt])
@@ -363,17 +367,17 @@ model SupportMessage {
 }
 
 model ContactEnquiry {
-  id                 String                 @id @default(uuid())
-  name               String
-  email              String
-  subject            String
-  status             ContactEnquiryStatus   @default(NEW)
-  priority           ContactEnquiryPriority  @default(NORMAL)
-  assignedAdminId    String?
-  assignedAdmin      User?                  @relation("ContactEnquiryAssignee", fields: [assignedAdminId], references: [id], onDelete: SetNull)
-  createdAt          DateTime               @default(now())
-  updatedAt          DateTime               @updatedAt
-  messages           ContactEnquiryMessage[]
+  id              String                  @id @default(uuid())
+  name            String
+  email           String
+  subject         String
+  status          ContactEnquiryStatus    @default(NEW)
+  priority        ContactEnquiryPriority  @default(NORMAL)
+  assignedAdminId String?
+  assignedAdmin   User?                   @relation("ContactEnquiryAssignee", fields: [assignedAdminId], references: [id], onDelete: SetNull)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  messages        ContactEnquiryMessage[]
 
   @@index([status, priority, updatedAt])
   @@index([assignedAdminId, status, updatedAt])
@@ -382,16 +386,16 @@ model ContactEnquiry {
 }
 
 model ContactEnquiryMessage {
-  id                 String                     @id @default(uuid())
-  enquiryId          String
-  enquiry            ContactEnquiry             @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
-  authorAdminId      String?
-  authorAdmin        User?                      @relation("ContactEnquiryAdminAuthor", fields: [authorAdminId], references: [id], onDelete: SetNull)
-  kind               ContactEnquiryMessageKind
-  body               String
+  id                  String                     @id @default(uuid())
+  enquiryId           String
+  enquiry             ContactEnquiry             @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  authorAdminId       String?
+  authorAdmin         User?                      @relation("ContactEnquiryAdminAuthor", fields: [authorAdminId], references: [id], onDelete: SetNull)
+  kind                ContactEnquiryMessageKind
+  body                String
   emailDeliveryStatus ContactEmailDeliveryStatus @default(NOT_APPLICABLE)
-  createdAt          DateTime                   @default(now())
-  mailOutbox         MailOutbox?
+  createdAt           DateTime                   @default(now())
+  mailOutbox          MailOutbox?
 
   @@index([enquiryId, createdAt, id])
   @@index([authorAdminId, createdAt])
@@ -420,15 +424,15 @@ model AdminAuditEvent {
 }
 
 model AdminInvitation {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   email        String
-  permissions  String[] @default([])
-  tokenHash    String   @unique
+  permissions  String[]  @default([])
+  tokenHash    String    @unique
   invitedById  String
-  invitedBy    User     @relation("AdminInvitationInviter", fields: [invitedById], references: [id], onDelete: Restrict)
+  invitedBy    User      @relation("AdminInvitationInviter", fields: [invitedById], references: [id], onDelete: Restrict)
   acceptedById String?
-  acceptedBy   User?    @relation("AdminInvitationAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
-  createdAt    DateTime @default(now())
+  acceptedBy   User?     @relation("AdminInvitationAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime  @default(now())
   expiresAt    DateTime
   acceptedAt   DateTime?
   revokedAt    DateTime?
@@ -439,35 +443,37 @@ model AdminInvitation {
 }
 
 model PublicProfile {
-  id              String                  @id @default(uuid())
-  userId          String                  @unique
-  user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  currentHandleId String?                 @unique
-  currentHandle   ProfileHandle?          @relation("CurrentProfileHandle", fields: [currentHandleId], references: [id], onDelete: SetNull)
-  handles         ProfileHandle[]         @relation("ProfileHandleOwner")
-  displayName     String                  @db.VarChar(80)
-  bio             String?                 @db.VarChar(160)
-  avatarAssetId   String?
-  avatarDeliveryUrl String?                @db.Text
-  visibility      PublicProfileVisibility @default(PRIVATE)
-  appearance      ProfileAppearance       @default(NEUTRAL)
-  createdAt       DateTime                @default(now())
-  updatedAt       DateTime                @updatedAt
-  links           ProfileLink[]
+  id                  String                  @id @default(uuid())
+  userId              String                  @unique
+  user                User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentHandleId     String?                 @unique
+  currentHandle       ProfileHandle?          @relation("CurrentProfileHandle", fields: [currentHandleId], references: [id], onDelete: SetNull)
+  handles             ProfileHandle[]         @relation("ProfileHandleOwner")
+  displayName         String                  @db.VarChar(80)
+  bio                 String?                 @db.VarChar(160)
+  avatarAssetId       String?
+  avatarDeliveryUrl   String?                 @db.Text
+  visibility          PublicProfileVisibility @default(PRIVATE)
+  moderationBlockedAt DateTime?
+  appearance          ProfileAppearance       @default(NEUTRAL)
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  links               ProfileLink[]
+  reports             PublicProfileReport[]
 
   @@index([visibility, updatedAt])
   @@map("public_profiles")
 }
 
 model ProfileHandle {
-  id          String        @id @default(uuid())
-  profileId   String
-  profile     PublicProfile @relation("ProfileHandleOwner", fields: [profileId], references: [id], onDelete: Cascade)
-  username    String        @db.VarChar(30)
-  isCurrent   Boolean       @default(true)
-  createdAt   DateTime      @default(now())
-  retiredAt   DateTime?
-  currentFor  PublicProfile? @relation("CurrentProfileHandle")
+  id         String         @id @default(uuid())
+  profileId  String
+  profile    PublicProfile  @relation("ProfileHandleOwner", fields: [profileId], references: [id], onDelete: Cascade)
+  username   String         @db.VarChar(30)
+  isCurrent  Boolean        @default(true)
+  createdAt  DateTime       @default(now())
+  retiredAt  DateTime?
+  currentFor PublicProfile? @relation("CurrentProfileHandle")
 
   @@index([profileId, isCurrent])
   @@map("profile_handles")
@@ -500,6 +506,29 @@ model ProfileAssetDeletion {
 
   @@index([nextAttemptAt, createdAt])
   @@map("profile_asset_deletions")
+}
+
+model PublicProfileReport {
+  id                  String                    @id @default(uuid())
+  // Nullable so reports remain in the moderation audit trail if the creator
+  // deletes their account and the profile is removed.
+  profileId           String?
+  profile             PublicProfile?            @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  reportedUsername    String                    @db.VarChar(30)
+  reportedDisplayName String                    @db.VarChar(80)
+  reason              PublicProfileReportReason
+  details             String?                   @db.VarChar(1000)
+  status              PublicProfileReportStatus @default(OPEN)
+  reviewedById        String?
+  reviewedBy          User?                     @relation("PublicProfileReportReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  moderationNote      String?                   @db.VarChar(1000)
+  reviewedAt          DateTime?
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+
+  @@index([status, createdAt, id])
+  @@index([profileId, createdAt])
+  @@map("public_profile_reports")
 }
 
 // ─────────────────────────── Enums ───────────────────────────
@@ -626,4 +655,20 @@ enum ProfileAppearance {
 enum ProfileLinkKind {
   SOCIAL
   CUSTOM
+}
+
+enum PublicProfileReportReason {
+  IMPERSONATION
+  SCAM
+  INAPPROPRIATE
+  SPAM
+  COPYRIGHT
+  OTHER
+}
+
+enum PublicProfileReportStatus {
+  OPEN
+  IN_REVIEW
+  ACTIONED
+  DISMISSED
 }

@@ -63,6 +63,10 @@ api.interceptors.response.use(
       }
 
       if (isRefreshing) {
+        // This request has already received its first 401. Mark it before it
+        // enters the queue so a still-unauthorized replay cannot start another
+        // refresh cycle after the in-flight refresh completes.
+        originalRequest._retry = true;
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         }).then(() => api(originalRequest)).catch((err) => Promise.reject(err));
@@ -82,7 +86,7 @@ api.interceptors.response.use(
         // refresh cookie. A timeout or 5xx can be a sleeping/restarting API;
         // the dashboard should offer a retry instead of logging the creator out.
         const refreshStatus = axios.isAxiosError(refreshError) ? refreshError.response?.status : undefined;
-        if (refreshStatus === 401 && typeof window !== 'undefined') {
+        if (refreshStatus === 401 && typeof window !== 'undefined' && window.location.pathname !== '/login') {
           window.location.href = '/login';
         }
         return Promise.reject(refreshError);
@@ -165,13 +169,13 @@ export const adminApi = {
   team: () => api.get('/admin/team'),
   addAdmin: (email: string, reason: string) => api.post('/admin/team', { email, reason }),
   adminInvitations: () => api.get('/admin/team/invitations'),
-  createAdminInvitation: (email: string, permissions: Array<'SUPPORT_MANAGE' | 'CONTACT_MANAGE' | 'MAIL_READ' | 'OPERATIONS_READ'>, reason: string) =>
+  createAdminInvitation: (email: string, permissions: Array<'SUPPORT_MANAGE' | 'PROFILE_MODERATE' | 'CONTACT_MANAGE' | 'MAIL_READ' | 'OPERATIONS_READ'>, reason: string) =>
     api.post('/admin/team/invitations', { email, permissions, reason }),
   revokeAdminInvitation: (id: string, reason: string) => api.delete(`/admin/team/invitations/${id}`, { data: { reason } }),
   acceptAdminInvitation: (token: string) => api.post('/admin/invitations/accept', { token }),
   updateAdminRole: (userId: string, role: 'ADMIN' | 'SUPER_ADMIN' | 'INFLUENCER', reason: string) =>
     api.patch(`/admin/team/${userId}/role`, { role, reason }),
-  updateAdminPermissions: (userId: string, permissions: Array<'SUPPORT_MANAGE' | 'CONTACT_MANAGE' | 'MAIL_READ' | 'OPERATIONS_READ'>, reason: string) =>
+  updateAdminPermissions: (userId: string, permissions: Array<'SUPPORT_MANAGE' | 'PROFILE_MODERATE' | 'CONTACT_MANAGE' | 'MAIL_READ' | 'OPERATIONS_READ'>, reason: string) =>
     api.patch(`/admin/team/${userId}/permissions`, { permissions, reason }),
     suspendAdmin: (userId: string, reason: string) => api.post(`/admin/team/${userId}/suspend`, { reason }),
     reactivateAdmin: (userId: string, reason: string) => api.post(`/admin/team/${userId}/reactivate`, { reason }),
@@ -188,6 +192,12 @@ export const adminApi = {
   workerHealth: () => api.get('/admin/health/worker'),
   supportRequests: (page = 1, status?: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED') =>
     api.get('/admin/support-requests', { params: { page, status } }),
+  publicProfileReports: (page = 1, status?: 'OPEN' | 'IN_REVIEW' | 'ACTIONED' | 'DISMISSED') =>
+    api.get('/admin/profile-reports', { params: { page, status } }),
+  reviewPublicProfileReport: (id: string, status: 'IN_REVIEW' | 'ACTIONED' | 'DISMISSED', moderationNote: string) =>
+    api.post(`/admin/profile-reports/${id}/review`, { status, moderationNote }),
+  restorePublicProfileReport: (id: string, reason: string) =>
+    api.post(`/admin/profile-reports/${id}/restore`, { reason }),
     contactEnquiries: (params: { page?: number; pageSize?: number; status?: string; priority?: string; search?: string; assigned?: 'MINE' | 'UNASSIGNED' } = {}) =>
       api.get('/admin/contact-enquiries', { params }),
     contactEnquiry: (id: string) => api.get(`/admin/contact-enquiries/${id}`),

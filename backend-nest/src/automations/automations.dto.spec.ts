@@ -32,6 +32,29 @@ describe('automation media ID validation', () => {
   });
 });
 
+describe('automation trigger support', () => {
+  it('rejects the unsupported NEXT_POST trigger on create', () => {
+    expect(createAutomationSchema.safeParse({ ...base, triggerType: 'NEXT_POST' }).success).toBe(false);
+  });
+
+  it('accepts a Live Comment trigger on create and update', () => {
+    expect(createAutomationSchema.safeParse({ ...base, triggerType: 'LIVE_COMMENT' }).success).toBe(true);
+    expect(updateAutomationSchema.safeParse({ triggerType: 'LIVE_COMMENT' }).success).toBe(true);
+  });
+
+  it('rejects the unsupported NEXT_POST trigger on update', () => {
+    const triggerType = 'NEXT_POST';
+    expect(updateAutomationSchema.safeParse({ triggerType }).success).toBe(false);
+  });
+});
+
+describe('automation match-mode support', () => {
+  it('rejects AI intent mode on create and update until an intent service exists', () => {
+    expect(createAutomationSchema.safeParse({ ...base, matchMode: 'AI_INTENT' }).success).toBe(false);
+    expect(updateAutomationSchema.safeParse({ matchMode: 'AI_INTENT' }).success).toBe(false);
+  });
+});
+
 describe('automation update follow-up IDs', () => {
   const step = {
     order: 0,

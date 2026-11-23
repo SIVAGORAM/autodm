@@ -75,7 +75,7 @@ describe('self-service account deletion', () => {
       select: { id: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 50,
     });
     expect(tx.user.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: accountId, isVerified: false, role: { not: 'ADMIN' }, deletionRequestedAt: null, createdAt: { lte: createdBefore } },
+      where: { id: accountId, isVerified: false, role: { notIn: ['ADMIN', 'SUPER_ADMIN'] }, deletionRequestedAt: null, createdAt: { lte: createdBefore } },
       data: expect.objectContaining({
         deletionRequestedAt: now,
         email: `deleted-${accountId}@account.invalid`,

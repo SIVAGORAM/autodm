@@ -4,6 +4,7 @@ const productionEnv = () => ({
   DATABASE_URL: 'postgresql://app:secret@db.example.com/app?sslmode=require',
   DIRECT_URL: 'postgresql://app:secret@db.example.com/app?sslmode=require',
   REDIS_URL: 'rediss://default:secret@redis.example.com:6379',
+  REDIS_REQUIRE_NOEVICTION: true,
   JWT_ACCESS_SECRET: 'a'.repeat(40),
   JWT_REFRESH_SECRET: 'b'.repeat(40),
   ENCRYPTION_KEY: 'c'.repeat(40),
@@ -33,6 +34,14 @@ describe('production environment validation', () => {
     expect(parsed.UNVERIFIED_ACCOUNT_RETENTION_DAYS).toBe(30);
     expect(parsed.LEGAL_POLICY_STATUS).toBe('DRAFT');
     expect(validateEnv({ ...productionEnv(), LEGAL_POLICY_STATUS: 'APPROVED' }).LEGAL_POLICY_STATUS).toBe('APPROVED');
+  });
+
+  it('requires explicit noeviction policy enforcement in production', () => {
+    expect(validateEnv(productionEnv()).REDIS_REQUIRE_NOEVICTION).toBe(true);
+    const log = jest.spyOn(console, 'error').mockImplementation(() => {});
+    expect(() => validateEnv({ ...productionEnv(), REDIS_REQUIRE_NOEVICTION: false }))
+      .toThrow('Invalid environment configuration');
+    log.mockRestore();
   });
 
   it('keeps Cloudinary uploads disabled until all server-side credentials are set', () => {

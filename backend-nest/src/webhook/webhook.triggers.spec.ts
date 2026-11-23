@@ -20,7 +20,7 @@ function automation(id: string, triggerType: string, createdAt: Date, mediaId: s
   };
 }
 
-function setup(candidates: any[]) {
+function setup(candidates: any[], liveCommentsEnabled = false) {
   const prisma: any = {
     igAccount: {
       findUnique: jest.fn().mockResolvedValue(account),
@@ -31,12 +31,16 @@ function setup(candidates: any[]) {
     contact: {
       upsert: jest.fn().mockResolvedValue({ id: 'contact-1', igScopedId: 'viewer-1', username: 'viewer' }),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      findUnique: jest.fn().mockResolvedValue({ lastReplyAt: new Date() }),
     },
     run: { findFirst: jest.fn().mockResolvedValue(null) },
   };
   const queue: any = { getJob: jest.fn().mockResolvedValue(null), add: jest.fn().mockResolvedValue({ id: 'job-1' }) };
   const quota: any = { consume: jest.fn().mockResolvedValue(true) };
-  const instagram: any = { getCommentMetadata: jest.fn().mockResolvedValue({ mediaId: null, createdAt: '2026-11-20T10:00:00.000Z' }) };
+  const instagram: any = {
+    liveCommentsEnabled,
+    getCommentMetadata: jest.fn().mockResolvedValue({ mediaId: null, createdAt: '2026-11-20T10:00:00.000Z' }),
+  };
   const encryption: any = { decrypt: jest.fn().mockReturnValue('provider-token') };
   return { service: new WebhookService(
     prisma, queue, quota, { publish: jest.fn().mockResolvedValue(undefined) } as any,
@@ -84,6 +88,37 @@ describe('WebhookService automation selection', () => {
       triggerEventId: `comment:${account.igUserId}:reel-comment-1`,
       text: 'Reply from reel-rule',
     }), expect.objectContaining({ jobId: expect.stringMatching(/^dm-[a-f0-9]{64}$/) }));
+  });
+
+  it('queues one no-retry private reply job for a matching Live Comment event when enabled', async () => {
+    const liveRule = automation('live-rule', 'LIVE_COMMENT', new Date('2026-01-02T00:00:00Z'));
+    const { service, queue } = setup([liveRule], true);
+
+    await (service as any).onComment(
+      { id: account.igUserId },
+      { id: 'live-comment-1', text: 'guide', from: { id: 'viewer-1', username: 'viewer' }, media: { id: 'live-1' } },
+      true,
+    );
+
+    expect(queue.add).toHaveBeenCalledWith('send', expect.objectContaining({
+      automationId: liveRule.id,
+      triggerType: 'LIVE_COMMENT',
+      triggerEventId: `live-comment:${account.igUserId}:live-comment-1`,
+    }), expect.objectContaining({ jobId: expect.stringMatching(/^dm-[a-f0-9]{64}$/), attempts: 1 }));
+  });
+
+  it('ignores Live Comment events unless the Meta feature flag is enabled', async () => {
+    const liveRule = automation('live-rule', 'LIVE_COMMENT', new Date('2026-01-02T00:00:00Z'));
+    const { service, queue, prisma } = setup([liveRule]);
+
+    await (service as any).onComment(
+      { id: account.igUserId },
+      { id: 'live-comment-2', text: 'guide', from: { id: 'viewer-1' } },
+      true,
+    );
+
+    expect(prisma.igAccount.findUnique).not.toHaveBeenCalled();
+    expect(queue.add).not.toHaveBeenCalled();
   });
 
   it('resolves an omitted carousel album ID before selecting a media-specific rule', async () => {

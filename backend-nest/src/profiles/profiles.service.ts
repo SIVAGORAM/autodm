@@ -1,5 +1,5 @@
 import {
-  BadRequestException, ConflictException, Injectable, Logger,
+  BadRequestException, ConflictException, ForbiddenException, Injectable, Logger,
   NotFoundException, ServiceUnavailableException,
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -124,6 +124,9 @@ export class ProfilesService {
         const existing = await tx.publicProfile.findUnique({
           where: { userId }, include: { currentHandle: true },
         });
+        if (existing?.moderationBlockedAt && input.visibility === 'PUBLIC') {
+          throw new ForbiddenException('This profile is restricted while it is reviewed by HeyLaunch. Contact support if you believe this is a mistake.');
+        }
         const handle = await tx.profileHandle.findFirst({
           where: { username: { equals: username, mode: 'insensitive' } },
           select: { id: true, profileId: true, isCurrent: true },
