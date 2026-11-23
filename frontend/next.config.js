@@ -7,7 +7,7 @@ const createNextConfig = (phase) => ({
   // `next dev` and `next build` must not share manifests or chunks. A build
   // during local development otherwise replaces `.next` files that the dev
   // server still references, producing missing chunk/CSS responses.
-  distDir: phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next',
+  distDir: phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next-prod',
   output: 'standalone',
   outputFileTracingRoot: path.join(__dirname, '..'),
   // Keep static generation deterministic on constrained/Windows build hosts.

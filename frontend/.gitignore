@@ -5,6 +5,7 @@ node_modules
 dist
 .next
 .next-dev
+.next-prod
 
 # Local build artifacts / backups (QA cleanup)
 *.tgz

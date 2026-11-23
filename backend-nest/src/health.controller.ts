@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Header, Inject, Res, UseGuards } from '@nestjs/common';
 import { FastifyReply } from 'fastify';
 import { Queue } from 'bullmq';
 import { SkipThrottle, ThrottlerStorage } from '@nestjs/throttler';
@@ -27,6 +27,16 @@ export class HealthController {
   @SkipThrottle()
   check() {
     return { status: 'ok', ts: new Date().toISOString() };
+  }
+
+  /** Public, non-secret deploy marker for verifying that API and UI releases match. */
+  @Get('api/version')
+  @SkipThrottle()
+  @Header('Cache-Control', 'no-store')
+  version() {
+    const commit = this.config.get<string>('RENDER_GIT_COMMIT')?.trim() ?? '';
+    const revision = /^[a-f\d]{40}$/i.test(commit) ? commit.slice(0, 12).toLowerCase() : null;
+    return { service: 'api', revision };
   }
 
   /** Readiness: checks database, queue, and shared HTTP throttling dependencies. */

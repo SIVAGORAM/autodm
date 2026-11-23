@@ -9,7 +9,7 @@ import nextPlugin from "@next/eslint-plugin-next";
 // on top so `next build` detects the plugin and Next-specific lint
 // coverage is in force.
 export default [
-  { ignores: [".next/**", ".next-dev/**", "node_modules/**", "next-env.d.ts", "public/**"] },
+  { ignores: [".next/**", ".next-dev/**", ".next-prod/**", "node_modules/**", "next-env.d.ts", "public/**"] },
   // Keep the Next plugin visible in the flat-config baseline so both the
   // Next build integration and standalone ESLint detect it consistently.
   { plugins: { "@next/next": nextPlugin } },

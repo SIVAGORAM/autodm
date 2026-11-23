@@ -4,12 +4,27 @@ describe('HealthController readiness', () => {
   function setup(
     database: () => Promise<unknown>, redis: () => Promise<unknown>, throttlePing = () => Promise.resolve(true),
     requireNoeviction = false, memoryInfo = '# Memory\r\nmaxmemory_policy:noeviction\r\n',
+    revision?: string,
   ) {
     const prisma: any = { $queryRaw: database };
     const queue: any = { getJobCounts: redis, client: Promise.resolve({ info: jest.fn().mockResolvedValue(memoryInfo) }) };
     const response: any = { status: jest.fn() };
-    return { controller: new HealthController(prisma, queue, { ping: throttlePing }, { get: () => requireNoeviction } as any), response };
+    return { controller: new HealthController(prisma, queue, { ping: throttlePing }, {
+      get: (key: string) => key === 'RENDER_GIT_COMMIT' ? revision : requireNoeviction,
+    } as any), response };
   }
+
+  it('exposes only a shortened validated Render commit for deployment verification', () => {
+    const { controller } = setup(() => Promise.resolve([]), () => Promise.resolve({}), undefined, false, undefined, 'ABCDEF0123456789ABCDEF0123456789ABCDEF01');
+
+    expect(controller.version()).toEqual({ service: 'api', revision: 'abcdef012345' });
+  });
+
+  it('does not expose unexpected deployment metadata', () => {
+    const { controller } = setup(() => Promise.resolve([]), () => Promise.resolve({}), undefined, false, undefined, 'private-deploy-value');
+
+    expect(controller.version()).toEqual({ service: 'api', revision: null });
+  });
 
   it('reports ready only when database and queue both respond', async () => {
     const { controller, response } = setup(() => Promise.resolve([{ '?column?': 1 }]), () => Promise.resolve({ waiting: 0 }));

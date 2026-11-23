@@ -13,7 +13,7 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 WORKDIR /workspace/frontend
-COPY --from=build /workspace/frontend/.next/standalone ./.next/standalone
-RUN test -f .next/standalone/frontend/server.js
+COPY --from=build /workspace/frontend/.next-prod/standalone ./.next-prod/standalone
+RUN test -f .next-prod/standalone/frontend/server.js
 EXPOSE 3000
-CMD ["node", ".next/standalone/frontend/server.js"]
+CMD ["node", ".next-prod/standalone/frontend/server.js"]

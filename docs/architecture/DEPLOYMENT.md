@@ -6,9 +6,9 @@
 
 1. `relayo-api`: Node web service rooted at `backend-nest`; `npm ci`, Prisma client generation, Nest build; startup runs `prisma migrate deploy` before the HTTP API.
 2. `relayo-worker`: persistent background worker rooted at `backend-nest`; builds the Nest app and runs `npm run start:worker`. It processes DMs, durable webhook receipts, delayed follow-ups, encrypted auth-mail outbox retries, token refresh, and stale-run recovery.
-3. `relayo-frontend`: Node web service rooted at `frontend`; `npm ci`, production Next standalone build (including copied `public` and `.next/static` assets), and `npm start` on the generated `.next/standalone/frontend/server.js` server. The nested path reflects `outputFileTracingRoot` at the repository root.
+3. `relayo-frontend`: Node web service rooted at `frontend`; `npm ci`, production Next standalone build (including copied `public` and `.next-prod/static` assets), and `npm start` on the generated `.next-prod/standalone/frontend/server.js` server. Development uses `.next-dev`; production has its own output directory so a running dev server cannot corrupt production manifests. The nested path reflects `outputFileTracingRoot` at the repository root.
 
-All three auto-deploy. The API and frontend are configured as free web services while the worker uses a paid always-on plan. A free API may cold-start or sleep; validate Meta webhook delivery and user experience at the chosen hosting tier. The API performs migrations at startup, so review this behavior and use a tested staging rollout before production.
+All three Render services currently have `autoDeploy: false`, so a GitHub push does not itself deploy them. The API and frontend are configured as free web services while the worker uses a paid always-on plan. A free API may cold-start or sleep; validate Meta webhook delivery and user experience at the chosen hosting tier. The API performs migrations at startup, so review this behavior and use a tested staging rollout before production.
 
 ## Runtime versions and environment
 

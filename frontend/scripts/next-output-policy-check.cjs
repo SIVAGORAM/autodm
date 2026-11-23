@@ -7,7 +7,7 @@ const createNextConfig = require('../next.config.js');
   const production = createNextConfig(PHASE_PRODUCTION_BUILD, {});
 
   assert.equal(development.distDir, '.next-dev', 'Next development needs an isolated output directory.');
-  assert.equal(production.distDir, '.next', 'Production builds must keep the standalone output directory.');
+  assert.equal(production.distDir, '.next-prod', 'Production builds must use an isolated standalone output directory.');
   assert.notEqual(development.distDir, production.distDir, 'Development and production output must never overlap.');
   assert.equal(production.output, 'standalone', 'Production must retain the standalone output directory.');
   assert.equal(production.experimental.cpus, 2, 'Static generation must use a bounded worker count.');

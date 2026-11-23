@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "node scripts/validate-api-url.cjs && eslint . && next build && node scripts/prepare-standalone.cjs",
-    "start": "node .next/standalone/frontend/server.js",
+    "start": "node .next-prod/standalone/frontend/server.js",
     "lint": "eslint .",
     "test:config": "node scripts/api-url-policy-check.cjs && node scripts/next-output-policy-check.cjs && node scripts/auth-refresh-policy-check.cjs && node scripts/instagram-login-config-check.cjs"
   },
