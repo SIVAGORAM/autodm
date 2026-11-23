@@ -163,13 +163,7 @@ export const envSchema = z.object({
   const required: Array<[keyof typeof env, string]> = [
     ['META_APP_ID', 'Meta app ID'],
     ['META_APP_SECRET', 'Meta app secret'],
-    ['INSTAGRAM_APP_ID', 'Instagram product App ID'],
-    ['INSTAGRAM_APP_SECRET', 'Instagram product App Secret'],
-    ['INSTAGRAM_OAUTH_REDIRECT_URI', 'Instagram OAuth callback URL'],
     ['META_WEBHOOK_VERIFY_TOKEN', 'Meta webhook verification token'],
-    ['RAZORPAY_KEY_ID', 'Razorpay key ID'],
-    ['RAZORPAY_KEY_SECRET', 'Razorpay key secret'],
-    ['RAZORPAY_WEBHOOK_SECRET', 'Razorpay webhook secret'],
     ['SMTP_HOST', 'SMTP host'],
     ['SMTP_USER', 'SMTP username'],
     ['SMTP_PASS', 'SMTP password'],
@@ -179,6 +173,29 @@ export const envSchema = z.object({
     if (typeof value !== 'string' || !value.trim() || value === 'change-me') {
       ctx.addIssue({ code: 'custom', path: [key], message: `${label} must be configured in production` });
     }
+  }
+
+  // If separate Instagram product credentials are provided, both ID and Secret must be non-empty.
+  // Otherwise, the runtime falls back automatically to META_APP_ID / META_APP_SECRET.
+  if (Boolean(env.INSTAGRAM_APP_ID.trim()) !== Boolean(env.INSTAGRAM_APP_SECRET.trim())) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['INSTAGRAM_APP_ID'],
+      message: 'Configure both INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET, or leave both blank to use META_APP_ID / META_APP_SECRET.',
+    });
+  }
+
+  // If Razorpay keys are provided, both ID and Secret must be non-empty.
+  if (Boolean(env.RAZORPAY_KEY_ID.trim()) !== Boolean(env.RAZORPAY_KEY_SECRET.trim())) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['RAZORPAY_KEY_ID'],
+      message: 'Configure both RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET, or leave both blank to disable payments.',
+    });
+  }
+
+  if (env.RAZORPAY_WEBHOOK_SECRET.trim() && env.RAZORPAY_WEBHOOK_SECRET.length < 32) {
+    ctx.addIssue({ code: 'custom', path: ['RAZORPAY_WEBHOOK_SECRET'], message: 'Use a Razorpay webhook secret of at least 32 characters' });
   }
   for (const key of ['DATABASE_URL', 'DIRECT_URL'] as const) {
     const connectionString = env[key];
