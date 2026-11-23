@@ -32,8 +32,9 @@ function createdAutomationOrder(left: AutomationOrderFields, right: AutomationOr
   return left.createdAt.getTime() - right.createdAt.getTime() || left.id.localeCompare(right.id);
 }
 
-// Turns a raw Instagram webhook payload into DM jobs. Fast: it only reads
-// and enqueues, never calls Meta, so the webhook can return 200 immediately.
+// Handles durable Instagram webhook events. The HTTP endpoint persists the
+// event before acknowledging Meta; this worker resolves matched comment
+// metadata before it enqueues a private reply.
 @Injectable()
 export class WebhookService {
   private readonly log = new Logger(WebhookService.name);
@@ -369,6 +370,7 @@ export class WebhookService {
     const fromId = normalized.from?.id ? String(normalized.from.id) : '';
     const fromUser = normalized.from?.username as string | undefined;
     let mediaId = String(normalized.media?.id ?? '');
+    let commentCreatedAt: string | undefined;
     if (!fromId || !commentId) return;
 
     const account = await this.prisma.igAccount.findUnique({ where: { igUserId } });
@@ -402,7 +404,9 @@ export class WebhookService {
     // fallback rule to send a potentially incorrect reply.
     if (!mediaId && automations.some((automation) => !!automation.mediaId)) {
       const token = this.encryption.decrypt(account.accessTokenEnc);
-      mediaId = await this.instagram.getCommentMediaId(token, commentId, account.loginMode) ?? '';
+      const metadata = await this.instagram.getCommentMetadata(token, commentId, account.loginMode);
+      commentCreatedAt = metadata.createdAt;
+      mediaId = metadata.mediaId ?? '';
       if (!mediaId) throw new ServiceUnavailableException('Instagram comment media ID is unavailable; webhook processing will retry.');
     }
     // A media-specific rule must win over the global fallback if both match.
@@ -423,6 +427,12 @@ export class WebhookService {
         await this.recordSkipped(a.id, account.id, triggerEventId, null, restriction);
         break;
       }
+      // Meta measures private-reply eligibility from comment creation, not
+      // from entry.time (the webhook notification timestamp).
+      if (!commentCreatedAt) {
+        const token = this.encryption.decrypt(account.accessTokenEnc);
+        commentCreatedAt = (await this.instagram.getCommentMetadata(token, commentId, account.loginMode)).createdAt;
+      }
       if (!(await this.quota.consume(account.userId, a.id, a.dailyLimit, triggerEventId))) {
         await this.recordSkipped(a.id, account.id, triggerEventId, null, 'Your plan DM quota or this automation daily limit has been reached.');
         this.log.warn('DM quota reached; comment skipped');
@@ -431,7 +441,7 @@ export class WebhookService {
       await this.enqueue({
         automationId: a.id, igAccountId: account.id, triggerType: a.triggerType,
         commentId, recipientIgsid: fromId, recipientUsername: fromUser,
-        commentEventAt: this.commentNotificationTime(entry?.time),
+        commentCreatedAt,
         text: this.firstText(a.dmBlocks), matchedKeyword: res.keyword,
         triggerEventId,
       });
@@ -611,14 +621,4 @@ export class WebhookService {
     await this.dmQueue.add('send', job, { jobId: dmQueueJobId(job.triggerEventId) });
   }
 
-  private commentNotificationTime(value: unknown): string {
-    const timestamp = typeof value === 'number' || (typeof value === 'string' && /^\d{1,16}$/.test(value))
-      ? Number(value)
-      : Number.NaN;
-    if (!Number.isFinite(timestamp) || timestamp <= 0) return new Date().toISOString();
-    // Meta's webhook entry.time uses Unix seconds; tolerate millisecond values
-    // in older or normalized payloads without confusing them with seconds.
-    const date = new Date(timestamp < 1e12 ? timestamp * 1000 : timestamp);
-    return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
-  }
 }

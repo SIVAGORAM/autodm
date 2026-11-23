@@ -99,7 +99,7 @@ describe('DmProcessorService delivery recovery', () => {
       igAccountId: 'account-1',
       triggerType: 'POST_COMMENT',
       commentId: 'comment-1',
-      commentEventAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+      commentCreatedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
       recipientIgsid: 'recipient-1',
       text: 'Reply',
       triggerEventId: 'comment:ig-user-1:comment-1',
@@ -108,7 +108,7 @@ describe('DmProcessorService delivery recovery', () => {
     await service.process(job, { timestamp: Date.now() } as any);
 
     expect(runUpsert).toHaveBeenCalledWith(expect.objectContaining({
-      create: expect.objectContaining({ status: 'SKIPPED', error: expect.stringContaining('more than seven days old') }),
+      create: expect.objectContaining({ status: 'SKIPPED', error: expect.stringContaining('created more than seven days ago') }),
     }));
     expect(quota.settle).toHaveBeenCalledWith(job.triggerEventId, false);
     expect(meta.replyToComment).not.toHaveBeenCalled();
@@ -133,7 +133,7 @@ describe('DmProcessorService delivery recovery', () => {
       igAccountId: 'account-1',
       triggerType: 'POST_COMMENT',
       commentId: 'comment-1',
-      commentEventAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+      commentCreatedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
       recipientIgsid: 'recipient-1',
       text: 'Reply',
       triggerEventId: 'comment:ig-user-1:comment-1',
@@ -143,12 +143,57 @@ describe('DmProcessorService delivery recovery', () => {
 
     expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { triggerEventId: job.triggerEventId, status: 'PENDING' },
-      data: expect.objectContaining({ status: 'UNKNOWN', error: expect.stringContaining('more than seven days old') }),
+      data: expect.objectContaining({ status: 'UNKNOWN', error: expect.stringContaining('created more than seven days ago') }),
     }));
     expect(quota.settle).not.toHaveBeenCalled();
     expect(meta.replyToComment).not.toHaveBeenCalled();
     expect(meta.sendCommentDm).not.toHaveBeenCalled();
     expect(dashboardEvents.publish).toHaveBeenCalledWith(expect.any(String), 'delivery');
+  });
+
+  it('fails closed for legacy queued comment jobs without an authoritative creation time', async () => {
+    const runUpsert = jest.fn().mockResolvedValue({ id: 'run-1', status: 'SKIPPED' });
+    const job: any = {
+      automationId: 'automation-1', igAccountId: 'account-1', triggerType: 'POST_COMMENT',
+      commentId: 'comment-1', recipientIgsid: 'recipient-1', text: 'Reply',
+      triggerEventId: 'comment:ig-user-1:comment-legacy',
+    };
+    const prisma: any = {
+      run: { findUnique: jest.fn().mockResolvedValue(null), upsert: runUpsert },
+      automation: { findUnique: jest.fn().mockResolvedValue({ id: job.automationId }) },
+    };
+    const meta: any = { replyToComment: jest.fn(), sendCommentDm: jest.fn(), sendDirectMessage: jest.fn() };
+    const quota: any = { settle: jest.fn().mockResolvedValue(undefined) };
+    const service = new DmProcessorService(prisma, meta, {} as any, {} as any, quota, {} as any, { publish: jest.fn() } as any);
+
+    await service.process(job, { timestamp: Date.now() - 60_000 } as any);
+
+    expect(runUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({ status: 'SKIPPED', error: expect.stringContaining('creation time could not be verified') }),
+    }));
+    expect(meta.replyToComment).not.toHaveBeenCalled();
+    expect(meta.sendCommentDm).not.toHaveBeenCalled();
+  });
+
+  it('uses comment creation time rather than an old queue timestamp', async () => {
+    const runUpsert = jest.fn();
+    const job: any = {
+      automationId: 'automation-1', igAccountId: 'account-1', triggerType: 'POST_COMMENT',
+      commentId: 'comment-1', commentCreatedAt: new Date(Date.now() - 60_000).toISOString(),
+      recipientIgsid: 'recipient-1', text: 'Reply', triggerEventId: 'comment:ig-user-1:comment-fresh',
+    };
+    const prisma: any = {
+      run: { findUnique: jest.fn().mockResolvedValue(null), upsert: runUpsert },
+      automation: { findUnique: jest.fn().mockResolvedValue(null) },
+    };
+    const meta: any = { replyToComment: jest.fn(), sendCommentDm: jest.fn() };
+    const service = new DmProcessorService(prisma, meta, {} as any, {} as any, { settle: jest.fn() } as any, {} as any, { publish: jest.fn() } as any);
+
+    await service.process(job, { timestamp: Date.now() - 8 * 24 * 60 * 60 * 1000 } as any);
+
+    expect(runUpsert).not.toHaveBeenCalled();
+    expect(meta.replyToComment).not.toHaveBeenCalled();
+    expect(meta.sendCommentDm).not.toHaveBeenCalled();
   });
 
   it('does not repeat a successful public comment reply when the DM needs a retry', async () => {
@@ -189,7 +234,7 @@ describe('DmProcessorService delivery recovery', () => {
     const service = new DmProcessorService(prisma, meta, encryption, config, quota, queue, { publish: jest.fn().mockResolvedValue(undefined) } as any);
     const job: any = {
       automationId: 'automation-1', igAccountId: 'account-1', triggerType: 'POST_COMMENT',
-      commentId: 'comment-1', recipientIgsid: 'recipient-1', text: 'Here is the guide.',
+      commentId: 'comment-1', commentCreatedAt: new Date().toISOString(), recipientIgsid: 'recipient-1', text: 'Here is the guide.',
       triggerEventId: 'comment:ig-user-1:comment-1',
     };
     const queueJob: any = { data: job, token: 'lock-token' };

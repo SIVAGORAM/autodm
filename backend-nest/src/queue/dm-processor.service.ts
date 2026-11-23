@@ -5,7 +5,7 @@ import { Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { MetaService, DmButton } from '../meta/meta.service';
 import { EncryptionService } from '../common/encryption.service';
-import { CLICK_TO_DIRECT_AD_MESSAGE_WINDOW_MS, COMMENT_FOLLOWUP_REPLY_REQUIRED, DmJob, dmQueueJobId, isCommentPrivateReplyDefinitelyExpired, messageWindowState, MessageWindowType, runEventId, STANDARD_MESSAGE_WINDOW_MS } from './queue.constants';
+import { CLICK_TO_DIRECT_AD_MESSAGE_WINDOW_MS, COMMENT_FOLLOWUP_REPLY_REQUIRED, commentPrivateReplyWindowState, DmJob, dmQueueJobId, messageWindowState, MessageWindowType, runEventId, STANDARD_MESSAGE_WINDOW_MS } from './queue.constants';
 import { DM_QUEUE_TOKEN } from './queue.constants';
 import { extractButtons, applyTracking } from '../automations/dm-blocks';
 import { personalize } from '../automations/personalize';
@@ -113,13 +113,11 @@ export class DmProcessorService {
       },
     });
     if (!automation) return;
-    // Jobs already in Redis before this guard shipped have no commentEventAt;
-    // BullMQ's immutable enqueue timestamp is a safe fallback for those jobs.
-    const commentEventAt = job.commentEventAt ?? (Number.isFinite(queueJob?.timestamp)
-      ? new Date(queueJob!.timestamp).toISOString()
-      : undefined);
-    if (job.commentId && isCommentPrivateReplyDefinitelyExpired(commentEventAt)) {
-      const reason = 'This comment event is more than seven days old; Instagram private replies are no longer eligible.';
+    const commentWindow = job.commentId && !job.followUpId ? commentPrivateReplyWindowState(job.commentCreatedAt) : 'ELIGIBLE';
+    if (commentWindow !== 'ELIGIBLE') {
+      const reason = commentWindow === 'EXPIRED'
+        ? 'This comment was created more than seven days ago; Instagram private replies are no longer eligible.'
+        : 'The comment creation time could not be verified; no private reply was sent to protect Instagram eligibility.';
       if (existing?.status === 'PENDING') {
         // A previous attempt may have reached Meta before its response was
         // lost. Preserve that uncertainty instead of converting it to a

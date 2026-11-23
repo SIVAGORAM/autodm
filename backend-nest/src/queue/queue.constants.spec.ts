@@ -1,5 +1,5 @@
 import { Job } from 'bullmq';
-import { CLICK_TO_DIRECT_AD_MESSAGE_WINDOW_MS, dmQueueJobId, messageWindowState, STANDARD_MESSAGE_WINDOW_MS, standardMessageWindowState } from './queue.constants';
+import { CLICK_TO_DIRECT_AD_MESSAGE_WINDOW_MS, commentPrivateReplyWindowState, dmQueueJobId, messageWindowState, STANDARD_MESSAGE_WINDOW_MS, standardMessageWindowState, COMMENT_PRIVATE_REPLY_WINDOW_MS } from './queue.constants';
 
 describe('BullMQ send job identifiers', () => {
   it('generates deterministic, queue-safe IDs for colon-delimited event keys', () => {
@@ -54,5 +54,21 @@ describe('Click-to-Direct ad message window', () => {
 
   it.each([undefined, '', 'not-a-date', now + 6 * 60_000])('fails closed for missing or unverifiable ad message times (%s)', (messageAt) => {
     expect(messageWindowState(messageAt as any, 'CLICK_TO_DIRECT_AD', now)).toBe('UNKNOWN');
+  });
+});
+
+describe('comment private-reply window', () => {
+  const now = Date.parse('2026-11-23T12:00:00.000Z');
+
+  it('uses the comment creation timestamp and permits a fresh comment', () => {
+    expect(commentPrivateReplyWindowState(new Date(now - 6 * 24 * 60 * 60 * 1000), now)).toBe('ELIGIBLE');
+  });
+
+  it('expires at seven days from comment creation', () => {
+    expect(commentPrivateReplyWindowState(new Date(now - COMMENT_PRIVATE_REPLY_WINDOW_MS), now)).toBe('EXPIRED');
+  });
+
+  it.each([undefined, '', 'not-a-date', now + 6 * 60_000])('fails closed when comment creation time is missing or invalid (%s)', (createdAt) => {
+    expect(commentPrivateReplyWindowState(createdAt as any, now)).toBe('UNKNOWN');
   });
 });

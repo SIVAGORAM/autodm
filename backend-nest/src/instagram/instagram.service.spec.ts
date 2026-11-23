@@ -340,14 +340,23 @@ describe('InstagramService Unified Login', () => {
   it.each([
     ['INSTAGRAM_LOGIN', 'https://graph.instagram.com/v26.0/comment-id'],
     ['UNIFIED_LOGIN', 'https://graph.facebook.com/v26.0/comment-id'],
-  ] as const)('resolves an omitted carousel media ID using the %s comment endpoint', async (loginMode, endpoint) => {
-    const get = jest.spyOn(axios, 'get').mockResolvedValue({ data: { media: { id: 'album-id' } } } as any);
+  ] as const)('resolves authoritative metadata using the %s comment endpoint', async (loginMode, endpoint) => {
+    const get = jest.spyOn(axios, 'get').mockResolvedValue({ data: { media: { id: 'album-id' }, timestamp: '2026-11-20T10:00:00+0000' } } as any);
     const service = new InstagramService(config as any);
 
-    await expect(service.getCommentMediaId('provider-token', 'comment-id', loginMode)).resolves.toBe('album-id');
+    await expect(service.getCommentMetadata('provider-token', 'comment-id', loginMode)).resolves.toEqual({
+      mediaId: 'album-id', createdAt: '2026-11-20T10:00:00.000Z',
+    });
     expect(get).toHaveBeenCalledWith(endpoint, expect.objectContaining({
-      params: { fields: 'media', access_token: 'provider-token' }, timeout: 10_000,
+      params: { fields: 'media,timestamp', access_token: 'provider-token' }, timeout: 10_000,
     }));
+  });
+
+  it('fails closed when Meta omits the comment creation timestamp', async () => {
+    const service = new InstagramService(config as any);
+    jest.spyOn(axios, 'get').mockResolvedValue({ data: { media: { id: 'album-id' } } } as any);
+
+    await expect(service.getCommentMetadata('provider-token', 'comment-id')).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 
   it('fails comment processing with a retryable error when the media lookup is unavailable', async () => {
@@ -357,7 +366,7 @@ describe('InstagramService Unified Login', () => {
       code: 'ECONNRESET', config: { params: { access_token: 'must-not-be-logged' } },
     }));
 
-    await expect(service.getCommentMediaId('provider-token', 'comment-id'))
+    await expect(service.getCommentMetadata('provider-token', 'comment-id'))
       .rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(warn.mock.calls.flat().join(' ')).not.toContain('must-not-be-logged');
     expect(warn.mock.calls.flat().join(' ')).not.toContain('provider-token');

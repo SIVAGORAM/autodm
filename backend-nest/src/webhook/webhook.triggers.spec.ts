@@ -36,7 +36,7 @@ function setup(candidates: any[]) {
   };
   const queue: any = { getJob: jest.fn().mockResolvedValue(null), add: jest.fn().mockResolvedValue({ id: 'job-1' }) };
   const quota: any = { consume: jest.fn().mockResolvedValue(true) };
-  const instagram: any = { getCommentMediaId: jest.fn().mockResolvedValue(null) };
+  const instagram: any = { getCommentMetadata: jest.fn().mockResolvedValue({ mediaId: null, createdAt: '2026-11-20T10:00:00.000Z' }) };
   const encryption: any = { decrypt: jest.fn().mockReturnValue('provider-token') };
   return { service: new WebhookService(
     prisma, queue, quota, { publish: jest.fn().mockResolvedValue(undefined) } as any,
@@ -60,7 +60,7 @@ describe('WebhookService automation selection', () => {
     expect(queue.add).toHaveBeenCalledWith('send', expect.objectContaining({
       automationId: specific.id,
       triggerEventId: `comment:${account.igUserId}:comment-1`,
-      commentEventAt: new Date(1790000000 * 1000).toISOString(),
+      commentCreatedAt: '2026-11-20T10:00:00.000Z',
       text: 'Reply from specific-post',
     }), expect.objectContaining({ jobId: expect.stringMatching(/^dm-[a-f0-9]{64}$/) }));
   });
@@ -89,7 +89,7 @@ describe('WebhookService automation selection', () => {
   it('resolves an omitted carousel album ID before selecting a media-specific rule', async () => {
     const specific = automation('carousel-rule', 'POST_COMMENT', new Date('2026-01-02T00:00:00Z'), 'album-1');
     const { service, queue, instagram, encryption } = setup([specific]);
-    instagram.getCommentMediaId.mockResolvedValue('album-1');
+    instagram.getCommentMetadata.mockResolvedValue({ mediaId: 'album-1', createdAt: '2026-11-20T10:00:00.000Z' });
 
     await (service as any).onComment(
       { id: account.igUserId },
@@ -97,7 +97,7 @@ describe('WebhookService automation selection', () => {
     );
 
     expect(encryption.decrypt).toHaveBeenCalledWith(account.accessTokenEnc);
-    expect(instagram.getCommentMediaId).toHaveBeenCalledWith('provider-token', 'carousel-comment-1', 'INSTAGRAM_LOGIN');
+    expect(instagram.getCommentMetadata).toHaveBeenCalledWith('provider-token', 'carousel-comment-1', 'INSTAGRAM_LOGIN');
     expect(queue.add).toHaveBeenCalledWith('send', expect.objectContaining({
       automationId: specific.id,
       triggerEventId: `comment:${account.igUserId}:carousel-comment-1`,
@@ -108,7 +108,7 @@ describe('WebhookService automation selection', () => {
     const specific = automation('carousel-rule', 'POST_COMMENT', new Date('2026-01-01T00:00:00Z'), 'album-1');
     const fallback = automation('any-post', 'ANY_POST', new Date('2026-01-02T00:00:00Z'));
     const { service, queue, instagram } = setup([specific, fallback]);
-    instagram.getCommentMediaId.mockRejectedValue(new Error('provider request failed'));
+    instagram.getCommentMetadata.mockRejectedValue(new Error('provider request failed'));
 
     await expect((service as any).onComment(
       { id: account.igUserId },
@@ -116,14 +116,14 @@ describe('WebhookService automation selection', () => {
     )).rejects.toThrow('provider request failed');
 
     expect(queue.add).not.toHaveBeenCalled();
-    expect(instagram.getCommentMediaId).toHaveBeenCalled();
+    expect(instagram.getCommentMetadata).toHaveBeenCalled();
   });
 
   it('retries instead of using an any-post fallback when Meta returns no media ID', async () => {
     const specific = automation('carousel-rule', 'POST_COMMENT', new Date('2026-01-01T00:00:00Z'), 'album-1');
     const fallback = automation('any-post', 'ANY_POST', new Date('2026-01-02T00:00:00Z'));
     const { service, queue, instagram } = setup([specific, fallback]);
-    instagram.getCommentMediaId.mockResolvedValue(null);
+    instagram.getCommentMetadata.mockResolvedValue({ mediaId: null, createdAt: '2026-11-20T10:00:00.000Z' });
 
     await expect((service as any).onComment(
       { id: account.igUserId },

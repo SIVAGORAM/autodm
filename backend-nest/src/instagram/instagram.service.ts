@@ -390,32 +390,40 @@ export class InstagramService {
   }
 
   /**
-   * Instagram may omit the parent album ID from a carousel comment webhook.
-   * Meta documents querying the comment node's `media` field to resolve it.
-   * This is only called when the webhook did not include a media ID.
+   * Fetch authoritative comment creation time for the private-reply window.
+   * The `media` edge also resolves a parent ID omitted from some carousel events.
    */
-  async getCommentMediaId(token: string, commentId: string, loginMode: InstagramLoginMode = 'INSTAGRAM_LOGIN'): Promise<string | null> {
+  async getCommentMetadata(
+    token: string,
+    commentId: string,
+    loginMode: InstagramLoginMode = 'INSTAGRAM_LOGIN',
+  ): Promise<{ mediaId: string | null; createdAt: string }> {
     const host = loginMode === 'UNIFIED_LOGIN' ? 'graph.facebook.com' : 'graph.instagram.com';
     const version = this.config.get<string>('META_GRAPH_VERSION') ?? 'v26.0';
     try {
       const res = await axios.get(`https://${host}/${version}/${encodeURIComponent(commentId)}`, {
-        params: { fields: 'media', access_token: token },
+        params: { fields: 'media,timestamp', access_token: token },
         timeout: 10_000,
         ...this.httpOptions,
       });
-      const mediaId = res.data?.media?.id;
-      return typeof mediaId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(mediaId) ? mediaId : null;
+      const rawTimestamp = res.data?.timestamp;
+      const timestamp = typeof rawTimestamp === 'string' ? Date.parse(rawTimestamp) : Number.NaN;
+      if (!Number.isFinite(timestamp) || timestamp <= 0 || timestamp > Date.now() + 5 * 60_000) {
+        throw new Error('Meta returned no valid comment creation timestamp');
+      }
+      const rawMediaId = res.data?.media?.id;
+      const mediaId = typeof rawMediaId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(rawMediaId) ? rawMediaId : null;
+      return { mediaId, createdAt: new Date(timestamp).toISOString() };
     } catch (err: any) {
       const status = Number.isInteger(err?.response?.status) ? err.response.status : 'network';
       const rawCode = err?.response?.data?.error?.code ?? err?.response?.data?.code;
       const code = Number.isInteger(rawCode) || (typeof rawCode === 'string' && /^\d{1,6}$/.test(rawCode))
         ? String(rawCode)
         : 'unknown';
-      this.log.warn(`getCommentMediaId failed status=${status} providerCode=${code}`);
-      // A missing media ID prevents safe selection between a selected-post
-      // automation and an account-wide fallback. Let durable webhook retry and
-      // eventually dead-letter this event instead of acknowledging it as done.
-      throw new ServiceUnavailableException('Instagram comment media lookup failed; webhook processing will retry.');
+      this.log.warn(`getCommentMetadata failed status=${status} providerCode=${code}`);
+      // Do not acknowledge an event when its send eligibility cannot be
+      // verified. Durable webhook processing will retry this lookup.
+      throw new ServiceUnavailableException('Instagram comment metadata lookup failed; webhook processing will retry.');
     }
   }
 }

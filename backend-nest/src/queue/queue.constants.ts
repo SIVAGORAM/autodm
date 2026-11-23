@@ -29,6 +29,22 @@ export function messageWindowState(
   return now - timestamp >= windowMs ? 'EXPIRED' : 'ELIGIBLE';
 }
 
+/** Meta measures comment private-reply eligibility from comment creation, not webhook delivery. */
+export function commentPrivateReplyWindowState(
+  commentCreatedAt: string | number | Date | undefined,
+  now = Date.now(),
+): MessageWindowState {
+  const timestamp = commentCreatedAt instanceof Date
+    ? commentCreatedAt.getTime()
+    : typeof commentCreatedAt === 'number'
+      ? commentCreatedAt
+      : typeof commentCreatedAt === 'string'
+        ? Date.parse(commentCreatedAt)
+        : Number.NaN;
+  if (!Number.isFinite(timestamp) || timestamp <= 0 || timestamp > now + 5 * 60_000) return 'UNKNOWN';
+  return now - timestamp >= COMMENT_PRIVATE_REPLY_WINDOW_MS ? 'EXPIRED' : 'ELIGIBLE';
+}
+
 /** Compatibility helper for callers that intentionally use the 24-hour window. */
 export function standardMessageWindowState(messageAt: string | number | Date | undefined, now = Date.now()): MessageWindowState {
   return messageWindowState(messageAt, 'STANDARD', now);
@@ -39,7 +55,7 @@ export interface DmJob {
   igAccountId: string;
   triggerType: string;
   commentId?: string;        // for public reply + comment-DM
-  commentEventAt?: string;   // Meta notification time; this is not the comment creation time
+  commentCreatedAt?: string; // Authoritative timestamp fetched from the Meta comment node
   recipientIgsid: string;    // who receives the DM
   recipientUsername?: string;
   text: string;              // resolved DM text
@@ -53,26 +69,6 @@ export interface DmJob {
 }
 
 export const COMMENT_FOLLOWUP_REPLY_REQUIRED = 'Instagram allows a follow-up to a comment private reply only after the commenter responds.';
-
-/**
- * A webhook notification cannot predate the comment that caused it. If the
- * notification itself is already outside Meta's private-reply window, the
- * comment is definitely too old. Newer notifications still rely on Meta's
- * authoritative eligibility check because the standard comment webhook does
- * not include the comment creation timestamp.
- */
-export function isCommentPrivateReplyDefinitelyExpired(
-  notificationAt: string | number | Date | undefined,
-  now = Date.now(),
-): boolean {
-  if (notificationAt === undefined) return false;
-  const timestamp = notificationAt instanceof Date
-    ? notificationAt.getTime()
-    : typeof notificationAt === 'number'
-      ? notificationAt
-      : Date.parse(notificationAt);
-  return Number.isFinite(timestamp) && now - timestamp > COMMENT_PRIVATE_REPLY_WINDOW_MS;
-}
 
 export function runEventId(job: Pick<DmJob, 'triggerEventId' | 'followUpId'>): string {
   return job.followUpId ? `${job.triggerEventId}:fu:${job.followUpId}` : job.triggerEventId;

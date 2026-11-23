@@ -31,7 +31,7 @@ function setup() {
   const dashboardEvents = { publish: jest.fn().mockResolvedValue(undefined) };
   return { prisma, queue, dashboardEvents, service: new WebhookService(
     prisma, queue, { consume: jest.fn() } as any, dashboardEvents as any,
-    { getCommentMediaId: jest.fn().mockResolvedValue(null) } as any,
+    { getCommentMetadata: jest.fn().mockResolvedValue({ mediaId: null, createdAt: '2026-11-20T10:00:00.000Z' }) } as any,
     { decrypt: jest.fn().mockReturnValue('provider-token') } as any,
   ) };
 }
