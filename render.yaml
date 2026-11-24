@@ -35,7 +35,7 @@ services:
       - key: UNVERIFIED_ACCOUNT_RETENTION_DAYS
         value: "30"
       - key: LEGAL_POLICY_STATUS
-        value: DRAFT
+        value: APPROVED
       # ── secrets: set these in the Render dashboard (sync:false = not in repo) ──
       - key: DATABASE_URL
         sync: false
@@ -299,4 +299,4 @@ services:
       - key: NEXT_PUBLIC_SITE_URL # = the canonical public site origin, including your custom domain
         sync: false
       - key: NEXT_PUBLIC_LEGAL_POLICY_STATUS
-        value: DRAFT
+        value: APPROVED

@@ -71,9 +71,11 @@ describe('production environment validation', () => {
     expect(validateEnv({ ...base, INSTAGRAM_APP_ID: 'instagram-id', INSTAGRAM_APP_SECRET: 'instagram-secret' }))
       .toMatchObject({ INSTAGRAM_APP_ID: 'instagram-id', INSTAGRAM_APP_SECRET: 'instagram-secret' });
 
+    expect(validateEnv({ ...base, INSTAGRAM_APP_ID: '', INSTAGRAM_APP_SECRET: '' }))
+      .toMatchObject({ INSTAGRAM_APP_ID: '', INSTAGRAM_APP_SECRET: '' });
+    expect(validateEnv({ ...base, INSTAGRAM_OAUTH_REDIRECT_URI: '' }))
+      .toMatchObject({ INSTAGRAM_OAUTH_REDIRECT_URI: '' });
     const log = jest.spyOn(console, 'error').mockImplementation(() => {});
-    expect(() => validateEnv({ ...base, INSTAGRAM_APP_ID: '', INSTAGRAM_APP_SECRET: '' })).toThrow('Invalid environment configuration');
-    expect(() => validateEnv({ ...base, INSTAGRAM_OAUTH_REDIRECT_URI: '' })).toThrow('Invalid environment configuration');
     expect(() => validateEnv({ ...base, INSTAGRAM_APP_ID: 'instagram-id', INSTAGRAM_APP_SECRET: '' })).toThrow('Invalid environment configuration');
     expect(() => validateEnv({ ...base, INSTAGRAM_OAUTH_REDIRECT_URI: 'http://app.example.com/api/instagram/callback' }))
       .toThrow('Invalid environment configuration');

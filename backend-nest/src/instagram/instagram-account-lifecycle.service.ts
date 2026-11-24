@@ -167,7 +167,7 @@ export class InstagramAccountLifecycleService {
       while (true) {
         const pending = await this.jobsForAccount(DISCONNECT_JOB_STATES, accountId);
         if (pending.length) {
-          await Promise.all(pending.map((job) => job.remove()));
+          await Promise.all(pending.map((job) => job.remove().catch(() => undefined)));
           continue;
         }
 

@@ -180,9 +180,11 @@ export class InstagramController {
             let newActiveAccounts = 0;
             existingAccounts.forEach((existing) => {
               if (existing && existing.userId !== userId) {
-                throw new BadRequestException('An Instagram account in this Meta grant is already linked to another user.');
+                if (existing.isActive) {
+                  throw new BadRequestException('An Instagram account in this Meta grant is already linked to another user.');
+                }
               }
-              if (existing && existing.loginMode !== loginMode) {
+              if (existing && existing.isActive && existing.loginMode !== loginMode) {
                 throw new BadRequestException('An Instagram account in this Meta grant is connected through a different Meta login. Disconnect it before reconnecting with the new login method.');
               }
               if (!existing || !existing.isActive) newActiveAccounts++;
@@ -194,7 +196,7 @@ export class InstagramController {
             for (const account of accounts) {
               await tx.igAccount.upsert({
                 where: { igUserId: account.igUserId },
-                update: { username: account.username, accessTokenEnc: this.enc.encrypt(accessToken), tokenExpiresAt, loginMode, clientBusinessId, unifiedConfigId, isActive: true },
+                update: { userId, username: account.username, accessTokenEnc: this.enc.encrypt(accessToken), tokenExpiresAt, loginMode, clientBusinessId, unifiedConfigId, isActive: true },
                 create: { userId, igUserId: account.igUserId, username: account.username, accessTokenEnc: this.enc.encrypt(accessToken), tokenExpiresAt, loginMode, clientBusinessId, unifiedConfigId },
               });
             }

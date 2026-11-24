@@ -68,6 +68,8 @@ export default function InstagramPage() {
   const params = useSearchParams();
   const router = useRouter();
   const [banner, setBanner] = useState<{ tone: 'success' | 'error'; msg: string } | null>(null);
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+  const [subscribingId, setSubscribingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (params.get('connected')) {
@@ -127,11 +129,15 @@ export default function InstagramPage() {
   });
   const disconnect = useMutation({
     mutationFn: (id: string) => instagramApi.disconnect(id),
+    onMutate: (id) => setDisconnectingId(id),
+    onSettled: () => setDisconnectingId(null),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['ig-accounts'] }); setBanner({ tone: 'success', msg: 'Instagram account disconnected.' }); },
     onError: () => setBanner({ tone: 'error', msg: 'Could not disconnect. Please try again.' }),
   });
   const subscribeWebhooks = useMutation({
     mutationFn: (id: string) => instagramApi.subscribeWebhooks(id),
+    onMutate: (id) => setSubscribingId(id),
+    onSettled: () => setSubscribingId(null),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['ig-accounts'] });
       setBanner({ tone: 'success', msg: loginOptions?.liveCommentsEnabled ? 'Instagram comment, message, and live-comment webhooks are set up.' : 'Instagram comment and message webhooks are set up.' });
@@ -212,7 +218,17 @@ export default function InstagramPage() {
                     <div style={{ marginTop: 4 }}><Pill tone="green" dot>connected</Pill></div>
                   </div>
                 </div>
-                <Btn variant="ghost" disabled={disconnect.isPending} onClick={() => disconnect.mutate(a.id)}><Unlink style={{ width: 15, height: 15 }} /> Disconnect</Btn>
+                <Btn
+                  variant="ghost"
+                  disabled={disconnect.isPending}
+                  onClick={() => {
+                    if (window.confirm(`Disconnect @${a.username}? Active automations for this account will be paused.`)) {
+                      disconnect.mutate(a.id);
+                    }
+                  }}
+                >
+                  <Unlink style={{ width: 15, height: 15 }} /> {disconnectingId === a.id ? 'Disconnecting…' : 'Disconnect'}
+                </Btn>
               </div>
               <TokenExpiryNotice
                 account={a}
@@ -228,7 +244,15 @@ export default function InstagramPage() {
                       ? 'Account subscription succeeded, but HeyLaunch has not received a webhook event yet. Confirm Meta App Dashboard fields and permissions, then run a controlled comment or message test.'
                       : `Last webhook event received ${new Date(a.lastWebhookAt).toLocaleString()}. Live delivery still depends on Meta permissions and account eligibility.`}
                 </span>
-                {!a.webhookSubscribedAt && <Btn variant="ghost" disabled={subscribeWebhooks.isPending} onClick={() => subscribeWebhooks.mutate(a.id)}>{subscribeWebhooks.isPending ? 'Setting up…' : 'Set up webhooks'}</Btn>}
+                {!a.webhookSubscribedAt && (
+                  <Btn
+                    variant="ghost"
+                    disabled={subscribeWebhooks.isPending}
+                    onClick={() => subscribeWebhooks.mutate(a.id)}
+                  >
+                    {subscribingId === a.id ? 'Setting up…' : 'Set up webhooks'}
+                  </Btn>
+                )}
               </div>
             </Card>
           ))}
