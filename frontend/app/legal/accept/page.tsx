@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { authApi } from '../../../services/api';
 import { useAuthStore } from '../../../store/authStore';
 import { LegalPolicyPage } from '../../../components/legal-policy-page';
-import { LEGAL_POLICIES_APPROVED, PRIVACY_VERSION, TERMS_VERSION } from '../../../lib/legal-policy';
+import { PRIVACY_VERSION, TERMS_VERSION } from '../../../lib/legal-policy';
 
 export default function AcceptPoliciesPage() {
   const router = useRouter();
@@ -23,8 +23,8 @@ export default function AcceptPoliciesPage() {
 
   useEffect(() => {
     if (isFetched && !isAuthenticated) router.replace('/login');
-    if (isFetched && isAuthenticated && (!LEGAL_POLICIES_APPROVED ||
-      (user?.termsVersion === TERMS_VERSION && user?.privacyVersion === PRIVACY_VERSION))) {
+    if (isFetched && isAuthenticated &&
+      user?.termsVersion === TERMS_VERSION && user?.privacyVersion === PRIVACY_VERSION) {
       router.replace('/dashboard');
     }
   }, [isFetched, isAuthenticated, user, router]);
