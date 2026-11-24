@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import * as http from 'http';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -188,6 +189,26 @@ async function bootstrap() {
     log.log('Development maintenance jobs are disabled; set RUN_SCHEDULED_JOBS_IN_DEVELOPMENT=true only with safe development services.');
   }
 
+  // If deployed as a Render Web Service or PORT is specified, bind a health check HTTP server
+  // so Render's port scanner detects the open port and keeps the service healthy.
+  const rawPort = config.get<string | number>('PORT') || process.env.PORT;
+  const port = rawPort ? parseInt(String(rawPort), 10) : null;
+  let healthServer: http.Server | null = null;
+  if (port && !isNaN(port)) {
+    healthServer = http.createServer((req, res) => {
+      if (req.url === '/ready' || req.url === '/health' || req.url === '/') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', worker: 'running', timestamp: new Date().toISOString() }));
+      } else {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'not_found' }));
+      }
+    });
+    healthServer.listen(port, '0.0.0.0', () => {
+      log.log(`Worker health server listening on port ${port} (0.0.0.0)`);
+    });
+  }
+
   let shuttingDown = false;
   const shutdown = async (signal: NodeJS.Signals) => {
     if (shuttingDown) return;
@@ -198,6 +219,9 @@ async function bootstrap() {
     process.off('SIGTERM', onSigterm);
     process.off('SIGINT', onSigint);
     try {
+      if (healthServer) {
+        await new Promise<void>((resolve) => healthServer!.close(() => resolve()));
+      }
       // Stop fetching jobs and wait for active handlers before closing their
       // queues and shared Redis connections. This reduces forced retries in
       // the middle of an Instagram send, where delivery can be ambiguous.
