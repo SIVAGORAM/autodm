@@ -120,10 +120,6 @@ export class InstagramService {
       response_type: 'code',
       scope: scopes,
       state,
-      // Keep legacy Instagram Login on Instagram credentials. Facebook's
-      // optional OIDC branch uses a different app configuration and can fail
-      // with a generic Meta error for this Instagram-product app ID.
-      enable_fb_login: 'false',
     });
     // When adding a DIFFERENT account, force Instagram to show the login/account
     // chooser instead of silently reusing the browser's current IG session.

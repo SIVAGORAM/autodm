@@ -30,7 +30,6 @@ describe('InstagramService Unified Login', () => {
     expect(url.searchParams.get('response_type')).toBe('code');
     expect(url.searchParams.get('scope')).toBe('instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments');
     expect(url.searchParams.get('force_reauth')).toBe('true');
-    expect(url.searchParams.get('enable_fb_login')).toBe('false');
   });
 
   it('exposes only public OAuth identifiers for deployment diagnostics', () => {
