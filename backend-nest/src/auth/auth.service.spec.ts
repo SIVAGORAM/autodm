@@ -216,4 +216,32 @@ describe('AuthService refresh rotation', () => {
     expect(tx.user.updateMany).toHaveBeenCalledTimes(1);
     expect(tx.refreshToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
   });
+
+  it('only queues a password reset email if the user account exists (OWASP enumeration defense)', async () => {
+    const tx: any = { user: { update: jest.fn().mockResolvedValue({}) } };
+    const prisma: any = {
+      user: { findUnique: jest.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'user-1', email: 'valid@example.test' }) },
+      $transaction: jest.fn((work: any) => work(tx)),
+    };
+    const mailOutbox: any = { queuePasswordReset: jest.fn().mockResolvedValue(undefined) };
+    const service = new AuthService(prisma, {} as any, {} as any, mailOutbox, {} as any);
+
+    // 1. Unknown email: Returns generic success, but queues NO email
+    const unknownRes = await service.requestPasswordReset('nonexistent@example.test');
+    expect(unknownRes).toEqual({ success: true });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(mailOutbox.queuePasswordReset).not.toHaveBeenCalled();
+
+    // 2. Known email: Generates token and queues email
+    const knownRes = await service.requestPasswordReset('valid@example.test');
+    expect(knownRes).toEqual({ success: true });
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(tx.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'user-1' },
+      data: expect.objectContaining({ passwordResetTokenHash: expect.any(String), passwordResetExpiresAt: expect.any(Date) }),
+    }));
+    expect(mailOutbox.queuePasswordReset).toHaveBeenCalledWith(
+      tx, 'user-1', 'valid@example.test', expect.stringMatching(/^[a-f0-9]{64}$/), expect.any(Date),
+    );
+  });
 });
