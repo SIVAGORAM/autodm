@@ -55,15 +55,15 @@ export default function AcceptPoliciesPage() {
   }
 
   return <LegalPolicyPage title="Review updated policies">
-    <p>Your continued use of HeyLaunch requires acknowledgment of the current Terms and Privacy Notice. Please review both documents before continuing.</p>
+    <p>Your continued use of HeyLaunch requires acknowledgment of the current Terms of Service and Privacy Policy. Please review both documents before continuing.</p>
     <form onSubmit={submit} style={{ display: 'grid', gap: 14, marginTop: 24 }}>
       <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         <input type="checkbox" required checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} />
-        <span>I agree to the <Link href="/terms">Terms of Service</Link>.</span>
+        <span>I agree to the <Link href="/terms" style={{ color: 'var(--text)', textDecoration: 'underline' }}>Terms of Service</Link>.</span>
       </label>
       <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         <input type="checkbox" required checked={privacyAcknowledged} onChange={(event) => setPrivacyAcknowledged(event.target.checked)} />
-        <span>I have read the <Link href="/privacy">Privacy Notice</Link>.</span>
+        <span>I have read and agree to the <Link href="/privacy" style={{ color: 'var(--text)', textDecoration: 'underline' }}>Privacy Policy</Link>.</span>
       </label>
       <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         <input type="checkbox" required checked={ageConfirmed} onChange={(event) => setAgeConfirmed(event.target.checked)} />

@@ -80,10 +80,21 @@ export default function ContactPage() {
             Leave this field empty
             <input name="website" tabIndex={-1} autoComplete="off" />
           </label>
-          <p style={{ margin: 0, color: 'var(--text-faint)', fontSize: 12, lineHeight: 1.5 }}>Please don’t include passwords, access tokens, or sensitive account data. By sending this form, you agree that we may use these details to respond as described in our <Link href="/privacy" style={{ color: 'var(--text)' }}>Privacy Notice</Link>.</p>
+          <p style={{ margin: 0, color: 'var(--text-faint)', fontSize: 12, lineHeight: 1.5 }}>Please don’t include passwords, access tokens, or sensitive account data. By sending this form, you agree that we may use these details to respond as described in our <Link href="/privacy" style={{ color: 'var(--text)' }}>Privacy Policy</Link>.</p>
           <Btn type="submit" variant="accent" loading={submitting} disabled={submitting}>Send message</Btn>
         </form>}
       </Card>
+
+      <section style={{ marginTop: 28, padding: 22, borderRadius: 16, border: '1px solid var(--border)', background: 'var(--surface)', fontSize: 14, color: 'var(--text-muted)' }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 12px', color: 'var(--text)' }}>Merchant &amp; Office Information</h2>
+        <div style={{ display: 'grid', gap: 8, lineHeight: 1.6 }}>
+          <p style={{ margin: 0 }}><strong>Legal Entity:</strong> HeyLaunch (Operated by Siva Goram)</p>
+          <p style={{ margin: 0 }}><strong>Operating Address:</strong> Madhapur, Hyderabad, Telangana, India - 500081</p>
+          <p style={{ margin: 0 }}><strong>Customer Support Email:</strong> <a href="mailto:mrsivagoram@gmail.com" style={{ color: 'var(--text)' }}>mrsivagoram@gmail.com</a></p>
+          <p style={{ margin: 0 }}><strong>Business Hours:</strong> Monday &ndash; Saturday, 9:00 AM &ndash; 6:00 PM IST</p>
+          <p style={{ margin: 0 }}><strong>Support SLA:</strong> Inquiries acknowledged within 24 hours; technical and billing issues resolved within 48 hours.</p>
+        </div>
+      </section>
     </div>
   </main>;
 }
