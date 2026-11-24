@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getApiErrorMessage, instagramApi, paymentApi } from '../../../../services/api';
 import { AUTH_URL_MISMATCH, LOGIN_OPTIONS_INCOMPLETE, parseInstagramLoginOptions, validateMetaAuthorizationUrl } from '../../../../lib/instagram-login-config.cjs';
 import { RL, Card, Pill, Btn, Empty, Skel, PageHead } from '../../../../components/rl-kit';
-import { Instagram, Plus, AlertCircle, Unlink, CheckCircle2, X, Sparkles, Lock } from 'lucide-react';
+import { Instagram, Plus, AlertCircle, AlertTriangle, Unlink, CheckCircle2, X, Sparkles, Lock } from 'lucide-react';
 
 type LoginMode = 'INSTAGRAM_LOGIN' | 'UNIFIED_LOGIN';
 type IgAccount = { id: string; username: string; igUserId: string; isActive: boolean; loginMode: LoginMode; tokenExpiresAt?: string; webhookSubscribedAt?: string | null; webhookFields?: string[]; lastWebhookAt?: string | null };
@@ -69,6 +69,7 @@ export default function InstagramPage() {
   const router = useRouter();
   const [banner, setBanner] = useState<{ tone: 'success' | 'error'; msg: string } | null>(null);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+  const [accountToDisconnect, setAccountToDisconnect] = useState<IgAccount | null>(null);
   const [subscribingId, setSubscribingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -130,10 +131,24 @@ export default function InstagramPage() {
   const disconnect = useMutation({
     mutationFn: (id: string) => instagramApi.disconnect(id),
     onMutate: (id) => setDisconnectingId(id),
-    onSettled: () => setDisconnectingId(null),
+    onSettled: () => {
+      setDisconnectingId(null);
+      setAccountToDisconnect(null);
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['ig-accounts'] }); setBanner({ tone: 'success', msg: 'Instagram account disconnected.' }); },
     onError: () => setBanner({ tone: 'error', msg: 'Could not disconnect. Please try again.' }),
   });
+
+  useEffect(() => {
+    if (!accountToDisconnect) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !disconnect.isPending) {
+        setAccountToDisconnect(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [accountToDisconnect, disconnect.isPending]);
   const subscribeWebhooks = useMutation({
     mutationFn: (id: string) => instagramApi.subscribeWebhooks(id),
     onMutate: (id) => setSubscribingId(id),
@@ -221,11 +236,7 @@ export default function InstagramPage() {
                 <Btn
                   variant="ghost"
                   disabled={disconnect.isPending}
-                  onClick={() => {
-                    if (window.confirm(`Disconnect @${a.username}? Active automations for this account will be paused.`)) {
-                      disconnect.mutate(a.id);
-                    }
-                  }}
+                  onClick={() => setAccountToDisconnect(a)}
                 >
                   <Unlink style={{ width: 15, height: 15 }} /> {disconnectingId === a.id ? 'Disconnecting…' : 'Disconnect'}
                 </Btn>
@@ -279,6 +290,118 @@ export default function InstagramPage() {
           ) : (
             <div style={{ fontSize: 13, color: RL.muted }}>You’ve reached your {planName} limit of {cap} connected accounts.</div>
           )}
+        </div>
+      )}
+
+      {/* Premium Disconnect Confirmation Modal */}
+      {accountToDisconnect && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="disconnect-dialog-title"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+            background: 'var(--overlay)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !disconnect.isPending) {
+              setAccountToDisconnect(null);
+            }
+          }}
+        >
+          <div
+            style={{
+              position: 'relative',
+              width: '100%',
+              maxWidth: 440,
+              background: 'var(--card)',
+              borderRadius: 16,
+              border: '1px solid var(--border)',
+              boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.35)',
+              padding: 24,
+            }}
+          >
+            <button
+              type="button"
+              disabled={disconnect.isPending}
+              onClick={() => setAccountToDisconnect(null)}
+              style={{
+                position: 'absolute',
+                top: 18,
+                right: 18,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--text-muted)',
+                display: 'grid',
+                placeItems: 'center',
+                padding: 4,
+                borderRadius: 8,
+              }}
+              aria-label="Close dialog"
+            >
+              <X style={{ width: 18, height: 18 }} />
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 16 }}>
+              <div
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 12,
+                  background: 'var(--error-soft)',
+                  color: 'var(--error)',
+                  display: 'grid',
+                  placeItems: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <AlertTriangle style={{ width: 22, height: 22 }} />
+              </div>
+              <div style={{ paddingRight: 24 }}>
+                <h3 id="disconnect-dialog-title" style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.3px' }}>
+                  Disconnect @{accountToDisconnect.username}?
+                </h3>
+                <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
+                  This action will pause all active automations for this Instagram account.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ background: 'var(--nav-selected)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', marginBottom: 20 }}>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.6, color: 'var(--text)' }}>
+                <li>Live comment and DM automations will be <strong>paused</strong>.</li>
+                <li>Stored Meta access credentials will be <strong>erased</strong>.</li>
+                <li>You can reconnect this account at any time without losing your triggers.</li>
+              </ul>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10 }}>
+              <Btn
+                variant="ghost"
+                disabled={disconnect.isPending}
+                onClick={() => setAccountToDisconnect(null)}
+              >
+                Cancel
+              </Btn>
+              <Btn
+                variant="danger"
+                loading={disconnect.isPending}
+                disabled={disconnect.isPending}
+                onClick={() => disconnect.mutate(accountToDisconnect.id)}
+              >
+                <Unlink style={{ width: 15, height: 15 }} /> {disconnect.isPending ? 'Disconnecting…' : 'Disconnect account'}
+              </Btn>
+            </div>
+          </div>
         </div>
       )}
     </div>
