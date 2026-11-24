@@ -88,13 +88,18 @@ describe('UsersService data export', () => {
     const result = await service.listContacts('user-a', { page: 2, pageSize: 25, accountId: 'account-1', search: 'fan' });
 
     expect(prisma.contact.count).toHaveBeenCalledWith({
-      where: { igAccount: { userId: 'user-a', id: 'account-1' }, username: { contains: 'fan', mode: 'insensitive' } },
+      where: { igAccount: { userId: 'user-a', isActive: true, id: 'account-1' }, username: { contains: 'fan', mode: 'insensitive' } },
     });
     expect(prisma.contact.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { igAccount: { userId: 'user-a', id: 'account-1' }, username: { contains: 'fan', mode: 'insensitive' } },
+      where: { igAccount: { userId: 'user-a', isActive: true, id: 'account-1' }, username: { contains: 'fan', mode: 'insensitive' } },
       skip: 25,
       take: 25,
     }));
+    expect(prisma.igAccount.findMany).toHaveBeenCalledWith({
+      where: { userId: 'user-a', isActive: true },
+      orderBy: { username: 'asc' },
+      select: { id: true, username: true },
+    });
     const selection = prisma.contact.findMany.mock.calls[0][0].select;
     expect(selection).not.toHaveProperty('igScopedId');
     expect(selection).not.toHaveProperty('email');
@@ -139,7 +144,7 @@ describe('UsersService data export', () => {
     expect(chunks.join('')).toContain('creator');
     expect(chunks.join('')).not.toContain('igScopedId');
     expect(prisma.contact.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { igAccount: { userId: 'user-a' }, username: { contains: 'fan', mode: 'insensitive' } },
+      where: { igAccount: { userId: 'user-a', isActive: true }, username: { contains: 'fan', mode: 'insensitive' } },
       take: 500,
     }));
     expect(prisma.contact.findMany.mock.calls[0][0].select).not.toHaveProperty('igScopedId');

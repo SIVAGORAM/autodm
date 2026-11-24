@@ -343,7 +343,7 @@ export class UsersService {
 
   private contactWhere(userId: string, accountId?: string, search?: string): Prisma.ContactWhereInput {
     return {
-      igAccount: { userId, ...(accountId ? { id: accountId } : {}) },
+      igAccount: { userId, isActive: true, ...(accountId ? { id: accountId } : {}) },
       ...(search ? { username: { contains: search, mode: 'insensitive' } } : {}),
     };
   }
@@ -383,7 +383,7 @@ export class UsersService {
         },
       }),
       this.prisma.igAccount.findMany({
-        where: { userId },
+        where: { userId, isActive: true },
         orderBy: { username: 'asc' },
         select: { id: true, username: true },
       }),

@@ -83,6 +83,12 @@ export default function ContactsPage() {
   const data = query.data;
   const pagination = data?.pagination;
 
+  useEffect(() => {
+    if (accountId && data?.accounts && !data.accounts.some((acc) => acc.id === accountId)) {
+      setAccountId('');
+    }
+  }, [accountId, data?.accounts]);
+
   return (
     <div>
       <PageHead
