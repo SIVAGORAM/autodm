@@ -98,6 +98,7 @@ export class InstagramService {
       const p = new URLSearchParams({
         client_id: this.appId,
         config_id: this.unifiedConfigId,
+        display: 'popup',
         redirect_uri: this.redirectUri,
         response_type: 'code',
         // This configuration uses a Business Integration System User token.
