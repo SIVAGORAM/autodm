@@ -59,7 +59,7 @@ function validateMetaAuthorizationUrl(value, mode, options, frontendOrigin) {
     if (mode === 'INSTAGRAM_LOGIN') {
       const scopes = new Set((url.searchParams.get('scope') ?? '').split(',').filter(Boolean));
       if (url.searchParams.get('enable_fb_login') !== 'false'
-        || url.searchParams.get('force_reauth') !== 'true'
+        || (url.searchParams.has('force_reauth') && url.searchParams.get('force_reauth') !== 'true')
         || !['instagram_business_basic', 'instagram_business_manage_messages', 'instagram_business_manage_comments'].every((scope) => scopes.has(scope))) {
         throw new Error('Instagram permissions mismatch');
       }

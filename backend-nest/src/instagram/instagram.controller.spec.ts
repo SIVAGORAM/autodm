@@ -72,12 +72,12 @@ describe('InstagramController OAuth callback binding', () => {
     }));
   });
 
-  it('keeps legacy Instagram Login as the default and forces Instagram auth even when Unified Login is enabled', async () => {
+  it('keeps legacy Instagram Login as the default when Unified Login is enabled', async () => {
     (ig as any).unifiedLoginEnabled = true;
 
     await controller.authUrl('user-1', undefined as any, { protocol: 'http', headers: {} } as any, reply as any);
 
-    expect(ig.buildAuthUrl).toHaveBeenCalledWith(expect.any(String), true, 'INSTAGRAM_LOGIN');
+    expect(ig.buildAuthUrl).toHaveBeenCalledWith(expect.any(String), false, 'INSTAGRAM_LOGIN');
   });
 
   it('exposes Unified Login as available only when its backend feature flag is enabled', () => {

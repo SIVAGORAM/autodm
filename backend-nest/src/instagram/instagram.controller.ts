@@ -69,8 +69,8 @@ export class InstagramController {
     // browser session can take Meta's Facebook/OIDC shortcut even when the
     // Instagram Login URL hides its Facebook-login option. This makes first
     // connect and add-account use the same predictable Instagram flow.
-    const existing = await this.prisma.igAccount.count({ where: { userId } });
-    return { success: true, data: { url: this.ig.buildAuthUrl(state, loginMode === 'INSTAGRAM_LOGIN' || existing > 0, loginMode), loginMode } };
+    const existing = await this.prisma.igAccount.count({ where: { userId, isActive: true } });
+    return { success: true, data: { url: this.ig.buildAuthUrl(state, existing > 0, loginMode), loginMode } };
   }
 
   @Get('login-options')
