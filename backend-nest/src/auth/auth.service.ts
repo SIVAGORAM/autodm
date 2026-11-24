@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailOutboxService } from '../mail/mail-outbox.service';
 import { effectivePlan } from '../common/plan.util';
 import { EncryptionService } from '../common/encryption.service';
+import { PRIVACY_VERSION, TERMS_VERSION } from '../legal/policy-versions';
 import { authenticatorUri, newRecoveryCodes, newTotpSecret, recoveryCodeHash, totpStep } from './admin-mfa';
 
 // Valid cost-12 hash with no associated account/password. Unknown-email login
@@ -85,6 +86,21 @@ export class AuthService {
       const challenge = await this.createAdminMfaChallenge(user.id, user.email, user.role, user.sessionVersion,
         user.adminMfaEnabledAt ? 'verify' : 'setup');
       return { mfaRequired: !!user.adminMfaEnabledAt, mfaSetupRequired: !user.adminMfaEnabledAt, challenge };
+    }
+    if (user.termsVersion !== TERMS_VERSION || user.privacyVersion !== PRIVACY_VERSION) {
+      const now = new Date();
+      await this.prisma.user.updateMany({
+        where: { id: user.id },
+        data: {
+          termsVersion: TERMS_VERSION,
+          termsAcceptedAt: now,
+          privacyVersion: PRIVACY_VERSION,
+          privacyAcknowledgedAt: now,
+          ageConfirmedAt: user.ageConfirmedAt ?? now,
+        },
+      });
+      user.termsVersion = TERMS_VERSION;
+      user.privacyVersion = PRIVACY_VERSION;
     }
     const tokens = await this.issueTokens(user.id, user.email, user.role, user.sessionVersion);
     return {
@@ -313,6 +329,21 @@ export class AuthService {
       },
     });
     if (!user) return null;
+    if (user.termsVersion !== TERMS_VERSION || user.privacyVersion !== PRIVACY_VERSION) {
+      const now = new Date();
+      await this.prisma.user.updateMany({
+        where: { id: user.id },
+        data: {
+          termsVersion: TERMS_VERSION,
+          termsAcceptedAt: user.termsAcceptedAt ?? now,
+          privacyVersion: PRIVACY_VERSION,
+          privacyAcknowledgedAt: user.privacyAcknowledgedAt ?? now,
+          ageConfirmedAt: user.ageConfirmedAt ?? now,
+        },
+      });
+      user.termsVersion = TERMS_VERSION;
+      user.privacyVersion = PRIVACY_VERSION;
+    }
     const { planExpiresAt, trialEndsAt, ...profile } = user;
     return { ...profile, plan: effectivePlan({ ...user, planExpiresAt, trialEndsAt }) };
   }
