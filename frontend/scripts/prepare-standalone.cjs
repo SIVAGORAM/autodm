@@ -1,6 +1,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+if (process.env.VERCEL) {
+  console.log('Vercel deployment detected; native serverless output retained.');
+  process.exit(0);
+}
+
 const appRoot = path.resolve(__dirname, '..');
 const standaloneApp = path.join(appRoot, '.next-prod', 'standalone', 'frontend');
 const standaloneNext = path.join(standaloneApp, '.next-prod');

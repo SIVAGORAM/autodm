@@ -7,8 +7,9 @@ const createNextConfig = (phase) => ({
   // `next dev` and `next build` must not share manifests or chunks. A build
   // during local development otherwise replaces `.next` files that the dev
   // server still references, producing missing chunk/CSS responses.
-  distDir: phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next-prod',
-  output: 'standalone',
+  // On Vercel, the platform runner expects the standard `.next` output directory.
+  distDir: process.env.VERCEL ? '.next' : (phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next-prod'),
+  output: process.env.VERCEL ? undefined : 'standalone',
   outputFileTracingRoot: path.join(__dirname, '..'),
   // Keep static generation deterministic on constrained/Windows build hosts.
   // Multiple workers have intermittently observed Next's generated manifests
