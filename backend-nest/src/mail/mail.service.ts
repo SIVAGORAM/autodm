@@ -12,7 +12,7 @@ export class MailService {
   private readonly frontend: string;
 
   constructor(private config: ConfigService) {
-    this.from = config.get('MAIL_FROM', 'HeyLaunch <no-reply@heylaunch.app>');
+    this.from = config.get<string>('MAIL_FROM') || config.get<string>('SMTP_FROM') || 'AutoDm <mrsivagoram@gmail.com>';
     this.frontend = (config.get('CORS_ORIGIN', 'http://localhost:3000') as string).split(',')[0];
     const host = config.get<string>('SMTP_HOST');
     const user = config.get<string>('SMTP_USER');
