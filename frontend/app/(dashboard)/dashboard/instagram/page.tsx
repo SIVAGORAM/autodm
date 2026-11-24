@@ -178,44 +178,6 @@ export default function InstagramPage() {
         </div>
       )}
 
-      {active.length === 0 && loginOptions && (
-        <Card pad={14} style={{ marginBottom: 14 }}>
-          <strong style={{ color: RL.ink, fontSize: 14 }}>Meta connection setup</strong>
-          <p style={{ color: RL.muted, fontSize: 13, lineHeight: 1.5, margin: '5px 0 8px' }}>
-            Active login method: {loginOptions.unifiedLoginEnabled ? 'Meta Unified Login' : 'Instagram Login'}. Match the relevant App ID, configuration ID, and callback in Meta Developers.
-          </p>
-          <div style={{ display: 'grid', gap: 6, marginBottom: 8, color: RL.muted, fontSize: 12.5 }}>
-            <div>Instagram Login App ID: <code style={{ color: RL.ink }}>{loginOptions.instagramLoginAppId || 'Not configured'}</code></div>
-            {loginOptions.instagramLoginUsesMetaFallback && <div role="status" style={{ color: RL.amber }}>Instagram Login is falling back to META_APP_ID. Confirm that this is the Instagram product App ID from Meta’s Business Login settings; the Facebook/Unified Login App ID may not be interchangeable.</div>}
-            <div>Meta App ID (Unified Login): <code style={{ color: RL.ink }}>{loginOptions.unifiedLoginAppId || 'Not configured'}</code></div>
-            <div>Unified Login configuration ID: <code style={{ color: RL.ink }}>{loginOptions.unifiedLoginConfigId || 'Not configured'}</code> <span>({loginOptions.unifiedLoginEnabled ? 'enabled' : 'disabled'})</span></div>
-          </div>
-          <code style={{ display: 'block', overflowWrap: 'anywhere', color: RL.ink, fontSize: 12.5, padding: '9px 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)' }}>
-            {loginOptions.oauthRedirectUri}
-          </code>
-        </Card>
-      )}
-
-      {active.length > 0 && !active.every((account) => account.lastWebhookAt) && (
-        <Card pad={16} style={{ marginBottom: 14, borderColor: `${RL.amber}66`, background: `${RL.amber}0b` }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <AlertCircle style={{ width: 18, height: 18, flex: '0 0 auto', color: RL.amber, marginTop: 1 }} aria-hidden />
-            <div style={{ minWidth: 0 }}>
-              <strong style={{ color: RL.ink, fontSize: 14 }}>Finish Meta webhook setup before relying on automations</strong>
-              <p style={{ color: RL.muted, fontSize: 13, lineHeight: 1.55, margin: '6px 0 8px' }}>
-                Configure this callback and the comments and messages fields once in Meta Developers{loginOptions?.liveCommentsEnabled ? ', plus live_comments for live-broadcast automations' : ''}. Then use “Set up webhooks” once for each connected professional account; HeyLaunch remembers the fields Meta accepted for that account and offers setup again if it fails. The callback must be publicly reachable over HTTPS. Meta sends comment notifications only for media owned by public accounts. For production delivery, the app must be Live with the required access for these fields, and you should confirm delivery with an authorized test event.
-              </p>
-              <code style={{ display: 'block', overflowWrap: 'anywhere', color: RL.ink, fontSize: 12.5, padding: '9px 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)' }}>
-                {loginOptions?.webhookCallbackUrl ?? (loginOptionsError || loginOptions ? 'Callback URL unavailable. Check the backend PUBLIC_URL configuration.' : 'Loading callback URL…')}
-              </code>
-              <a href="https://developers.facebook.com/documentation/instagram-platform/webhooks/setup" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 8, color: RL.teal, fontSize: 12.5, fontWeight: 600 }}>
-                Open Meta’s webhook setup guide
-              </a>
-            </div>
-          </div>
-        </Card>
-      )}
-
       {banner && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 18, padding: '12px 16px', borderRadius: 12,
           background: banner.tone === 'success' ? 'var(--success-soft)' : 'var(--error-soft)', color: banner.tone === 'success' ? 'var(--success)' : 'var(--error)', border: `1px solid ${banner.tone === 'success' ? 'var(--success-soft)' : 'var(--error-soft)'}` }}>
