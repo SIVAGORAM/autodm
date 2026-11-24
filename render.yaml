@@ -25,7 +25,7 @@ services:
       - key: META_GRAPH_VERSION
         value: v26.0
       - key: META_UNIFIED_LOGIN_ENABLED
-        value: "false"
+        value: "true"
       - key: META_UNIFIED_TOKEN_REFRESH_ENABLED
         value: "false"
       - key: META_LIVE_COMMENTS_ENABLED
@@ -68,7 +68,7 @@ services:
       - key: META_WEBHOOK_VERIFY_TOKEN
         sync: false
       - key: META_UNIFIED_LOGIN_CONFIG_ID
-        value: ""
+        value: "1848584173153195"
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY
