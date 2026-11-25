@@ -69,6 +69,9 @@ export const envSchema = z.object({
   SMTP_PORT: z.coerce.number().default(587),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
+  EMAIL_FROM: z.string().optional(),
+  EMAIL_TO: z.string().optional(),
   BREVO_API_KEY: z.string().optional(),
   WEBHOOK_PAYLOAD_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   UNVERIFIED_ACCOUNT_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
@@ -174,11 +177,12 @@ export const envSchema = z.object({
   }
 
   // Transactional email: can be satisfied by Brevo API key OR Brevo/standard SMTP credentials
+  const effectivePass = env.SMTP_PASS?.trim() || env.SMTP_PASSWORD?.trim();
   const hasBrevoApi = typeof env.BREVO_API_KEY === 'string' && env.BREVO_API_KEY.trim().length > 0;
-  const hasBrevoKeyInSmtpPass = typeof env.SMTP_PASS === 'string' && env.SMTP_PASS.trim().startsWith('xkeysib-');
+  const hasBrevoKeyInSmtpPass = typeof effectivePass === 'string' && effectivePass.startsWith('xkeysib-');
   const hasSmtp = typeof env.SMTP_HOST === 'string' && env.SMTP_HOST.trim().length > 0
     && typeof env.SMTP_USER === 'string' && env.SMTP_USER.trim().length > 0
-    && typeof env.SMTP_PASS === 'string' && env.SMTP_PASS.trim().length > 0;
+    && typeof effectivePass === 'string' && effectivePass.length > 0;
 
   if (!hasBrevoApi && !hasBrevoKeyInSmtpPass && !hasSmtp) {
     ctx.addIssue({

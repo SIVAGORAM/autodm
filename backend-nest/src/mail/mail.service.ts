@@ -13,12 +13,15 @@ export class MailService {
   private brevoApiKey: string | null = null;
 
   constructor(private config: ConfigService) {
-    this.from = config.get<string>('MAIL_FROM') || config.get<string>('SMTP_FROM') || 'AutoDm <mrsivagoram@gmail.com>';
+    this.from = config.get<string>('MAIL_FROM')
+      || config.get<string>('SMTP_FROM')
+      || config.get<string>('EMAIL_FROM')
+      || 'Relayo <nexloralabs@gmail.com>';
     this.frontend = this.resolveFrontendUrl();
 
     const host = config.get<string>('SMTP_HOST');
     const user = config.get<string>('SMTP_USER');
-    const pass = config.get<string>('SMTP_PASS');
+    const pass = config.get<string>('SMTP_PASS') || config.get<string>('SMTP_PASSWORD');
     const explicitBrevoKey = config.get<string>('BREVO_API_KEY');
 
     // Detect Brevo REST API key: either explicitly configured via BREVO_API_KEY

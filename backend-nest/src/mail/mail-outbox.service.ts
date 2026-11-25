@@ -126,8 +126,13 @@ export class MailOutboxService implements OnApplicationBootstrap, OnApplicationS
     this.triggerDrain();
   }
 
+  private getSupportNotificationEmail(): string | undefined {
+    return this.config.get<string>('SUPPORT_NOTIFICATION_EMAIL')?.trim()
+      || this.config.get<string>('EMAIL_TO')?.trim();
+  }
+
   async queueSupportAdminNotification(tx: Prisma.TransactionClient, userId: string, subject: string, messageId: string) {
-    const to = this.config.get<string>('SUPPORT_NOTIFICATION_EMAIL')?.trim();
+    const to = this.getSupportNotificationEmail();
     if (!to) return;
     const payload: MailPayload = { kind: 'support-admin', to, subject };
     await tx.mailOutbox.createMany({
@@ -143,7 +148,7 @@ export class MailOutboxService implements OnApplicationBootstrap, OnApplicationS
   }
 
   async queueContactEnquiryNotification(tx: Prisma.TransactionClient, enquiryId: string, subject: string) {
-    const to = this.config.get<string>('SUPPORT_NOTIFICATION_EMAIL')?.trim();
+    const to = this.getSupportNotificationEmail();
     if (!to) return;
     const payload: MailPayload = { kind: 'contact-admin', to, enquiryId, subject };
     await tx.mailOutbox.createMany({
@@ -381,8 +386,8 @@ export class MailOutboxService implements OnApplicationBootstrap, OnApplicationS
         && invitation.expiresAt > now && invitation.acceptedAt === null && invitation.revokedAt === null;
     }
     if (payload.kind === 'contact-admin') {
-      if (!this.config.get<string>('SUPPORT_NOTIFICATION_EMAIL')?.trim()
-        || this.config.get<string>('SUPPORT_NOTIFICATION_EMAIL')?.trim() !== payload.to) return false;
+      const inbox = this.getSupportNotificationEmail();
+      if (!inbox || inbox !== payload.to) return false;
       const enquiry = await this.prisma.contactEnquiry.findUnique({ where: { id: payload.enquiryId }, select: { status: true } });
       return !!enquiry && enquiry.status !== 'SPAM';
     }
@@ -408,8 +413,8 @@ export class MailOutboxService implements OnApplicationBootstrap, OnApplicationS
     });
     if (!user || user.deletionRequestedAt) return false;
     if (payload.kind === 'support-admin') {
-      return user.isVerified && !!this.config.get<string>('SUPPORT_NOTIFICATION_EMAIL')
-        && this.config.get<string>('SUPPORT_NOTIFICATION_EMAIL')?.trim() === payload.to;
+      const inbox = this.getSupportNotificationEmail();
+      return user.isVerified && !!inbox && inbox === payload.to;
     }
     if (user.email !== payload.to) return false;
     if (payload.kind === 'verification') {
