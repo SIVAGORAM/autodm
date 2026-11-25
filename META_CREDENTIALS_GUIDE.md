@@ -86,9 +86,22 @@ This is your frontend callback route:
 * For Local Testing: `http://localhost:3000/api/instagram/callback`
 * For Production (Custom domain): `https://yourproductiondomain.com/api/instagram/callback`
 
-> **Note:** Whatever URL you enter here **MUST** be registered in Meta:
-> 1. In **API setup with Unified login** under **Redirect URL**.
-> 2. In **API setup with Instagram login** under **Step 4: Set up Instagram business login** → click **Business login settings** → **Valid OAuth Redirect URIs**.
+---
+
+### ⭐ CRUCIAL: The 3 Mandatory URLs in Meta Business Login Settings
+In Meta Developers (**Instagram API → API setup with Instagram login → Step 4 → Business login settings**), these 3 URLs must be entered and saved:
+
+1. **OAuth redirect URIs:**
+   - *Testing:* `https://frontend-fawn-six-26.vercel.app/api/instagram/callback`
+   - *Production:* `https://yourdomain.com/api/instagram/callback`
+2. **Deauthorize callback URL:**
+   - *Testing:* `https://autodm-89w5.onrender.com/api/instagram/deauthorize`
+   - *Production:* `https://api.yourdomain.com/api/instagram/deauthorize`
+3. **Data deletion request URL:**
+   - *Testing:* `https://autodm-89w5.onrender.com/api/instagram/data-deletion`
+   - *Production:* `https://api.yourdomain.com/api/instagram/data-deletion`
+
+*(Also register the OAuth Redirect URI in **API setup with Unified login** under **Redirect URL**).*
 
 ---
 

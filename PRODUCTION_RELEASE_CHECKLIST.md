@@ -13,6 +13,18 @@
 
 ---
 
+## Meta Business Login Settings: The 3 Mandatory URLs
+
+Before public launch or whenever switching to a custom production domain, you **MUST** update these 3 exact URLs in Meta Developers (**Instagram API → API setup with Instagram login → Step 4: Business login settings**):
+
+| Setting in Meta Modal | Current Testing URL (Vercel/Render) | Future Production URL (Your Custom Domain) | What It Does |
+| :--- | :--- | :--- | :--- |
+| **1. OAuth Redirect URI** | `https://frontend-fawn-six-26.vercel.app/api/instagram/callback` | `https://yourdomain.com/api/instagram/callback` | Where Meta redirects the user after logging in so cookies and session state are preserved. |
+| **2. Deauthorize Callback URL** | `https://autodm-89w5.onrender.com/api/instagram/deauthorize` | `https://api.yourdomain.com/api/instagram/deauthorize` | Where Meta notifies HeyLaunch when a user removes the app from their Instagram/Facebook settings. |
+| **3. Data Deletion Request URL** | `https://autodm-89w5.onrender.com/api/instagram/data-deletion` | `https://api.yourdomain.com/api/instagram/data-deletion` | Mandatory GDPR/Meta compliance endpoint that purges user data and returns a tracking confirmation code. |
+
+---
+
 ## Environment Variables Audit
 
 Verify the following variables are configured in Render/Vercel:
