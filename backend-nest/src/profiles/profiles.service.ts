@@ -73,7 +73,7 @@ export class ProfilesService {
         links: { orderBy: [{ kind: 'asc' }, { sortOrder: 'asc' }, { id: 'asc' }] },
       },
     });
-    if (!profile) return { profile: null, avatarStorageAvailable: this.storage.available };
+    if (!profile) return { profile: null, avatarStorageAvailable: true };
     return {
       profile: {
         id: profile.id,
@@ -87,7 +87,7 @@ export class ProfilesService {
         customLinks: profile.links.filter((link) => link.kind === 'CUSTOM').map((link) => this.serializeLink(link)),
         updatedAt: profile.updatedAt,
       },
-      avatarStorageAvailable: this.storage.available,
+      avatarStorageAvailable: true,
     };
   }
 
@@ -223,7 +223,6 @@ export class ProfilesService {
   }
 
   async uploadAvatar(userId: string, input: Buffer) {
-    if (!this.storage.available) throw new ServiceUnavailableException('Profile photo uploads are not configured yet.');
     if (!input.length || input.length > MAX_AVATAR_BYTES) throw new BadRequestException('Choose an image smaller than 5 MB.');
     const profile = await this.prisma.publicProfile.findUnique({
       where: { userId },
@@ -249,8 +248,15 @@ export class ProfilesService {
       throw new BadRequestException('The selected file is not a valid supported image.');
     }
 
-    const publicId = this.storage.createAvatarId(userId, randomUUID());
-    const uploaded = await this.storage.upload(publicId, normalized);
+    let uploaded: { assetId: string; deliveryUrl: string };
+    if (this.storage.available) {
+      const publicId = this.storage.createAvatarId(userId, randomUUID());
+      uploaded = await this.storage.upload(publicId, normalized);
+    } else {
+      const base64 = `data:image/webp;base64,${normalized.toString('base64')}`;
+      uploaded = { assetId: `db:${userId}:${randomUUID()}`, deliveryUrl: base64 };
+    }
+
     try {
       await this.prisma.$transaction(async (tx) => {
         const current = await tx.publicProfile.findUnique({ where: { userId }, select: { avatarAssetId: true } });
@@ -259,16 +265,20 @@ export class ProfilesService {
           throw new NotFoundException('An active creator profile is required.');
         }
         await tx.publicProfile.update({ where: { userId }, data: { avatarAssetId: uploaded.assetId, avatarDeliveryUrl: uploaded.deliveryUrl } });
-        if (current.avatarAssetId && current.avatarAssetId !== uploaded.assetId) await tx.profileAssetDeletion.upsert({
-          where: { assetId: current.avatarAssetId },
-          create: { assetId: current.avatarAssetId },
-          update: { nextAttemptAt: new Date() },
-        });
+        if (current.avatarAssetId && current.avatarAssetId !== uploaded.assetId && !current.avatarAssetId.startsWith('db:')) {
+          await tx.profileAssetDeletion.upsert({
+            where: { assetId: current.avatarAssetId },
+            create: { assetId: current.avatarAssetId },
+            update: { nextAttemptAt: new Date() },
+          });
+        }
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
-      try { await this.storage.remove(uploaded.assetId); } catch {
-        await this.enqueueAssetDeletion(uploaded.assetId).catch(() => undefined);
-        this.storage.logCleanupFailure();
+      if (!uploaded.assetId.startsWith('db:')) {
+        try { await this.storage.remove(uploaded.assetId); } catch {
+          await this.enqueueAssetDeletion(uploaded.assetId).catch(() => undefined);
+          this.storage.logCleanupFailure();
+        }
       }
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
         throw new ConflictException('The profile changed while the photo was uploading. Please retry.');
@@ -284,7 +294,7 @@ export class ProfilesService {
         const profile = await tx.publicProfile.findUnique({ where: { userId }, select: { avatarAssetId: true } });
         if (!profile) throw new NotFoundException('Public profile not found.');
         await tx.publicProfile.update({ where: { userId }, data: { avatarAssetId: null, avatarDeliveryUrl: null } });
-        if (profile.avatarAssetId) await tx.profileAssetDeletion.upsert({
+        if (profile.avatarAssetId && !profile.avatarAssetId.startsWith('db:')) await tx.profileAssetDeletion.upsert({
           where: { assetId: profile.avatarAssetId },
           create: { assetId: profile.avatarAssetId },
           update: { nextAttemptAt: new Date() },

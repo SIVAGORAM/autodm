@@ -6,7 +6,18 @@ export const PROFILE_PLATFORMS = [
   'github', 'whatsapp', 'telegram', 'pinterest', 'website',
 ] as const;
 
-const safeExternalUrl = z.string().trim().min(1).max(2048).url().superRefine((value, ctx) => {
+const normalizeUrlString = (value: string) => {
+  let trimmed = (value || '').trim();
+  if (trimmed && !/^https?:\/\//i.test(trimmed)) {
+    trimmed = `https://${trimmed}`;
+  }
+  return trimmed;
+};
+
+const safeExternalUrl = z.string().trim().min(1).max(2048)
+  .transform(normalizeUrlString)
+  .pipe(z.string().url())
+  .superRefine((value, ctx) => {
   let url: URL;
   try { url = new URL(value); } catch { return; }
   if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) {
