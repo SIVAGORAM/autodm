@@ -42,7 +42,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
   isAuthenticated: false,
   isFetched: false,
 
-  setUser: (user) => set({ user, isAuthenticated: !!user }),
+  setUser: (user) => set({ user, isAuthenticated: !!user, isFetched: !!user, isLoading: false }),
 
   logout: async () => {
     try { await authApi.logout(); } catch { /* ignore */ }

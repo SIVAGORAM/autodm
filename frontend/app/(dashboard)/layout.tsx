@@ -77,10 +77,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const verifySession = useCallback(() => {
     setSessionCheckFailed(false);
     return fetchMe().then(() => undefined).catch((error: { response?: { status?: number } }) => {
-      if (error?.response?.status === 401) router.replace('/login');
-      else setSessionCheckFailed(true);
+      if (error?.response?.status === 401) {
+        router.replace('/login');
+      } else if (!user) {
+        setSessionCheckFailed(true);
+      }
     });
-  }, [fetchMe, router]);
+  }, [fetchMe, router, user]);
 
   useEffect(() => { void verifySession(); }, [verifySession]);
   useEffect(() => {

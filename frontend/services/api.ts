@@ -9,7 +9,7 @@ export const api = axios.create({
   // to the backend so auth cookies remain first-party in production browsers.
   baseURL: '/api',
   withCredentials: true,
-  timeout: 15000,
+  timeout: 45000,
   headers: { 'Content-Type': 'application/json' },
 });
 

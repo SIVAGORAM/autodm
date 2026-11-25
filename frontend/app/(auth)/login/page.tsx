@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AtSign, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
-import { authApi, getApiErrorMessage } from '../../../services/api';
+import { api, authApi, getApiErrorMessage } from '../../../services/api';
 import { useAuthStore } from '../../../store/authStore';
 import { AuthBrand, AC } from '../../../components/auth-brand';
 
@@ -19,6 +19,11 @@ export default function LoginPage() {
   const [mfaCode, setMfaCode] = useState('');
   const [mfaSetup, setMfaSetup] = useState<{ secret: string; otpauthUri: string } | null>(null);
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+
+  // Pre-warm backend container while user enters credentials
+  useEffect(() => {
+    void api.get('/version').catch(() => undefined);
+  }, []);
 
   // Confirm the browser can use the HTTP-only session cookies before entering
   // the protected dashboard. This catches proxy/cookie configuration problems
@@ -42,12 +47,15 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await authApi.login(form);
-      if (res.data.data.mfaSetupRequired) {
+      if (res.data?.data?.mfaSetupRequired) {
         setAdminStep('setup');
         setError('Administrator accounts must enroll an authenticator before opening the dashboard.');
-      } else if (res.data.data.mfaRequired) {
+      } else if (res.data?.data?.mfaRequired) {
         setAdminStep('verify');
         setError('Enter the code from your authenticator app or a recovery code.');
+      } else if (res.data?.data?.user) {
+        setUser(res.data.data.user);
+        router.replace('/dashboard');
       } else {
         await confirmBrowserSession();
       }
