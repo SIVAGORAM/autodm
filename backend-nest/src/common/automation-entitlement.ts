@@ -19,8 +19,12 @@ export function automationRestriction(
     return 'This trigger is not available yet.';
   }
   if (automation.matchMode === 'AI_INTENT') return 'AI intent matching is not available yet.';
-  if (automation.askToFollow) return 'Follow gating is not available yet.';
-  if (automation.collectEmail) return 'Email collection is not available yet.';
+  if (automation.askToFollow && !plan.features.askToFollow) {
+    return 'Follow gating needs a higher plan.';
+  }
+  if (automation.collectEmail && !plan.features.collectEmail) {
+    return 'Email collection needs a higher plan.';
+  }
   if (automation.matchMode === 'KEYWORDS' && (automation.keywords?.length ?? 0) > plan.features.keywordsPerAutomation) {
     return `This automation exceeds the ${plan.features.keywordsPerAutomation}-keyword limit on your current plan.`;
   }

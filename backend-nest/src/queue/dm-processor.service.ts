@@ -192,12 +192,12 @@ export class DmProcessorService {
       ? 'The public comment reply failed; the direct message was still sent.'
       : undefined;
 
-    if (automation.askToFollow) {
+    if (automation.askToFollow && !contact.follows) {
       const { isFollower } = await this.meta.getFollowerInfo(igUserId, token, job.recipientIgsid, loginMode);
       await this.prisma.contact.update({ where: { id: contact.id }, data: { follows: isFollower } });
       if (!isFollower) {
         const accountUsername = automation.igAccount.username;
-        const promptText = `Hey ${job.recipientUsername || 'there'}! Thanks for commenting! To unlock your link, please follow @${accountUsername} first, then reply 'DONE' here! 👇`;
+        const promptText = `Hey ${job.recipientUsername || 'there'}! Thanks for commenting! To unlock your link, please follow @${accountUsername} ( https://instagram.com/${accountUsername} ) first, then reply 'DONE' here! 👇`;
         const profileButton = [{ title: `Follow @${accountUsername}`, url: `https://instagram.com/${accountUsername}` }];
 
         const existingTags = contact.tags || [];
@@ -210,7 +210,7 @@ export class DmProcessorService {
         }
 
         const promptResult = job.commentId
-          ? await this.meta.sendCommentDm(igUserId, token, job.commentId, promptText, profileButton, loginMode)
+          ? await this.meta.sendCommentDm(igUserId, token, job.commentId, promptText, [], loginMode)
           : await this.meta.sendDirectMessage(igUserId, token, job.recipientIgsid, promptText, profileButton, loginMode);
 
         if (!promptResult.ok) {

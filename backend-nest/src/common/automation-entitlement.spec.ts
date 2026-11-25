@@ -30,7 +30,12 @@ describe('automation plan entitlements', () => {
 
   it('rejects unsupported automation modes independent of plan', () => {
     expect(automationRestriction(PLANS.PRO, { triggerType: 'POST_COMMENT', matchMode: 'AI_INTENT' })).toMatch(/not available/i);
-    expect(automationRestriction(PLANS.PRO, { triggerType: 'POST_COMMENT', askToFollow: true })).toMatch(/not available/i);
+    expect(automationRestriction(PLANS.PRO, { triggerType: 'NEXT_POST' })).toMatch(/not available/i);
+  });
+
+  it('allows follow gating and email collection when supported by plan', () => {
+    expect(automationRestriction(PLANS.PRO, { triggerType: 'POST_COMMENT', askToFollow: true })).toBeNull();
+    expect(automationRestriction(PLANS.PRO, { triggerType: 'POST_COMMENT', collectEmail: true })).toBeNull();
   });
 });
 
