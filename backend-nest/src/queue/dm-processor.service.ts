@@ -243,7 +243,7 @@ export class DmProcessorService {
     }
 
     if (!isConversationalGateStep && automation.collectEmail && !contact.email) {
-      const emailPromptText = `Hey ${job.recipientUsername || 'there'}! What's the best email address to send your ${automation.name} to? (Reply with your email address, or reply SKIP to proceed) 📩`;
+      const emailPromptText = `Hey ${job.recipientUsername || 'there'}! 🎉 Before I drop your link right here, what's your email address? Reply with your email below! 📩`;
 
       const existingTags = contact.tags || [];
       const emailTag = `pending_email:${automation.id}`;

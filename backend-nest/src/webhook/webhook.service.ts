@@ -543,7 +543,7 @@ export class WebhookService {
               where: { id: contact.id },
               data: { tags: [...remainingTags, `pending_email:${targetAuto.id}`] },
             });
-            const emailPrompt = `Awesome, thanks for following @${targetAuto.igAccount.username}! 🎉 What's the best email address to send your ${targetAuto.name} to? (Reply with your email address, or reply SKIP to proceed) 📩`;
+            const emailPrompt = `Awesome, thanks for following @${targetAuto.igAccount.username}! 🎉 Before I drop your link right here, what's your email address? Reply with your email below! 📩`;
             await this.enqueue({
               automationId: targetAuto.id,
               igAccountId: account.id,
@@ -649,7 +649,7 @@ export class WebhookService {
           return;
         }
 
-        const retryPrompt = `That doesn't look like a valid email address. Please reply with your email (e.g. name@example.com) to receive your link, or reply SKIP to proceed.`;
+        const retryPrompt = `Oops, that doesn't look like a valid email address! ✉️ Please reply with your email (e.g. name@example.com) to get your link right here! ✨`;
         await this.enqueue({
           automationId: targetAuto.id,
           igAccountId: account.id,
