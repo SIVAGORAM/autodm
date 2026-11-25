@@ -324,7 +324,16 @@ export class InstagramService {
   }
 
   async getMedia(token: string, igUserId: string, loginMode: InstagramLoginMode = 'INSTAGRAM_LOGIN', after?: string): Promise<{
-    media: Array<{ id: string; media_type: string; media_product_type?: string; caption?: string; permalink?: string; timestamp?: string }>;
+    media: Array<{
+      id: string;
+      media_type: string;
+      media_product_type?: string;
+      caption?: string;
+      permalink?: string;
+      timestamp?: string;
+      media_url?: string;
+      thumbnail_url?: string;
+    }>;
     nextCursor: string | null;
   }> {
     try {
@@ -334,7 +343,7 @@ export class InstagramService {
       // Meta exposes media_product_type (FEED/REELS/STORY/AD) only through
       // Instagram API with Facebook Login. Keep the legacy Instagram Login
       // field set compatible while allowing Unified Login to identify Reels.
-      const fields = ['id', 'media_type', 'caption', 'permalink', 'timestamp'];
+      const fields = ['id', 'media_type', 'caption', 'permalink', 'timestamp', 'media_url', 'thumbnail_url'];
       if (loginMode === 'UNIFIED_LOGIN') fields.push('media_product_type');
       const res = await axios.get(`https://${host}/${version}/${path}`, {
         params: { fields: fields.join(','), limit: 50, ...(after ? { after } : {}), access_token: token },

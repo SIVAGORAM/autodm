@@ -257,7 +257,7 @@ describe('InstagramService Unified Login', () => {
       media: [{ id: 'reel-id', media_type: 'VIDEO', media_product_type: 'REELS' }], nextCursor: 'opaque-cursor',
     });
     expect(get).toHaveBeenCalledWith('https://graph.facebook.com/v26.0/ig-id/media', expect.objectContaining({
-      params: expect.objectContaining({ fields: 'id,media_type,caption,permalink,timestamp,media_product_type', access_token: 'bis-token' }),
+      params: expect.objectContaining({ fields: 'id,media_type,caption,permalink,timestamp,media_url,thumbnail_url,media_product_type', access_token: 'bis-token' }),
     }));
   });
 
@@ -268,7 +268,7 @@ describe('InstagramService Unified Login', () => {
     await service.getMedia('legacy-token', 'ig-id', 'INSTAGRAM_LOGIN');
 
     expect(get).toHaveBeenCalledWith('https://graph.instagram.com/v26.0/me/media', expect.objectContaining({
-      params: expect.objectContaining({ fields: 'id,media_type,caption,permalink,timestamp', access_token: 'legacy-token' }),
+      params: expect.objectContaining({ fields: 'id,media_type,caption,permalink,timestamp,media_url,thumbnail_url', access_token: 'legacy-token' }),
       proxy: false,
     }));
   });

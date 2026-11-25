@@ -240,8 +240,10 @@ export function InstagramPostSelector({
                         <img
                           src={imageUrl}
                           alt={post.caption?.slice(0, 50) || 'Instagram post'}
-                          className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                          className="relative z-10 h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
                           loading="lazy"
+                          referrerPolicy="no-referrer"
+                          crossOrigin="anonymous"
                           onError={(e) => {
                             // If direct image fails to load, fallback to styled icon
                             (e.target as HTMLElement).style.display = 'none';
@@ -250,7 +252,7 @@ export function InstagramPostSelector({
                       ) : null}
 
                       {/* Fallback Icon when image not available */}
-                      <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                      <div className="absolute inset-0 flex items-center justify-center text-muted-foreground z-0">
                         {category === 'REEL' ? (
                           <Film className="h-8 w-8 opacity-40" />
                         ) : category === 'CAROUSEL' ? (
