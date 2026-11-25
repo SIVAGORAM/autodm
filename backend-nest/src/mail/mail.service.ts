@@ -10,13 +10,26 @@ export class MailService {
   private transporter: Transporter | null = null;
   private readonly from: string;
   private readonly frontend: string;
+  private brevoApiKey: string | null = null;
 
   constructor(private config: ConfigService) {
     this.from = config.get<string>('MAIL_FROM') || config.get<string>('SMTP_FROM') || 'AutoDm <mrsivagoram@gmail.com>';
     this.frontend = (config.get('CORS_ORIGIN', 'http://localhost:3000') as string).split(',')[0];
+
     const host = config.get<string>('SMTP_HOST');
     const user = config.get<string>('SMTP_USER');
     const pass = config.get<string>('SMTP_PASS');
+    const explicitBrevoKey = config.get<string>('BREVO_API_KEY');
+
+    // Detect Brevo REST API key: either explicitly configured via BREVO_API_KEY
+    // or passed inside SMTP_PASS (starts with xkeysib-)
+    if (explicitBrevoKey && explicitBrevoKey.trim()) {
+      this.brevoApiKey = explicitBrevoKey.trim();
+    } else if (pass && pass.trim().startsWith('xkeysib-')) {
+      this.brevoApiKey = pass.trim();
+      this.log.log('Brevo API key detected in SMTP_PASS; enabling Brevo REST API transport.');
+    }
+
     if (host) {
       const port = config.get<number>('SMTP_PORT', 587);
       this.transporter = nodemailer.createTransport({
@@ -27,12 +40,82 @@ export class MailService {
         ...(user && pass ? { auth: { user, pass } } : {}),
         connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 20_000,
       });
-    } else {
-      this.log.warn('SMTP not configured; email send attempts will report delivery failure.');
+    }
+
+    if (!this.transporter && !this.brevoApiKey) {
+      this.log.warn('Neither SMTP nor Brevo API is configured; email send attempts will report delivery failure.');
     }
   }
 
-  get isConfigured() { return this.transporter !== null; }
+  get isConfigured() { return this.transporter !== null || this.brevoApiKey !== null; }
+
+  private parseSender(): { name: string; email: string } {
+    const match = this.from.match(/^(?:(?:"?([^"]*)"?\s)?<([^>]+)>|([^<>\s]+))$/);
+    const name = match ? (match[1] || match[3] || 'HeyLaunch').trim() : 'HeyLaunch';
+    const email = match ? (match[2] || match[3] || '').trim() : this.from;
+    return { name, email };
+  }
+
+  private async sendViaBrevoApi(to: string, subject: string, html: string): Promise<boolean> {
+    if (!this.brevoApiKey) return false;
+    const sender = this.parseSender();
+    try {
+      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': this.brevoApiKey,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: sender.name, email: sender.email },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html,
+        }),
+      });
+
+      if (res.ok) {
+        this.log.debug(`Email delivered via Brevo REST API to ${to}`);
+        return true;
+      }
+
+      const body = await res.text().catch(() => '');
+      this.log.warn(`Brevo API delivery failed (HTTP ${res.status}): ${body.slice(0, 160)}`);
+      return false;
+    } catch (err: any) {
+      this.log.warn(`Brevo API network error: ${err?.message || 'unknown error'}`);
+      return false;
+    }
+  }
+
+  async verifyConnection(): Promise<{ ok: boolean; method: 'brevo_api' | 'smtp' | 'none'; message: string }> {
+    if (this.brevoApiKey) {
+      try {
+        const res = await fetch('https://api.brevo.com/v3/account', {
+          headers: { 'api-key': this.brevoApiKey, 'Accept': 'application/json' },
+        });
+        if (res.ok) {
+          const data = (await res.json().catch(() => ({}))) as { email?: string };
+          return { ok: true, method: 'brevo_api', message: `Connected to Brevo API (${data.email || 'account verified'})` };
+        }
+        return { ok: false, method: 'brevo_api', message: `Brevo API rejected key (HTTP ${res.status})` };
+      } catch (err: any) {
+        return { ok: false, method: 'brevo_api', message: `Brevo API connection error: ${err?.message || 'network failed'}` };
+      }
+    }
+
+    if (this.transporter) {
+      try {
+        await this.transporter.verify();
+        return { ok: true, method: 'smtp', message: 'SMTP connection verified successfully' };
+      } catch (err: any) {
+        return { ok: false, method: 'smtp', message: `SMTP verification failed: ${err?.message || 'connection failed'}` };
+      }
+    }
+
+    return { ok: false, method: 'none', message: 'Neither SMTP nor Brevo API is configured' };
+  }
 
   private escapeHtml(value: string) {
     return value.replace(/[&<>\"']/g, (char) => ({
@@ -41,14 +124,25 @@ export class MailService {
   }
 
   private async send(to: string, subject: string, html: string): Promise<boolean> {
-    if (!this.transporter) { this.log.warn('Email suppressed: SMTP is not configured.'); return false; }
+    if (this.brevoApiKey) {
+      const ok = await this.sendViaBrevoApi(to, subject, html);
+      if (ok) return true;
+      if (!this.transporter) return false;
+      this.log.log('Brevo REST API failed, attempting SMTP fallback...');
+    }
+
+    if (!this.transporter) {
+      this.log.warn('Email suppressed: Neither SMTP nor Brevo API is configured.');
+      return false;
+    }
+
     try {
       await this.transporter.sendMail({ from: this.from, to, subject, html });
       return true;
     } catch (e: any) {
       const rawCode = e?.code;
       const code = typeof rawCode === 'string' && /^[A-Z0-9_]{1,24}$/.test(rawCode) ? rawCode : 'provider error';
-      this.log.warn(`Email delivery failed (${code}).`);
+      this.log.warn(`Email delivery failed (${code}): ${e?.message || 'unknown error'}`);
       return false;
     }
   }

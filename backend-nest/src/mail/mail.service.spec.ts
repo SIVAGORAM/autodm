@@ -133,4 +133,18 @@ describe('MailService', () => {
     expect(html).not.toContain('every feature unlocked');
     expect(html).not.toContain('Full analytics');
   });
+
+  it('detects Brevo API key when configured or when passed via SMTP_PASS', async () => {
+    const configWithApi: any = {
+      get: (key: string, fallback?: unknown) => ({ BREVO_API_KEY: 'xkeysib-test-key' }[key] ?? fallback),
+    };
+    const mailWithApi = new MailService(configWithApi);
+    expect(mailWithApi.isConfigured).toBe(true);
+
+    const configWithPass: any = {
+      get: (key: string, fallback?: unknown) => ({ SMTP_PASS: 'xkeysib-detected-key' }[key] ?? fallback),
+    };
+    const mailWithPass = new MailService(configWithPass);
+    expect(mailWithPass.isConfigured).toBe(true);
+  });
 });

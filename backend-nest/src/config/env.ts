@@ -69,6 +69,7 @@ export const envSchema = z.object({
   SMTP_PORT: z.coerce.number().default(587),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
+  BREVO_API_KEY: z.string().optional(),
   WEBHOOK_PAYLOAD_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   UNVERIFIED_ACCOUNT_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   MAIL_FROM: z.string().default('HeyLaunch <no-reply@heylaunch.app>'),
@@ -164,15 +165,27 @@ export const envSchema = z.object({
     ['META_APP_ID', 'Meta app ID'],
     ['META_APP_SECRET', 'Meta app secret'],
     ['META_WEBHOOK_VERIFY_TOKEN', 'Meta webhook verification token'],
-    ['SMTP_HOST', 'SMTP host'],
-    ['SMTP_USER', 'SMTP username'],
-    ['SMTP_PASS', 'SMTP password'],
   ];
   for (const [key, label] of required) {
     const value = env[key];
     if (typeof value !== 'string' || !value.trim() || value === 'change-me') {
       ctx.addIssue({ code: 'custom', path: [key], message: `${label} must be configured in production` });
     }
+  }
+
+  // Transactional email: can be satisfied by Brevo API key OR Brevo/standard SMTP credentials
+  const hasBrevoApi = typeof env.BREVO_API_KEY === 'string' && env.BREVO_API_KEY.trim().length > 0;
+  const hasBrevoKeyInSmtpPass = typeof env.SMTP_PASS === 'string' && env.SMTP_PASS.trim().startsWith('xkeysib-');
+  const hasSmtp = typeof env.SMTP_HOST === 'string' && env.SMTP_HOST.trim().length > 0
+    && typeof env.SMTP_USER === 'string' && env.SMTP_USER.trim().length > 0
+    && typeof env.SMTP_PASS === 'string' && env.SMTP_PASS.trim().length > 0;
+
+  if (!hasBrevoApi && !hasBrevoKeyInSmtpPass && !hasSmtp) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['SMTP_HOST'],
+      message: 'Transactional email must be configured in production (set SMTP_HOST, SMTP_USER, and SMTP_PASS or BREVO_API_KEY)',
+    });
   }
 
   // If separate Instagram product credentials are provided, both ID and Secret must be non-empty.

@@ -13,7 +13,8 @@ describe('MailAdminController', () => {
 
   it('validates filters and returns redacted outbox data through the service', async () => {
     const mailOutbox: any = { listForAdmin: jest.fn().mockResolvedValue({ counts: {}, messages: [], hasMore: false }) };
-    const controller = new MailAdminController(mailOutbox);
+    const mail: any = { verifyConnection: jest.fn().mockResolvedValue({ ok: true, method: 'smtp', message: 'ok' }) };
+    const controller = new MailAdminController(mailOutbox, mail);
 
     await expect(controller.list('2', 'FAILED')).resolves.toEqual({
       success: true,
@@ -22,5 +23,10 @@ describe('MailAdminController', () => {
     expect(mailOutbox.listForAdmin).toHaveBeenCalledWith(2, 'FAILED');
     await expect(controller.list('0', 'FAILED')).rejects.toThrow();
     await expect(controller.list('1', 'ALL')).rejects.toThrow();
+
+    await expect(controller.verifyConnection()).resolves.toEqual({
+      success: true,
+      data: { ok: true, method: 'smtp', message: 'ok' },
+    });
   });
 });

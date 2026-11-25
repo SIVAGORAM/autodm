@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'crypto';
@@ -25,13 +25,52 @@ const ADMIN_MAIL_STATUSES = ['PENDING', 'PROCESSING', 'SENT', 'FAILED', 'CANCELL
 type AdminMailStatus = (typeof ADMIN_MAIL_STATUSES)[number];
 
 @Injectable()
-export class MailOutboxService {
+export class MailOutboxService implements OnApplicationBootstrap, OnApplicationShutdown {
+  private readonly log = new Logger(MailOutboxService.name);
+  private drainTimer: NodeJS.Timeout | null = null;
+  private activeDrain: Promise<any> | null = null;
+
   constructor(
     private prisma: PrismaService,
     private encryption: EncryptionService,
     private mail: MailService,
     private config: ConfigService,
   ) {}
+
+  onApplicationBootstrap() {
+    if (process.env.NODE_ENV === 'test') return;
+    // Keep outbox processing running in-process for single-service deployments (e.g. Render free tier)
+    this.drainTimer = setInterval(() => {
+      this.triggerDrain();
+    }, 10_000);
+    this.drainTimer.unref();
+  }
+
+  onApplicationShutdown() {
+    if (this.drainTimer) {
+      clearInterval(this.drainTimer);
+      this.drainTimer = null;
+    }
+  }
+
+  /** Triggers immediate asynchronous processing of pending outbox items without blocking the caller */
+  triggerDrain() {
+    if (this.activeDrain || process.env.NODE_ENV === 'test') return;
+    setImmediate(() => {
+      this.activeDrain = this.processPending()
+        .then((res) => {
+          if (res.sent > 0 || res.failed > 0) {
+            this.log.log(`Mail outbox processed: sent=${res.sent} retried=${res.retried} failed=${res.failed}`);
+          }
+        })
+        .catch((err) => {
+          this.log.warn(`Mail outbox drain error: ${err?.message || 'unknown error'}`);
+        })
+        .finally(() => {
+          this.activeDrain = null;
+        });
+    });
+  }
 
   async queueVerification(tx: Prisma.TransactionClient, userId: string, to: string, code: string, expiresAt: Date) {
     const payload: MailPayload = { kind: 'verification', to, code };
@@ -43,6 +82,7 @@ export class MailOutboxService {
         expiresAt,
       },
     });
+    this.triggerDrain();
   }
 
   async queuePasswordReset(tx: Prisma.TransactionClient, userId: string, to: string, token: string, expiresAt: Date) {
@@ -55,6 +95,7 @@ export class MailOutboxService {
         expiresAt,
       },
     });
+    this.triggerDrain();
   }
 
   async queueWelcome(tx: Prisma.TransactionClient, userId: string, to: string, name: string, expiresAt: Date) {
@@ -68,6 +109,7 @@ export class MailOutboxService {
       }],
       skipDuplicates: true,
     });
+    this.triggerDrain();
   }
 
   async queueSupportReply(tx: Prisma.TransactionClient, userId: string, to: string, subject: string, messageId: string) {
@@ -81,6 +123,7 @@ export class MailOutboxService {
       }],
       skipDuplicates: true,
     });
+    this.triggerDrain();
   }
 
   async queueSupportAdminNotification(tx: Prisma.TransactionClient, userId: string, subject: string, messageId: string) {
@@ -96,6 +139,7 @@ export class MailOutboxService {
       }],
       skipDuplicates: true,
     });
+    this.triggerDrain();
   }
 
   async queueContactEnquiryNotification(tx: Prisma.TransactionClient, enquiryId: string, subject: string) {
@@ -110,6 +154,7 @@ export class MailOutboxService {
       }],
       skipDuplicates: true,
     });
+    this.triggerDrain();
   }
 
   async queueContactReply(tx: Prisma.TransactionClient, input: {
@@ -125,6 +170,7 @@ export class MailOutboxService {
       }],
       skipDuplicates: true,
     });
+    this.triggerDrain();
   }
 
   async queueAdminInvitation(tx: Prisma.TransactionClient, input: {
@@ -141,6 +187,7 @@ export class MailOutboxService {
         expiresAt: input.expiresAt,
       },
     });
+    this.triggerDrain();
   }
 
   async processPending(): Promise<{ processed: number; sent: number; retried: number; failed: number; canceled: number }> {
