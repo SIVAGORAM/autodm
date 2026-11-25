@@ -4,6 +4,7 @@ import {
   Logger,
   OnApplicationBootstrap,
   OnApplicationShutdown,
+  forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue, Worker } from 'bullmq';
@@ -31,6 +32,7 @@ export class InProcessWorkerService implements OnApplicationBootstrap, OnApplica
     private readonly config: ConfigService,
     @Inject(DM_QUEUE_TOKEN) private readonly dmQueue: Queue,
     private readonly dmProcessor: DmProcessorService,
+    @Inject(forwardRef(() => WebhookService))
     private readonly webhookService: WebhookService,
   ) {}
 

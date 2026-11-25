@@ -6,5 +6,10 @@ import { AdminGuard } from '../common/guards/admin.guard';
 import { SuperAdminGuard } from '../common/guards/super-admin.guard';
 import { InstagramModule } from '../instagram/instagram.module';
 
-@Module({ imports: [InstagramModule], controllers: [WebhookController, WebhookAdminController], providers: [WebhookService, AdminGuard, SuperAdminGuard] })
+@Module({
+  imports: [InstagramModule],
+  controllers: [WebhookController, WebhookAdminController],
+  providers: [WebhookService, AdminGuard, SuperAdminGuard],
+  exports: [WebhookService],
+})
 export class WebhookModule {}
