@@ -16,7 +16,7 @@ export class MailService {
     this.from = config.get<string>('MAIL_FROM')
       || config.get<string>('SMTP_FROM')
       || config.get<string>('EMAIL_FROM')
-      || 'Relayo <nexloralabs@gmail.com>';
+      || 'Hey Launch <nexloralabs@gmail.com>';
     this.frontend = this.resolveFrontendUrl();
 
     const host = config.get<string>('SMTP_HOST');

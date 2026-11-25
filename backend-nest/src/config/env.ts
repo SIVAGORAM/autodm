@@ -75,7 +75,7 @@ export const envSchema = z.object({
   BREVO_API_KEY: z.string().optional(),
   WEBHOOK_PAYLOAD_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   UNVERIFIED_ACCOUNT_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
-  MAIL_FROM: z.string().default('HeyLaunch <no-reply@heylaunch.app>'),
+  MAIL_FROM: z.string().default('Hey Launch <no-reply@heylaunch.app>'),
   SUPPORT_NOTIFICATION_EMAIL: z.union([z.string().email(), z.literal('')]).optional(),
   COOKIE_SECURE: z.preprocess(
     (value) => typeof value === 'boolean' ? value : value === 'true' ? true : value === 'false' ? false : undefined,
