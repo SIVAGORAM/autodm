@@ -552,6 +552,7 @@ export class WebhookService {
               triggerType: 'DM',
               recipientIgsid: senderId,
               text: emailPrompt,
+              customButtons: [],
               triggerEventId: `follow-verified-email-prompt:${igUserId}:${mid}`,
               replyReceivedAt: replyAt.toISOString(),
             });
@@ -684,6 +685,7 @@ export class WebhookService {
             triggerType: 'DM',
             recipientIgsid: senderId,
             text: retryPrompt,
+            customButtons: [],
             triggerEventId: `email-retry-prompt:${igUserId}:${mid}`,
             replyReceivedAt: replyAt.toISOString(),
           });

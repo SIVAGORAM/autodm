@@ -282,7 +282,12 @@ export class DmProcessorService {
     const attributionSecret = automation.trackClicks && automation.trackedLinks.length > 0
       ? this.config.getOrThrow<string>('ENCRYPTION_KEY')
       : undefined;
-    const buttons = job.customButtons && job.customButtons.length > 0
+    const isEmailPromptJob =
+      job.triggerEventId?.startsWith('follow-verified-email-prompt:') ||
+      job.triggerEventId?.startsWith('email-retry-prompt:');
+    const buttons = isEmailPromptJob
+      ? []
+      : job.customButtons !== undefined
       ? job.customButtons
       : applyTracking(
           extractButtons(automation.dmBlocks), automation.trackedLinks, automation.trackClicks,
