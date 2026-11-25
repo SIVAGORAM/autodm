@@ -93,6 +93,7 @@ export class WebhookService {
         }
       }
       for (const message of Array.isArray(entry.messaging) ? entry.messaging : []) {
+        if (message?.reaction || message?.read || message?.delivery || message?.message?.is_echo) continue;
         const mid = message?.message?.mid ?? message?.postback?.mid ?? (message?.timestamp ? `postback:${message?.sender?.id ?? 'sender'}:${message.timestamp}` : '');
         if (!mid) continue;
         const eventId = `message:${igUserId}:${String(mid)}`;
@@ -460,7 +461,8 @@ export class WebhookService {
     const text: string = msg.message?.text ?? msg.postback?.title ?? msg.message?.quick_reply?.payload ?? msg.postback?.payload ?? '';
     const mid = msg.message?.mid ?? msg.postback?.mid ?? (msg.timestamp ? `postback:${senderId}:${msg.timestamp}` : '');
     if (!senderId || senderId === igUserId || !mid) return;
-    if (msg.message?.is_echo) return;
+    if (msg.reaction || msg.read || msg.delivery || msg.message?.is_echo) return;
+    if (!text || !text.trim()) return;
     const providerTimestamp = typeof msg.timestamp === 'number' || (typeof msg.timestamp === 'string' && /^\d+$/.test(msg.timestamp))
       ? Number(msg.timestamp)
       : Number.NaN;
@@ -532,7 +534,7 @@ export class WebhookService {
         const isFollower = await this.instagram.checkFollowerStatus(token, senderId, account.loginMode);
 
         if (isFollower) {
-          const remainingTags = currentTags.filter((t) => t !== pendingFollowTag);
+          const remainingTags = currentTags.filter((t) => t !== pendingFollowTag && !t.startsWith('last_reminder_at:'));
           await this.prisma.contact.update({
             where: { id: contact.id },
             data: { follows: true, tags: remainingTags },
@@ -567,6 +569,17 @@ export class WebhookService {
           });
           return;
         } else {
+          const lastReminderTime = currentTags.find((t) => t.startsWith('last_reminder_at:'))?.replace('last_reminder_at:', '');
+          if (lastReminderTime && Date.now() - Number(lastReminderTime) < 15_000) {
+            this.log.log(`Throttling duplicate follow reminder for ${senderId}`);
+            return;
+          }
+          const cleanTags = currentTags.filter((t) => !t.startsWith('last_reminder_at:'));
+          await this.prisma.contact.update({
+            where: { id: contact.id },
+            data: { tags: [...cleanTags, `last_reminder_at:${Date.now()}`] },
+          });
+
           const accountUsername = targetAuto.igAccount.username;
           const retryDescriptions = [
             `Hmm, it looks like you haven't followed yet! 🔍👀 Please tap 'Visit Profile' below, hit Follow, and then tap 'I'm following'! ✨`,
@@ -598,12 +611,26 @@ export class WebhookService {
       const targetAutoId = pendingEmailTag.replace('pending_email:', '');
       const targetAuto = await this.prisma.automation.findUnique({
         where: { id: targetAutoId },
-        select: { id: true, name: true, status: true, dmBlocks: true },
+        select: { id: true, name: true, status: true, dmBlocks: true, igAccount: { select: { username: true } } },
       });
 
       if (targetAuto && targetAuto.status === 'LIVE') {
         const trimmed = text.trim();
-        const remainingTags = currentTags.filter((t) => t !== pendingEmailTag);
+        const remainingTags = currentTags.filter((t) => t !== pendingEmailTag && !t.startsWith('last_reminder_at:'));
+
+        if (trimmed === 'CONFIRM_FOLLOW' || trimmed.toLowerCase() === "i'm following" || trimmed.toLowerCase() === 'following') {
+          const emailPrompt = `Awesome, you're already following @${targetAuto.igAccount.username}! 🎉 Before I drop your link right here, what's your email address? Reply with your email below! 📩`;
+          await this.enqueue({
+            automationId: targetAuto.id,
+            igAccountId: account.id,
+            triggerType: 'DM',
+            recipientIgsid: senderId,
+            text: emailPrompt,
+            triggerEventId: `follow-verified-email-prompt:${igUserId}:${mid}`,
+            replyReceivedAt: replyAt.toISOString(),
+          });
+          return;
+        }
 
         if (trimmed.toUpperCase() === 'SKIP') {
           await this.prisma.contact.update({
@@ -649,16 +676,18 @@ export class WebhookService {
           return;
         }
 
-        const retryPrompt = `Oops, that doesn't look like a valid email address! ✉️ Please reply with your email (e.g. name@example.com) to get your link right here! ✨`;
-        await this.enqueue({
-          automationId: targetAuto.id,
-          igAccountId: account.id,
-          triggerType: 'DM',
-          recipientIgsid: senderId,
-          text: retryPrompt,
-          triggerEventId: `email-retry-prompt:${igUserId}:${mid}`,
-          replyReceivedAt: replyAt.toISOString(),
-        });
+        if (trimmed.length >= 3) {
+          const retryPrompt = `Oops, that doesn't look like a valid email address! ✉️ Please reply with your email (e.g. name@example.com) to get your link right here! ✨`;
+          await this.enqueue({
+            automationId: targetAuto.id,
+            igAccountId: account.id,
+            triggerType: 'DM',
+            recipientIgsid: senderId,
+            text: retryPrompt,
+            triggerEventId: `email-retry-prompt:${igUserId}:${mid}`,
+            replyReceivedAt: replyAt.toISOString(),
+          });
+        }
         return;
       }
     }
