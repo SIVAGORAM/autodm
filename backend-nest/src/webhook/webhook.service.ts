@@ -93,8 +93,9 @@ export class WebhookService {
         }
       }
       for (const message of Array.isArray(entry.messaging) ? entry.messaging : []) {
-        if (!message?.message?.mid) continue;
-        const eventId = `message:${igUserId}:${String(message.message.mid)}`;
+        const mid = message?.message?.mid ?? message?.postback?.mid ?? (message?.timestamp ? `postback:${message?.sender?.id ?? 'sender'}:${message.timestamp}` : '');
+        if (!mid) continue;
+        const eventId = `message:${igUserId}:${String(mid)}`;
         events.push({ eventId, igUserId, payload: { entry: [{ id: igUserId, messaging: [message] }] } });
       }
     }

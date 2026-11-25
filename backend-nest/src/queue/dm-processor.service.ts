@@ -192,7 +192,15 @@ export class DmProcessorService {
       ? 'The public comment reply failed; the direct message was still sent.'
       : undefined;
 
-    if (automation.askToFollow && !contact.follows) {
+    const isConversationalGateStep =
+      job.triggerEventId.startsWith('follow-reminder:') ||
+      job.triggerEventId.startsWith('follow-verified-email-prompt:') ||
+      job.triggerEventId.startsWith('follow-verified-delivered:') ||
+      job.triggerEventId.startsWith('email-retry-prompt:') ||
+      job.triggerEventId.startsWith('email-collected-delivered:') ||
+      job.triggerEventId.startsWith('email-skipped-delivered:');
+
+    if (!isConversationalGateStep && automation.askToFollow && !contact.follows) {
       const { isFollower } = await this.meta.getFollowerInfo(igUserId, token, job.recipientIgsid, loginMode);
       await this.prisma.contact.update({ where: { id: contact.id }, data: { follows: isFollower } });
       if (!isFollower) {
@@ -234,7 +242,7 @@ export class DmProcessorService {
       }
     }
 
-    if (automation.collectEmail && !contact.email) {
+    if (!isConversationalGateStep && automation.collectEmail && !contact.email) {
       const emailPromptText = `Hey ${job.recipientUsername || 'there'}! What's the best email address to send your ${automation.name} to? (Reply with your email address, or reply SKIP to proceed) 📩`;
 
       const existingTags = contact.tags || [];
