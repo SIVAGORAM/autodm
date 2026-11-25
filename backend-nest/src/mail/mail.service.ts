@@ -14,7 +14,7 @@ export class MailService {
 
   constructor(private config: ConfigService) {
     this.from = config.get<string>('MAIL_FROM') || config.get<string>('SMTP_FROM') || 'AutoDm <mrsivagoram@gmail.com>';
-    this.frontend = (config.get('CORS_ORIGIN', 'http://localhost:3000') as string).split(',')[0];
+    this.frontend = this.resolveFrontendUrl();
 
     const host = config.get<string>('SMTP_HOST');
     const user = config.get<string>('SMTP_USER');
@@ -54,6 +54,38 @@ export class MailService {
     const name = match ? (match[1] || match[3] || 'HeyLaunch').trim() : 'HeyLaunch';
     const email = match ? (match[2] || match[3] || '').trim() : this.from;
     return { name, email };
+  }
+
+  private resolveFrontendUrl(): string {
+    const explicit = this.config.get<string>('FRONTEND_URL') || this.config.get<string>('APP_URL');
+    if (explicit && explicit.trim()) return explicit.trim().replace(/\/+$/, '');
+
+    const corsOrigins = (this.config.get<string>('CORS_ORIGIN', '') || '')
+      .split(',')
+      .map((s) => s.trim().replace(/\/+$/, ''))
+      .filter(Boolean);
+
+    // Prefer live production origins over localhost
+    const prodOrigin = corsOrigins.find((o) => !o.includes('localhost') && !o.includes('127.0.0.1'));
+    if (prodOrigin) return prodOrigin;
+
+    // Check if INSTAGRAM_OAUTH_REDIRECT_URI has the production frontend origin
+    const redirectUri = this.config.get<string>('INSTAGRAM_OAUTH_REDIRECT_URI');
+    if (redirectUri) {
+      try {
+        const parsed = new URL(redirectUri);
+        if (parsed.origin && !parsed.origin.includes('localhost')) {
+          return parsed.origin;
+        }
+      } catch {
+        // ignore parsing error
+      }
+    }
+
+    if (corsOrigins.length > 0) return corsOrigins[0];
+
+    const isProd = this.config.get<string>('NODE_ENV') === 'production';
+    return isProd ? 'https://frontend-fawn-six-26.vercel.app' : 'http://localhost:3000';
   }
 
   private async sendViaBrevoApi(to: string, subject: string, html: string): Promise<boolean> {
@@ -162,11 +194,18 @@ export class MailService {
     const link = `${this.frontend}/reset-password?token=${encodeURIComponent(token)}`;
     const safeLink = this.escapeHtml(link);
     const html = `
-      <div style="font-family:Inter,Arial,sans-serif;max-width:460px;margin:auto;padding:24px;border:1px solid #e2eaed;border-radius:14px">
-        <h2 style="color:#17171B;margin:0 0 8px">Reset your HeyLaunch password</h2>
-        <p style="color:#667085;font-size:14px">Use this link to choose a new password. It expires in one hour.</p>
-        <a href="${safeLink}" style="display:inline-block;background:#17171B;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:600">Set a new password</a>
-        <p style="color:#667085;font-size:12px;margin-top:18px">If you didn't request this, you can ignore this email.</p>
+      <div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:auto;padding:28px 24px;border:1px solid #e2eaed;border-radius:14px;background:#ffffff">
+        <h2 style="color:#17171B;margin:0 0 8px;font-size:22px">Reset your HeyLaunch password</h2>
+        <p style="color:#667085;font-size:14px;line-height:1.5">Use the button below to choose a new password. This reset link is valid for <b>one hour</b>.</p>
+        <div style="margin:20px 0">
+          <a href="${safeLink}" style="display:inline-block;background:#17171B;color:#ffffff;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px">Set a new password</a>
+        </div>
+        <p style="color:#667085;font-size:12px;line-height:1.6;margin-top:20px;word-break:break-all">
+          If the button above does not open, copy and paste this URL into your browser:<br>
+          <a href="${safeLink}" style="color:#17827E;text-decoration:underline">${safeLink}</a>
+        </p>
+        <hr style="border:0;border-top:1px solid #f0f2f5;margin:20px 0 16px">
+        <p style="color:#9aa8ad;font-size:12px;margin:0">If you didn't request a password reset, you can safely ignore this email — your password will remain unchanged.</p>
       </div>`;
     return this.send(to, 'Reset your HeyLaunch password', html);
   }
