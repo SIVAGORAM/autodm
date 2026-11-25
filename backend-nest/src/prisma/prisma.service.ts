@@ -8,12 +8,20 @@ const logger = new Logger('PrismaService');
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor(config: ConfigService) {
-    const connectionString = config.getOrThrow<string>('DATABASE_URL');
-    const parsed = new URL(connectionString);
+    const rawConnectionString = config.getOrThrow<string>('DATABASE_URL');
+    const parsed = new URL(rawConnectionString);
     const configuredPoolLimit = Number(parsed.searchParams.get('connection_limit'));
     const max = Number.isInteger(configuredPoolLimit) && configuredPoolLimit > 0
       ? Math.min(configuredPoolLimit, 20)
       : 10;
+
+    // Normalize sslmode to 'verify-full' to eliminate pg-connection-string deprecated SSL mode warning
+    const rawSslMode = parsed.searchParams.get('sslmode')?.toLowerCase();
+    if (rawSslMode === 'require' || rawSslMode === 'prefer' || rawSslMode === 'verify-ca') {
+      parsed.searchParams.set('sslmode', 'verify-full');
+    }
+    const connectionString = parsed.toString();
+
     const adapter = new PrismaPg({
       connectionString,
       max,
