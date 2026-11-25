@@ -27,6 +27,7 @@ export class InProcessWorkerService implements OnApplicationBootstrap, OnApplica
   private worker: Worker | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private connection: any = null;
+  private heartbeatConnection: any = null;
 
   constructor(
     private readonly config: ConfigService,
@@ -35,6 +36,20 @@ export class InProcessWorkerService implements OnApplicationBootstrap, OnApplica
     @Inject(forwardRef(() => WebhookService))
     private readonly webhookService: WebhookService,
   ) {}
+
+  async refreshHeartbeat(): Promise<void> {
+    if (!this.heartbeatConnection) return;
+    try {
+      await this.heartbeatConnection.set(
+        WORKER_HEARTBEAT_KEY,
+        String(Date.now()),
+        'EX',
+        WORKER_HEARTBEAT_TTL_SECONDS,
+      );
+    } catch (err) {
+      this.log.warn(`Heartbeat update failed: ${safeErrorLabel(err)}`);
+    }
+  }
 
   async onApplicationBootstrap() {
     // In unit test environment, don't auto-start unless explicitly requested
@@ -49,34 +64,15 @@ export class InProcessWorkerService implements OnApplicationBootstrap, OnApplica
     }
 
     try {
-      // Check if an external dedicated worker is already running and active
-      const hasExternalWorker = await hasFreshWorkerHeartbeat(this.dmQueue);
-      if (hasExternalWorker) {
-        this.log.log('External delivery worker detected. In-process worker in standby mode.');
-        return;
-      }
-
       const redisUrl = this.config.get<string>('REDIS_URL');
       if (!redisUrl) return;
 
+      this.heartbeatConnection = createRedis(redisUrl);
       this.connection = createRedis(redisUrl);
 
-      const refreshHeartbeat = async () => {
-        try {
-          await this.connection.set(
-            WORKER_HEARTBEAT_KEY,
-            String(Date.now()),
-            'EX',
-            WORKER_HEARTBEAT_TTL_SECONDS,
-          );
-        } catch (err) {
-          this.log.warn(`Heartbeat update failed: ${safeErrorLabel(err)}`);
-        }
-      };
-
-      await refreshHeartbeat();
+      await this.refreshHeartbeat();
       this.heartbeatTimer = setInterval(() => {
-        void refreshHeartbeat();
+        void this.refreshHeartbeat();
       }, WORKER_HEARTBEAT_INTERVAL_MS);
       this.heartbeatTimer.unref();
 
@@ -111,13 +107,16 @@ export class InProcessWorkerService implements OnApplicationBootstrap, OnApplica
       await this.worker.close();
       this.worker = null;
     }
-    if (this.connection) {
-      try {
-        await this.connection.quit();
-      } catch {
-        this.connection.disconnect();
+    for (const conn of [this.connection, this.heartbeatConnection]) {
+      if (conn) {
+        try {
+          await conn.quit();
+        } catch {
+          conn.disconnect();
+        }
       }
-      this.connection = null;
     }
+    this.connection = null;
+    this.heartbeatConnection = null;
   }
 }

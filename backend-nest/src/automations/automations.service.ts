@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException, BadRequestException, ConflictException, ServiceUnavailableException, Inject } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException, BadRequestException, ConflictException, ServiceUnavailableException, Inject, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { Job, Queue } from 'bullmq';
@@ -14,6 +14,7 @@ import { accountPlanRestriction, planFor } from '../common/plan.util';
 import { EncryptionService } from '../common/encryption.service';
 import { InstagramService } from '../instagram/instagram.service';
 import { hasFreshWorkerHeartbeat } from '../queue/worker-health';
+import { InProcessWorkerService } from '../queue/in-process-worker.service';
 
 const unsupportedFollowUpConditions = new Set(['BOUGHT', 'NOT_BOUGHT', 'FORM_NOT_SUBMITTED']);
 const supportedTriggerTypeSet = new Set<string>(supportedTriggerTypes);
@@ -26,6 +27,7 @@ export class AutomationsService {
     private quota: DmQuotaService,
     private readonly instagram: InstagramService,
     private readonly encryption: EncryptionService,
+    @Optional() private readonly inProcessWorker?: InProcessWorkerService,
   ) {}
 
   private async assertOwnsAccount(userId: string, igAccountId: string) {
@@ -105,7 +107,12 @@ export class AutomationsService {
   }
 
   private async requireDeliveryWorker() {
-    if (!(await hasFreshWorkerHeartbeat(this.dmQueue))) {
+    let fresh = await hasFreshWorkerHeartbeat(this.dmQueue);
+    if (!fresh && this.inProcessWorker) {
+      await this.inProcessWorker.refreshHeartbeat();
+      fresh = await hasFreshWorkerHeartbeat(this.dmQueue);
+    }
+    if (!fresh) {
       throw new ServiceUnavailableException('The DM delivery worker is offline. This automation cannot be set live until delivery processing is available. Please try again shortly.');
     }
   }

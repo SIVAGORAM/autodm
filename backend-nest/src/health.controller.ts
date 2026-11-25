@@ -1,4 +1,4 @@
-import { Controller, Get, Header, Inject, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Header, Inject, Optional, Res, UseGuards } from '@nestjs/common';
 import { FastifyReply } from 'fastify';
 import { Queue } from 'bullmq';
 import { SkipThrottle, ThrottlerStorage } from '@nestjs/throttler';
@@ -11,6 +11,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { VerifiedEmailGuard } from './common/guards/verified-email.guard';
 import { AdminGuard } from './common/guards/admin.guard';
 import { RequireAdminPermission } from './common/admin-permissions';
+import { InProcessWorkerService } from './queue/in-process-worker.service';
 
 type ThrottleHealth = { ping(): Promise<boolean> };
 @Controller()
@@ -20,6 +21,7 @@ export class HealthController {
     @Inject(DM_QUEUE_TOKEN) private dmQueue: Queue,
     @Inject(ThrottlerStorage) private throttleStorage: ThrottleHealth,
     private config: ConfigService,
+    @Optional() private readonly inProcessWorker?: InProcessWorkerService,
   ) {}
 
   /** Liveness only: confirms the HTTP process can respond. */
