@@ -1,5 +1,11 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { DmProcessorService } from './dm-processor.service';
+import { InProcessWorkerService } from './in-process-worker.service';
+import { WebhookModule } from '../webhook/webhook.module';
 
-@Module({ providers: [DmProcessorService], exports: [DmProcessorService] })
+@Module({
+  imports: [forwardRef(() => WebhookModule)],
+  providers: [DmProcessorService, InProcessWorkerService],
+  exports: [DmProcessorService, InProcessWorkerService],
+})
 export class QueueServiceModule {}

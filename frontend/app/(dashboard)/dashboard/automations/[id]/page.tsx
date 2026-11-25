@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { automationApi } from '../../../../../services/api';
 import { Button, Card, Badge, Skeleton, StatTile } from '../../../../../components/ui/primitives';
-import { ArrowLeft, AlertTriangle, CheckCircle2, PauseCircle, Pencil, RefreshCw } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, CheckCircle2, PauseCircle, Pencil, Play, RefreshCw } from 'lucide-react';
 
 const healthTone: Record<string, 'success' | 'warning' | 'danger' | 'muted'> = {
   healthy: 'success', at_risk: 'warning', needs_reconnect: 'danger', paused: 'muted', draft: 'muted',
@@ -57,13 +57,23 @@ export default function AutomationDetail({ params }: { params: Promise<{ id: str
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" onClick={() => router.push(`/dashboard/automations/${id}/edit`)}><Pencil className="h-4 w-4" /> Edit</Button>
-              {a.data.status !== 'DRAFT' && (
+              {a.data.status === 'DRAFT' ? (
+                <Button variant="accent" loading={setStatus.isPending} onClick={() => setStatus.mutate('LIVE')}>
+                  <Play className="mr-1.5 h-4 w-4" /> Publish &amp; Go Live
+                </Button>
+              ) : (
                 <Button variant="secondary" loading={setStatus.isPending} onClick={() => setStatus.mutate(a.data.status === 'LIVE' ? 'PAUSED' : 'LIVE')}>
                   {a.data.status === 'LIVE' ? 'Pause' : 'Resume'}
                 </Button>
               )}
             </div>
           </header>
+
+          {setStatus.isError && (
+            <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {(setStatus.error as any)?.response?.data?.message ?? 'Could not update status. Please try again.'}
+            </div>
+          )}
 
           {/* Health banner — the reliability wedge */}
           {health && (

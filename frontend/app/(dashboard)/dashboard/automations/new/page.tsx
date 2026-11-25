@@ -81,9 +81,11 @@ export default function NewAutomationPage() {
     : activeAccounts[0]?.id ?? '';
   const selectedAccount = activeAccounts.find((account) => account.id === igAccountId);
   const supportsPublicCommentReply = ['POST_COMMENT', 'ANY_POST'].includes(triggerType);
+  const [submittingStatus, setSubmittingStatus] = useState<'DRAFT' | 'LIVE' | null>(null);
 
   const create = useMutation({
     mutationFn: (status: 'DRAFT' | 'LIVE') => {
+      setSubmittingStatus(status);
       const dmBlocks: any[] = [{ type: 'text', text: dmText }];
       const validBtns = buttons.filter((b) => b.title.trim() && b.url.trim());
       if (validBtns.length) dmBlocks.push({ type: 'buttons', buttons: validBtns });
@@ -136,6 +138,7 @@ export default function NewAutomationPage() {
       qc.invalidateQueries({ queryKey: ['automations'] });
       router.push('/dashboard/automations');
     },
+    onSettled: () => setSubmittingStatus(null),
     onError: (e: any) =>
       setErr(e.response?.data?.message ?? 'Could not save automation. Please check your fields and try again.'),
   });
@@ -701,10 +704,20 @@ export default function NewAutomationPage() {
               </Button>
             ) : (
               <div className="flex gap-2">
-                <Button variant="secondary" loading={create.isPending} onClick={() => create.mutate('DRAFT')}>
+                <Button
+                  variant="secondary"
+                  loading={create.isPending && submittingStatus === 'DRAFT'}
+                  disabled={create.isPending}
+                  onClick={() => create.mutate('DRAFT')}
+                >
                   Save Draft
                 </Button>
-                <Button variant="accent" loading={create.isPending} onClick={() => create.mutate('LIVE')}>
+                <Button
+                  variant="accent"
+                  loading={create.isPending && submittingStatus === 'LIVE'}
+                  disabled={create.isPending}
+                  onClick={() => create.mutate('LIVE')}
+                >
                   <Check className="mr-1.5 h-4 w-4" /> Confirm &amp; Launch
                 </Button>
               </div>

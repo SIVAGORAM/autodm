@@ -71,10 +71,15 @@ export default function AutomationsPage() {
                   </div>
                 </Link>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {a.status !== 'DRAFT' && (
+                  {a.status !== 'DRAFT' ? (
                     <Btn variant="ghost" style={{ padding: '9px 14px' }} disabled={toggle.isPending}
                       onClick={() => toggle.mutate({ id: a.id, status: a.status === 'LIVE' ? 'PAUSED' : 'LIVE' })}>
                       {a.status === 'LIVE' ? 'Pause' : 'Resume'}
+                    </Btn>
+                  ) : (
+                    <Btn variant="accent" style={{ padding: '7px 14px', fontSize: 13 }} disabled={toggle.isPending}
+                      onClick={() => toggle.mutate({ id: a.id, status: 'LIVE' })}>
+                      Go Live
                     </Btn>
                   )}
                   <Link href={`/dashboard/automations/${a.id}`} style={{ padding: 8, color: RL.faint }}><ArrowRight style={{ width: 18, height: 18 }} /></Link>

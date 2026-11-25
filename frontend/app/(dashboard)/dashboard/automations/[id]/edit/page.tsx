@@ -9,7 +9,7 @@ import { useAuthStore } from '../../../../../../store/authStore';
 import { InstagramPostSelector } from '../../../../../../components/instagram-post-selector';
 import { AutomationMessagePreview } from '../../../../../../components/automation-message-preview';
 import { Badge, Button, Card, Input, Label, TagInput, Textarea, Toggle } from '../../../../../../components/ui/primitives';
-import { ArrowLeft, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Play, Plus, Save, Trash2 } from 'lucide-react';
 
 type FollowUp = { id?: string; condition: string; delayMinutes: number; text: string };
 type MessageButton = { title: string; url: string };
@@ -89,8 +89,11 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
     setInitializedForId(id);
   }, [automation.data, id, initializedForId]);
 
+  const [targetStatus, setTargetStatus] = useState<'DRAFT' | 'LIVE' | null>(null);
+
   const save = useMutation({
-    mutationFn: () => {
+    mutationFn: (newStatus?: 'DRAFT' | 'LIVE') => {
+      setTargetStatus(newStatus ?? null);
       const dmBlocks: any[] = [{ type: 'text', text: dmText.trim() }];
       const validButtons = buttons.filter((button) => button.title.trim() && button.url.trim());
       if (validButtons.length) dmBlocks.push({ type: 'buttons', buttons: validButtons });
@@ -107,6 +110,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
 
       return automationApi.update(id, {
         name: name.trim(),
+        ...(newStatus ? { status: newStatus } : {}),
         ...(triggerType === 'LIVE_COMMENT' && !liveCommentsEnabled && automation.data?.triggerType === 'LIVE_COMMENT' ? {} : { triggerType }),
         mediaId: triggerType === 'POST_COMMENT' && mediaId.trim() ? mediaId.trim() : null,
         matchMode,
@@ -123,6 +127,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
         })),
       });
     },
+    onSettled: () => setTargetStatus(null),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['automation', id] }),
@@ -137,7 +142,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
     },
   });
 
-  function submit() {
+  function submit(newStatus?: 'DRAFT' | 'LIVE') {
     setError('');
     if (!name.trim()) return setError('Give your automation a name.');
     if (triggerType === 'POST_COMMENT' && !mediaId.trim()) return setError('Choose a specific post. Use “Comment on any post” for account-wide coverage.');
@@ -155,7 +160,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
     }
     if (followUps.some((item) => !item.text.trim())) return setError('Add a message or remove each empty follow-up.');
     if (['POST_COMMENT', 'ANY_POST'].includes(triggerType) && followUps.some((item) => item.condition === 'NO_REPLY')) return setError('A comment private reply cannot be followed by an unsolicited message. Choose another condition; the commenter must reply first.');
-    save.mutate();
+    save.mutate(newStatus);
   }
 
   if (automation.isLoading || initializedForId !== id) {
@@ -319,7 +324,30 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
 
         <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-5">
           <Button variant="secondary" onClick={() => router.push(`/dashboard/automations/${id}`)}>Cancel</Button>
-          <Button variant="accent" loading={save.isPending} onClick={submit}><Save className="h-4 w-4" /> Save changes</Button>
+          {automation.data?.status === 'DRAFT' ? (
+            <>
+              <Button
+                variant="secondary"
+                loading={save.isPending && targetStatus === 'DRAFT'}
+                disabled={save.isPending}
+                onClick={() => submit('DRAFT')}
+              >
+                Save as Draft
+              </Button>
+              <Button
+                variant="accent"
+                loading={save.isPending && targetStatus === 'LIVE'}
+                disabled={save.isPending}
+                onClick={() => submit('LIVE')}
+              >
+                <Play className="mr-1.5 h-4 w-4" /> Save &amp; Go Live
+              </Button>
+            </>
+          ) : (
+            <Button variant="accent" loading={save.isPending} onClick={() => submit()}>
+              <Save className="h-4 w-4" /> Save changes
+            </Button>
+          )}
         </div>
       </Card>
       </div>
