@@ -566,13 +566,25 @@ export class WebhookService {
           });
           return;
         } else {
-          const followReminder = `We checked and it looks like you haven't followed @${targetAuto.igAccount.username} yet! Please tap the profile link above to follow, then reply DONE here.`;
+          const accountUsername = targetAuto.igAccount.username;
+          const retryDescriptions = [
+            `Hmm, it looks like you haven't followed yet! 🔍👀 Please tap 'Visit Profile' below, hit Follow, and then tap 'I'm following'! ✨`,
+            `Still not seeing that follow! 👀 Don't worry, tap 'Visit Profile' below to follow @${accountUsername}, then tap 'I'm following' right here! 🚀`,
+            `We checked, but you're not following @${accountUsername} yet! 🥺👀 Please tap 'Visit Profile' and follow us, then press 'I'm following'! 👇`,
+            `Almost! 👀 You need to hit Follow on @${accountUsername}'s profile first. Tap 'Visit Profile' below, then tap 'I'm following'! 💫`,
+          ];
+          const followReminder = retryDescriptions[Math.floor(Math.random() * retryDescriptions.length)];
+          const followButtons = [
+            { title: 'Visit Profile', url: `https://instagram.com/${accountUsername}`, type: 'web_url' as const },
+            { title: "I'm following", type: 'postback' as const, payload: 'CONFIRM_FOLLOW' },
+          ];
           await this.enqueue({
             automationId: targetAuto.id,
             igAccountId: account.id,
             triggerType: 'DM',
             recipientIgsid: senderId,
             text: followReminder,
+            customButtons: followButtons,
             triggerEventId: `follow-reminder:${igUserId}:${mid}`,
             replyReceivedAt: replyAt.toISOString(),
           });

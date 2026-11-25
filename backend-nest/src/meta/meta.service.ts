@@ -4,7 +4,12 @@ import axios, { AxiosInstance } from 'axios';
 import type { InstagramLoginMode } from '../instagram/instagram.service';
 import { metaHttpOptions } from '../common/meta-http';
 
-export interface DmButton { title: string; url: string; }
+export interface DmButton {
+  title: string;
+  url?: string;
+  type?: 'web_url' | 'postback';
+  payload?: string;
+}
 
 // Thin wrapper over the Instagram Graph API. Every send goes through here so
 // rate-limit handling and logging live in one place.
@@ -19,10 +24,27 @@ export class MetaService {
     this.http = axios.create({ baseURL: `https://graph.instagram.com/${this.version}`, timeout: 10_000, ...metaHttpOptions(config.get<string>('META_HTTPS_PROXY')) });
   }
 
+  private formatButtons(buttons: DmButton[]) {
+    return buttons.slice(0, 3).map((b) => {
+      if (b.type === 'postback' || (!b.url && b.payload)) {
+        return {
+          type: 'postback',
+          title: b.title.slice(0, 20),
+          payload: (b.payload || b.title).slice(0, 1000),
+        };
+      }
+      return {
+        type: 'web_url',
+        title: b.title.slice(0, 20),
+        url: b.url || 'https://instagram.com',
+      };
+    });
+  }
+
   // Private reply: DM a user who commented, referencing the comment id.
   async sendCommentDm(igUserId: string, token: string, commentId: string, text: string, buttons: DmButton[] = [], loginMode: InstagramLoginMode = 'INSTAGRAM_LOGIN') {
     const message = buttons.length
-      ? { attachment: { type: 'template', payload: { template_type: 'button', text, buttons: buttons.slice(0, 3).map(b => ({ type: 'web_url', title: b.title, url: b.url })) } } }
+      ? { attachment: { type: 'template', payload: { template_type: 'button', text, buttons: this.formatButtons(buttons) } } }
       : { text };
     return this.post(`/${igUserId}/messages`, token, { recipient: { comment_id: commentId }, message }, loginMode);
   }
@@ -30,7 +52,7 @@ export class MetaService {
   // Direct message to a user by IGSID (story replies, incoming DMs, follow-ups).
   async sendDirectMessage(igUserId: string, token: string, recipientIgsid: string, text: string, buttons: DmButton[] = [], loginMode: InstagramLoginMode = 'INSTAGRAM_LOGIN') {
     const message = buttons.length
-      ? { attachment: { type: 'template', payload: { template_type: 'button', text, buttons: buttons.slice(0, 3).map(b => ({ type: 'web_url', title: b.title, url: b.url })) } } }
+      ? { attachment: { type: 'template', payload: { template_type: 'button', text, buttons: this.formatButtons(buttons) } } }
       : { text };
     return this.post(`/${igUserId}/messages`, token, { recipient: { id: recipientIgsid }, message }, loginMode);
   }

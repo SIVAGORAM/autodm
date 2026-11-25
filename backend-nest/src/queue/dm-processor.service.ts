@@ -197,8 +197,18 @@ export class DmProcessorService {
       await this.prisma.contact.update({ where: { id: contact.id }, data: { follows: isFollower } });
       if (!isFollower) {
         const accountUsername = automation.igAccount.username;
-        const promptText = `Hey ${job.recipientUsername || 'there'}! Thanks for commenting! To unlock your link, please follow @${accountUsername} ( https://instagram.com/${accountUsername} ) first, then reply 'DONE' here! 👇`;
-        const profileButton = [{ title: `Follow @${accountUsername}`, url: `https://instagram.com/${accountUsername}` }];
+        const followDescriptions = [
+          `Oh no! 👀 It seems you're not following @${accountUsername} yet! Tap 'Visit Profile' below to follow, then tap 'I'm following' to get your link! 👇`,
+          `Wait a second! 🥺👀 You're not following @${accountUsername} yet! Please tap 'Visit Profile' below to follow, then tap 'I'm following' to unlock your resource! ✨`,
+          `Almost there! 🔍👀 We noticed you haven't followed @${accountUsername} yet. Hit 'Visit Profile' to follow us, then press 'I'm following' below! 🚀`,
+          `Hold on! 👀✨ It looks like you're not following @${accountUsername}. Tap 'Visit Profile' below to follow, then click 'I'm following' to receive your link! 🎁`,
+          `Oops! 🙈👀 You must follow @${accountUsername} to unlock this exclusive resource. Follow our profile and tap 'I'm following' right here! 👇`,
+        ];
+        const promptText = followDescriptions[Math.floor(Math.random() * followDescriptions.length)];
+        const followButtons: DmButton[] = [
+          { title: 'Visit Profile', url: `https://instagram.com/${accountUsername}`, type: 'web_url' },
+          { title: "I'm following", type: 'postback', payload: 'CONFIRM_FOLLOW' },
+        ];
 
         const existingTags = contact.tags || [];
         const followTag = `pending_follow:${automation.id}`;
@@ -210,8 +220,8 @@ export class DmProcessorService {
         }
 
         const promptResult = job.commentId
-          ? await this.meta.sendCommentDm(igUserId, token, job.commentId, promptText, [], loginMode)
-          : await this.meta.sendDirectMessage(igUserId, token, job.recipientIgsid, promptText, profileButton, loginMode);
+          ? await this.meta.sendCommentDm(igUserId, token, job.commentId, promptText, followButtons, loginMode)
+          : await this.meta.sendDirectMessage(igUserId, token, job.recipientIgsid, promptText, followButtons, loginMode);
 
         if (!promptResult.ok) {
           if (promptResult.retryable) throw new Error(`Retryable Meta error: ${promptResult.error}`);
@@ -264,10 +274,12 @@ export class DmProcessorService {
     const attributionSecret = automation.trackClicks && automation.trackedLinks.length > 0
       ? this.config.getOrThrow<string>('ENCRYPTION_KEY')
       : undefined;
-    const buttons = applyTracking(
-      extractButtons(automation.dmBlocks), automation.trackedLinks, automation.trackClicks,
-      this.publicUrl(), job.recipientIgsid, attributionSecret,
-    );
+    const buttons = job.customButtons && job.customButtons.length > 0
+      ? job.customButtons
+      : applyTracking(
+          extractButtons(automation.dmBlocks), automation.trackedLinks, automation.trackClicks,
+          this.publicUrl(), job.recipientIgsid, attributionSecret,
+        );
 
     const currentStatus = await this.currentAutomationStatus(job.automationId);
     if (currentStatus !== 'LIVE') {

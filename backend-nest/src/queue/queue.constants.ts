@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { DmButton } from '../meta/meta.service';
 
 export const DM_QUEUE = 'dm';
 export const DM_QUEUE_TOKEN = 'DM_QUEUE_TOKEN';
@@ -66,6 +67,7 @@ export interface DmJob {
   primarySentAt?: string;    // ISO time the primary DM was sent (also used for follow-up conditions)
   replyReceivedAt?: string;  // ISO time of an inbound DM/story reply or a comment-private-reply response
   messageWindow?: MessageWindowType; // set only from Meta's signed Click-to-Direct ad referral event
+  customButtons?: DmButton[];
 }
 
 export const COMMENT_FOLLOWUP_REPLY_REQUIRED = 'Instagram allows a follow-up to a comment private reply only after the commenter responds.';
