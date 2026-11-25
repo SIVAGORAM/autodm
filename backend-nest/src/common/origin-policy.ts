@@ -13,7 +13,7 @@ export function isForbiddenMutationOrigin(
   allowedOrigins: string[],
   hasAuthCookie = false,
 ): boolean {
-  if (!STATE_CHANGING_METHODS.has(method.toUpperCase()) || path === '/webhooks/instagram') return false;
+  if (!STATE_CHANGING_METHODS.has(method.toUpperCase()) || path === '/webhooks/instagram' || path === '/api/webhooks/instagram') return false;
   if (!origin) return hasAuthCookie;
   let normalizedOrigin: string;
   try {

@@ -5,7 +5,7 @@ import { WebhookService } from './webhook.service';
 import { verifyMetaSignature } from './signature';
 import { SkipThrottle } from '@nestjs/throttler';
 
-@Controller('webhooks/instagram')
+@Controller(['webhooks/instagram', 'api/webhooks/instagram'])
 export class WebhookController {
   private readonly log = new Logger(WebhookController.name);
   constructor(private webhook: WebhookService, private config: ConfigService) {}
