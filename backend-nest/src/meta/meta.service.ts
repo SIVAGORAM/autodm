@@ -43,8 +43,10 @@ export class MetaService {
   async getFollowerInfo(igUserId: string, token: string, igsid: string, loginMode: InstagramLoginMode = 'INSTAGRAM_LOGIN'): Promise<{ isFollower: boolean }> {
     try {
       const host = loginMode === 'UNIFIED_LOGIN' ? 'https://graph.facebook.com' : 'https://graph.instagram.com';
-      const { data } = await this.http.get(`${host}/${this.version}/${igUserId}`, { params: { fields: `business_discovery.username(${igsid})`, access_token: token } });
-      return { isFollower: !!data };
+      const { data } = await this.http.get(`${host}/${this.version}/${encodeURIComponent(igsid)}`, {
+        params: { fields: 'is_user_follow_business', access_token: token },
+      });
+      return { isFollower: data?.is_user_follow_business === true };
     } catch {
       return { isFollower: false };
     }

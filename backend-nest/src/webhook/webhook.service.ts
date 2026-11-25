@@ -456,8 +456,8 @@ export class WebhookService {
   private async onMessage(entry: any, msg: any) {
     const igUserId = typeof entry?.id === 'string' ? entry.id : '';
     const senderId = msg.sender?.id ? String(msg.sender.id) : '';
-    const text: string = msg.message?.text ?? '';
-    const mid = msg.message?.mid ? String(msg.message.mid) : '';
+    const text: string = msg.message?.text ?? msg.postback?.title ?? msg.message?.quick_reply?.payload ?? msg.postback?.payload ?? '';
+    const mid = msg.message?.mid ?? msg.postback?.mid ?? (msg.timestamp ? `postback:${senderId}:${msg.timestamp}` : '');
     if (!senderId || senderId === igUserId || !mid) return;
     if (msg.message?.is_echo) return;
     const providerTimestamp = typeof msg.timestamp === 'number' || (typeof msg.timestamp === 'string' && /^\d+$/.test(msg.timestamp))
@@ -508,6 +508,146 @@ export class WebhookService {
     });
     if (latestContact?.lastReplyAt) {
       await this.scheduleCommentFollowUps(account, contact, latestContact.lastReplyAt);
+    }
+
+    // Check if the contact has an active Follow-First or Email Collection gate in progress
+    const contactWithTags = await this.prisma.contact.findUnique({
+      where: { id: contact.id },
+      select: { tags: true, email: true, notes: true },
+    });
+    const currentTags = contactWithTags?.tags || [];
+    const pendingFollowTag = currentTags.find((t) => t.startsWith('pending_follow:'));
+    const pendingEmailTag = currentTags.find((t) => t.startsWith('pending_email:'));
+
+    if (pendingFollowTag) {
+      const targetAutoId = pendingFollowTag.replace('pending_follow:', '');
+      const targetAuto = await this.prisma.automation.findUnique({
+        where: { id: targetAutoId },
+        select: { id: true, name: true, status: true, collectEmail: true, dmBlocks: true, igAccount: { select: { username: true } } },
+      });
+
+      if (targetAuto && targetAuto.status === 'LIVE') {
+        const token = this.encryption.decrypt(account.accessTokenEnc);
+        const isFollower = await this.instagram.checkFollowerStatus(token, senderId, account.loginMode);
+
+        if (isFollower) {
+          const remainingTags = currentTags.filter((t) => t !== pendingFollowTag);
+          await this.prisma.contact.update({
+            where: { id: contact.id },
+            data: { follows: true, tags: remainingTags },
+          });
+
+          if (targetAuto.collectEmail && !contactWithTags?.email) {
+            await this.prisma.contact.update({
+              where: { id: contact.id },
+              data: { tags: [...remainingTags, `pending_email:${targetAuto.id}`] },
+            });
+            const emailPrompt = `Awesome, thanks for following @${targetAuto.igAccount.username}! 🎉 What's the best email address to send your ${targetAuto.name} to? (Reply with your email address, or reply SKIP to proceed) 📩`;
+            await this.enqueue({
+              automationId: targetAuto.id,
+              igAccountId: account.id,
+              triggerType: 'DM',
+              recipientIgsid: senderId,
+              text: emailPrompt,
+              triggerEventId: `follow-verified-email-prompt:${igUserId}:${mid}`,
+              replyReceivedAt: replyAt.toISOString(),
+            });
+            return;
+          }
+
+          await this.enqueue({
+            automationId: targetAuto.id,
+            igAccountId: account.id,
+            triggerType: 'DM',
+            recipientIgsid: senderId,
+            text: this.firstText(targetAuto.dmBlocks),
+            triggerEventId: `follow-verified-delivered:${igUserId}:${mid}`,
+            replyReceivedAt: replyAt.toISOString(),
+          });
+          return;
+        } else {
+          const followReminder = `We checked and it looks like you haven't followed @${targetAuto.igAccount.username} yet! Please tap the profile link above to follow, then reply DONE here.`;
+          await this.enqueue({
+            automationId: targetAuto.id,
+            igAccountId: account.id,
+            triggerType: 'DM',
+            recipientIgsid: senderId,
+            text: followReminder,
+            triggerEventId: `follow-reminder:${igUserId}:${mid}`,
+            replyReceivedAt: replyAt.toISOString(),
+          });
+          return;
+        }
+      }
+    }
+
+    if (pendingEmailTag) {
+      const targetAutoId = pendingEmailTag.replace('pending_email:', '');
+      const targetAuto = await this.prisma.automation.findUnique({
+        where: { id: targetAutoId },
+        select: { id: true, name: true, status: true, dmBlocks: true },
+      });
+
+      if (targetAuto && targetAuto.status === 'LIVE') {
+        const trimmed = text.trim();
+        const remainingTags = currentTags.filter((t) => t !== pendingEmailTag);
+
+        if (trimmed.toUpperCase() === 'SKIP') {
+          await this.prisma.contact.update({
+            where: { id: contact.id },
+            data: { tags: remainingTags },
+          });
+          await this.enqueue({
+            automationId: targetAuto.id,
+            igAccountId: account.id,
+            triggerType: 'DM',
+            recipientIgsid: senderId,
+            text: this.firstText(targetAuto.dmBlocks),
+            triggerEventId: `email-skipped-delivered:${igUserId}:${mid}`,
+            replyReceivedAt: replyAt.toISOString(),
+          });
+          return;
+        }
+
+        const emailMatch = trimmed.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/);
+        if (emailMatch) {
+          const submittedEmail = emailMatch[0].toLowerCase();
+          const consentNote = `[Consent] Email collected via ${targetAuto.name} on ${new Date().toISOString()}`;
+          const updatedNotes = contactWithTags?.notes ? `${contactWithTags.notes}\n${consentNote}` : consentNote;
+
+          await this.prisma.contact.update({
+            where: { id: contact.id },
+            data: {
+              email: submittedEmail,
+              notes: updatedNotes,
+              tags: [...remainingTags, 'email_collected'],
+            },
+          });
+
+          await this.enqueue({
+            automationId: targetAuto.id,
+            igAccountId: account.id,
+            triggerType: 'DM',
+            recipientIgsid: senderId,
+            text: this.firstText(targetAuto.dmBlocks),
+            triggerEventId: `email-collected-delivered:${igUserId}:${mid}`,
+            replyReceivedAt: replyAt.toISOString(),
+          });
+          return;
+        }
+
+        const retryPrompt = `That doesn't look like a valid email address. Please reply with your email (e.g. name@example.com) to receive your link, or reply SKIP to proceed.`;
+        await this.enqueue({
+          automationId: targetAuto.id,
+          igAccountId: account.id,
+          triggerType: 'DM',
+          recipientIgsid: senderId,
+          text: retryPrompt,
+          triggerEventId: `email-retry-prompt:${igUserId}:${mid}`,
+          replyReceivedAt: replyAt.toISOString(),
+        });
+        return;
+      }
     }
 
     // A story reply arrives as a message with reply_to.story; a plain DM does not.

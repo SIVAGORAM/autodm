@@ -425,4 +425,23 @@ export class InstagramService {
       throw new ServiceUnavailableException('Instagram comment metadata lookup failed; webhook processing will retry.');
     }
   }
+
+  /**
+   * Check official Meta follower status for a user within an active messaging interaction.
+   * Fails closed safely if unavailable or rejected.
+   */
+  async checkFollowerStatus(token: string, igsid: string, loginMode: InstagramLoginMode = 'INSTAGRAM_LOGIN'): Promise<boolean> {
+    const host = loginMode === 'UNIFIED_LOGIN' ? 'graph.facebook.com' : 'graph.instagram.com';
+    const version = this.config.get<string>('META_GRAPH_VERSION') ?? 'v26.0';
+    try {
+      const res = await axios.get(`https://${host}/${version}/${encodeURIComponent(igsid)}`, {
+        params: { fields: 'is_user_follow_business', access_token: token },
+        timeout: 10_000,
+        ...this.httpOptions,
+      });
+      return res.data?.is_user_follow_business === true;
+    } catch {
+      return false;
+    }
+  }
 }

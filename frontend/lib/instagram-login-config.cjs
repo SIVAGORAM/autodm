@@ -61,6 +61,9 @@ function validateMetaAuthorizationUrl(value, mode, options, frontendOrigin) {
       if (!['instagram_business_basic', 'instagram_business_manage_messages', 'instagram_business_manage_comments'].every((scope) => scopes.has(scope))) {
         throw new Error('Instagram permissions mismatch');
       }
+      if (url.searchParams.get('force_reauth') !== 'true') {
+        throw new Error('force_reauth missing');
+      }
     } else if (!options.unifiedLoginEnabled
       || !options.unifiedLoginConfigId
       || url.searchParams.get('config_id') !== options.unifiedLoginConfigId

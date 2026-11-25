@@ -130,7 +130,8 @@ export const instagramApi = {
     api.get('/instagram/auth-url', { params: mode === 'INSTAGRAM_LOGIN' ? undefined : { mode } }),
   loginOptions: () => api.get('/instagram/login-options'),
   accounts: () => api.get('/instagram/accounts'),
-  media: (id: string, after?: string) => api.get(`/instagram/accounts/${id}/media`, { params: after ? { after } : undefined }),
+  media: (id: string, after?: string, type?: string) =>
+    api.get(`/instagram/accounts/${id}/media`, { params: { ...(after ? { after } : {}), ...(type ? { type } : {}) } }),
   subscribeWebhooks: (id: string) => api.post(`/instagram/accounts/${id}/webhooks/subscribe`),
   disconnect: (id: string) => api.delete(`/instagram/accounts/${id}`),
 };

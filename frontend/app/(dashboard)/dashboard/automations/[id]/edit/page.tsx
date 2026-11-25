@@ -46,8 +46,11 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
   const [selectedMediaSupported, setSelectedMediaSupported] = useState(true);
   const [matchMode, setMatchMode] = useState<'KEYWORDS' | 'ANY'>('KEYWORDS');
   const [keywords, setKeywords] = useState<string[]>([]);
+  const [excludedKeywords, setExcludedKeywords] = useState<string[]>([]);
   const [replyToComment, setReplyToComment] = useState(false);
   const [publicReplies, setPublicReplies] = useState<string[]>([]);
+  const [askToFollow, setAskToFollow] = useState(false);
+  const [collectEmail, setCollectEmail] = useState(false);
   const [dmText, setDmText] = useState('');
   const [buttons, setButtons] = useState<MessageButton[]>([]);
   const [trackClicks, setTrackClicks] = useState(true);
@@ -65,9 +68,17 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
     setTriggerType(supportedTriggers.includes(current.triggerType) ? current.triggerType : 'POST_COMMENT');
     setMediaId(current.mediaId ?? '');
     setMatchMode(current.matchMode === 'ANY' ? 'ANY' : 'KEYWORDS');
-    setKeywords(Array.isArray(current.keywords) ? current.keywords : []);
+    
+    const rawKeywords = Array.isArray(current.keywords) ? current.keywords : [];
+    const positive = rawKeywords.filter((k: string) => typeof k === 'string' && !k.startsWith('-'));
+    const negative = rawKeywords.filter((k: string) => typeof k === 'string' && k.startsWith('-')).map((k: string) => k.slice(1));
+    setKeywords(positive);
+    setExcludedKeywords(negative);
+
     setReplyToComment(!!current.replyToComment);
-    setPublicReplies(Array.isArray(current.publicReplies) ? current.publicReplies : []);
+    setPublicReplies(Array.isArray(current.publicReplies) && current.publicReplies.length > 0 ? current.publicReplies : ['Sent! Check your DMs 📩']);
+    setAskToFollow(Boolean(current.askToFollow));
+    setCollectEmail(Boolean(current.collectEmail));
     setDmText(typeof textBlock?.text === 'string' ? textBlock.text : '');
     setButtons(buttonBlocks.flatMap((block: any) => Array.isArray(block.buttons) ? block.buttons : []));
     setTrackClicks(current.trackClicks !== false);
@@ -83,17 +94,29 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
       const dmBlocks: any[] = [{ type: 'text', text: dmText.trim() }];
       const validButtons = buttons.filter((button) => button.title.trim() && button.url.trim());
       if (validButtons.length) dmBlocks.push({ type: 'buttons', buttons: validButtons });
+
+      const formattedKeywords: string[] = [];
+      for (const kw of keywords) {
+        const trimmed = kw.trim();
+        if (trimmed) formattedKeywords.push(trimmed);
+      }
+      for (const ex of excludedKeywords) {
+        const trimmed = ex.trim();
+        if (trimmed) formattedKeywords.push(`-${trimmed}`);
+      }
+
       return automationApi.update(id, {
         name: name.trim(),
-        // Keep an already-disabled Live Comment trigger intact when editing a
-        // paused legacy record; do not silently convert it or ask the API to
-        // activate a feature that is disabled in this deployment.
         ...(triggerType === 'LIVE_COMMENT' && !liveCommentsEnabled && automation.data?.triggerType === 'LIVE_COMMENT' ? {} : { triggerType }),
         mediaId: triggerType === 'POST_COMMENT' && mediaId.trim() ? mediaId.trim() : null,
-        matchMode, keywords,
-        publicReplies: supportsPublicCommentReply && replyToComment ? publicReplies.filter((reply) => reply.trim()) : [],
+        matchMode,
+        keywords: formattedKeywords,
+        publicReplies: supportsPublicCommentReply && replyToComment ? publicReplies.filter((reply) => reply.trim()).slice(0, 10) : [],
         replyToComment: supportsPublicCommentReply && replyToComment,
-        trackClicks, askToFollow: false, collectEmail: false, dmBlocks,
+        askToFollow,
+        collectEmail,
+        trackClicks,
+        dmBlocks,
         followUps: followUps.map((item, index) => ({
           ...(item.id ? { id: item.id } : {}), order: index, condition: item.condition, delayMinutes: item.delayMinutes,
           dmBlocks: [{ type: 'text', text: item.text.trim() }],
@@ -126,7 +149,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
     if (!isPaid && keywords.length > 1) return setError('Your plan allows one keyword per automation.');
     if (!dmText.trim()) return setError('Write the DM message.');
     if (buttons.filter((button) => button.title.trim() && button.url.trim()).length > 3) return setError('Instagram allows up to 3 message buttons.');
-    if (replyToComment && publicReplies.filter((reply) => reply.trim()).length > 3) return setError('Choose up to 3 public replies.');
+    if (replyToComment && publicReplies.filter((reply) => reply.trim()).length > 10) return setError('Choose up to 10 public replies.');
     if (buttons.some((button) => (button.title.trim() && !button.url.trim()) || (!button.title.trim() && button.url.trim()))) {
       return setError('Each button needs both a label and a URL.');
     }
@@ -143,8 +166,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
   }
 
   const keywordLimit = isPaid ? undefined : 1;
-  const hasLegacyUnsupportedOptions = automation.data.askToFollow || automation.data.collectEmail
-    || automation.data.matchMode === 'AI_INTENT' || !supportedTriggers.includes(automation.data.triggerType);
+  const hasLegacyUnsupportedOptions = automation.data.matchMode === 'AI_INTENT' || !supportedTriggers.includes(automation.data.triggerType);
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -158,7 +180,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
       </header>
 
       {error && <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
-      {hasLegacyUnsupportedOptions && <div role="status" className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-foreground">This automation contains legacy options that are no longer supported. Saving will turn off follow gating and email capture and use a supported trigger and keyword rule.</div>}
+      {hasLegacyUnsupportedOptions && <div role="status" className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-foreground">This automation contains legacy trigger/matching options that are no longer supported. Saving will update it to standard keyword/trigger handling.</div>}
 
       <Card className="space-y-6 p-6">
         <section className="space-y-4">
@@ -182,6 +204,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
           </div>
           {triggerType === 'LIVE_COMMENT' && <p role="status" className="text-xs leading-relaxed text-muted-foreground">HeyLaunch attempts one private reply for a matching live comment. Meta may reject it if delivery occurs after the broadcast ends. This trigger requires the live_comments webhook and cannot use follow-ups.</p>}
           {triggerType === 'ANY_POST' && <p role="status" className="text-xs leading-relaxed text-muted-foreground">Meta documents comment events and private replies for Reels. Coverage still depends on your account permissions and active comment webhook subscription.</p>}
+          {triggerType === 'STORY_REPLY' && <div role="status" className="rounded-md border border-sky-500/30 bg-sky-500/10 p-3 text-xs leading-relaxed text-foreground"><strong>Instagram Stories note:</strong> Instagram Stories do not have public comment threads on Meta. Story automation activates when a viewer <strong>replies directly to your Story</strong> via DM within its active 24-hour window.</div>}
           {['POST_COMMENT', 'ANY_POST'].includes(triggerType) && <p className="text-xs leading-relaxed text-muted-foreground">Each comment can trigger one DM. A rule for the exact post takes priority over “Any post”; if multiple rules at the same priority match, the oldest automation handles it.</p>}
           {['DM', 'STORY_REPLY'].includes(triggerType) && <p className="text-xs leading-relaxed text-muted-foreground">If multiple active rules match the same message, the oldest automation handles it.</p>}
           {triggerType === 'POST_COMMENT' && <InstagramPostSelector accountId={automation.data.igAccountId} value={mediaId} onChange={setMediaId} onEligibilityChange={setSelectedMediaSupported} />}
@@ -195,19 +218,50 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
               ))}
             </div>
           </div>
-          {matchMode === 'KEYWORDS' && <div><Label>Keywords</Label><div className="mt-1.5"><TagInput tags={keywords} onChange={setKeywords} max={keywordLimit} placeholder="Add a keyword" /></div></div>}
+          {matchMode === 'KEYWORDS' && (
+            <div className="space-y-4">
+              <div>
+                <Label>Keywords to trigger response</Label>
+                <div className="mt-1.5"><TagInput tags={keywords} onChange={setKeywords} max={keywordLimit} placeholder="Add a keyword (e.g. link, send, price)" /></div>
+                <p className="mt-1 text-xs text-muted-foreground">Matches keywords in any language, Unicode script, Telugu, Hindi, or emojis.</p>
+              </div>
+              <div>
+                <Label>Excluded keywords (Negative match)</Label>
+                <div className="mt-1.5"><TagInput tags={excludedKeywords} onChange={setExcludedKeywords} placeholder="Add excluded keyword (e.g. spam, hate, bot)" /></div>
+                <p className="mt-1 text-xs text-muted-foreground">If any of these words appear in the user’s comment or message, the automation will be skipped.</p>
+              </div>
+            </div>
+          )}
         </section>
 
         {supportsPublicCommentReply && (
           <section className="space-y-3 border-t border-border pt-5">
             <div className="flex items-center justify-between gap-4">
-              <div><p className="text-sm font-medium text-foreground">Reply under the comment</p><p className="text-xs text-muted-foreground">Choose up to 3 public replies to rotate.</p></div>
+              <div>
+                <p className="text-sm font-medium text-foreground">Reply under the comment</p>
+                <p className="text-xs text-muted-foreground">Rotate up to 10 natural reply variations to prevent spam detection.</p>
+              </div>
               <Toggle checked={replyToComment} onChange={setReplyToComment} label="Reply under the comment" />
             </div>
-            {replyToComment && <div className="space-y-2">
-              {publicReplies.map((reply, index) => <div key={index} className="flex gap-2"><Input aria-label={`Public reply ${index + 1}`} value={reply} maxLength={1000} onChange={(event) => setPublicReplies((items) => items.map((item, i) => i === index ? event.target.value : item))} />{publicReplies.length > 1 && <button type="button" aria-label="Remove public reply" onClick={() => setPublicReplies((items) => items.filter((_, i) => i !== index))} className="rounded-md px-2 text-muted-foreground hover:bg-muted"><Trash2 className="h-4 w-4" /></button>}</div>)}
-              {publicReplies.length < 3 && <Button variant="ghost" onClick={() => setPublicReplies((items) => [...items, ''])}><Plus className="h-4 w-4" /> Add reply</Button>}
-            </div>}
+            {replyToComment && (
+              <div className="space-y-2">
+                {publicReplies.map((reply, index) => (
+                  <div key={index} className="flex gap-2">
+                    <Input aria-label={`Public reply ${index + 1}`} value={reply} maxLength={1000} onChange={(event) => setPublicReplies((items) => items.map((item, i) => i === index ? event.target.value : item))} placeholder={`Reply variation #${index + 1}`} />
+                    {publicReplies.length > 1 && (
+                      <button type="button" aria-label="Remove public reply" onClick={() => setPublicReplies((items) => items.filter((_, i) => i !== index))} className="rounded-md px-2 text-muted-foreground hover:bg-muted">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {publicReplies.length < 10 && (
+                  <Button variant="ghost" onClick={() => setPublicReplies((items) => [...items, ''])}>
+                    <Plus className="h-4 w-4" /> Add reply variation ({publicReplies.length}/10)
+                  </Button>
+                )}
+              </div>
+            )}
           </section>
         )}
 
@@ -222,6 +276,25 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
             </div>
           </div>
           <div className="flex items-center justify-between rounded-lg border border-border p-3"><div><p className="text-sm font-medium text-foreground">Track link clicks</p><p className="text-xs text-muted-foreground">Count clicks on your message buttons.</p></div><Toggle checked={trackClicks} onChange={setTrackClicks} label="Track link clicks" /></div>
+
+          {/* Conversational Gating: Follow-first & Email Collection */}
+          <div className="space-y-3 rounded-lg border border-border/80 bg-muted/20 p-4">
+            <h3 className="text-sm font-semibold text-foreground">Audience Growth & Conversational Gating</h3>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">Follow-First Verification</p>
+                <p className="text-xs text-muted-foreground">Ask non-followers to follow your profile before unlocking link buttons. Followers receive the link immediately.</p>
+              </div>
+              <Toggle checked={askToFollow} onChange={setAskToFollow} label="Follow-first verification" />
+            </div>
+            <div className="flex items-center justify-between gap-4 border-t border-border/40 pt-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">First-Time Email Collection</p>
+                <p className="text-xs text-muted-foreground">Ask the user for their email before sending the main link. If already in your Contacts, this step is skipped automatically.</p>
+              </div>
+              <Toggle checked={collectEmail} onChange={setCollectEmail} label="First-time email collection" />
+            </div>
+          </div>
         </section>
 
         <section className="space-y-3 border-t border-border pt-5">
@@ -257,6 +330,8 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
           publicReply={supportsPublicCommentReply && replyToComment ? publicReplies.find((reply) => reply.trim()) : undefined}
           dmText={dmText}
           buttons={buttons}
+          askToFollow={askToFollow}
+          collectEmail={collectEmail}
         />
       </aside>
     </div>

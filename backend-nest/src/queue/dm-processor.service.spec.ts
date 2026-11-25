@@ -284,14 +284,16 @@ describe('DmProcessorService delivery recovery', () => {
 
     await expect(service.process(job, queueJob)).rejects.toThrow('Retryable Meta error');
     expect(run.status).toBe('PENDING');
-    expect(run.publicReplyAttemptedAt).toBeInstanceOf(Date);
-    expect(run.publicReplyError).toBeNull();
+    // Public reply is NOT attempted while the DM delivery is still failing/pending
+    expect(meta.replyToComment).not.toHaveBeenCalled();
 
     await service.process(job, queueJob);
 
     expect(meta.replyToComment).toHaveBeenCalledTimes(1);
     expect(meta.sendCommentDm).toHaveBeenCalledTimes(2);
     expect(run.status).toBe('SENT');
+    expect(run.publicReplyAttemptedAt).toBeInstanceOf(Date);
+    expect(run.publicReplyError).toBeNull();
     expect(quota.settle).toHaveBeenCalledWith(job.triggerEventId, true);
   });
 

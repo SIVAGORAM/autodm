@@ -195,7 +195,59 @@ export class DmProcessorService {
     if (automation.askToFollow) {
       const { isFollower } = await this.meta.getFollowerInfo(igUserId, token, job.recipientIgsid, loginMode);
       await this.prisma.contact.update({ where: { id: contact.id }, data: { follows: isFollower } });
-      if (!isFollower) { await this.recordRun(job, contact.id, 'SKIPPED', 'not a follower'); return; }
+      if (!isFollower) {
+        const accountUsername = automation.igAccount.username;
+        const promptText = `Hey ${job.recipientUsername || 'there'}! Thanks for commenting! To unlock your link, please follow @${accountUsername} first, then reply 'DONE' here! 👇`;
+        const profileButton = [{ title: `Follow @${accountUsername}`, url: `https://instagram.com/${accountUsername}` }];
+
+        const existingTags = contact.tags || [];
+        const followTag = `pending_follow:${automation.id}`;
+        if (!existingTags.includes(followTag)) {
+          await this.prisma.contact.update({
+            where: { id: contact.id },
+            data: { tags: [...existingTags, followTag] },
+          });
+        }
+
+        const promptResult = job.commentId
+          ? await this.meta.sendCommentDm(igUserId, token, job.commentId, promptText, profileButton, loginMode)
+          : await this.meta.sendDirectMessage(igUserId, token, job.recipientIgsid, promptText, profileButton, loginMode);
+
+        if (!promptResult.ok) {
+          if (promptResult.retryable) throw new Error(`Retryable Meta error: ${promptResult.error}`);
+          await this.recordRun(job, contact.id, 'FAILED', promptResult.error);
+          return;
+        }
+
+        await this.recordRun(job, contact.id, 'SENT', 'Follow-first verification prompt sent to user.');
+        return;
+      }
+    }
+
+    if (automation.collectEmail && !contact.email) {
+      const emailPromptText = `Hey ${job.recipientUsername || 'there'}! What's the best email address to send your ${automation.name} to? (Reply with your email address, or reply SKIP to proceed) 📩`;
+
+      const existingTags = contact.tags || [];
+      const emailTag = `pending_email:${automation.id}`;
+      if (!existingTags.includes(emailTag)) {
+        await this.prisma.contact.update({
+          where: { id: contact.id },
+          data: { tags: [...existingTags, emailTag] },
+        });
+      }
+
+      const emailPromptResult = job.commentId
+        ? await this.meta.sendCommentDm(igUserId, token, job.commentId, emailPromptText, [], loginMode)
+        : await this.meta.sendDirectMessage(igUserId, token, job.recipientIgsid, emailPromptText, [], loginMode);
+
+      if (!emailPromptResult.ok) {
+        if (emailPromptResult.retryable) throw new Error(`Retryable Meta error: ${emailPromptResult.error}`);
+        await this.recordRun(job, contact.id, 'FAILED', emailPromptResult.error);
+        return;
+      }
+
+      await this.recordRun(job, contact.id, 'SENT', 'Voluntary email collection prompt sent.');
+      return;
     }
 
     if (!(await this.accountMaySend(job.igAccountId))) {
@@ -206,31 +258,6 @@ export class DmProcessorService {
     if (job.commentId) {
       if (!queueJob) throw new Error('Cannot reserve a comment reply without its BullMQ job.');
       await reserveCommentPrivateReply(this.dmQueue, queueJob, queueJob.token);
-    }
-
-    if (automation.replyToComment && job.commentId && automation.publicReplies.length && !existing?.publicReplyAttemptedAt) {
-      const currentStatus = await this.currentAutomationStatus(job.automationId);
-      if (currentStatus !== 'LIVE') {
-        if (currentStatus) await this.recordRun(job, contact.id, 'SKIPPED', 'Automation is not live.');
-        return;
-      }
-      if (!(await this.accountMaySend(job.igAccountId))) {
-        await this.recordRun(job, contact.id, 'SKIPPED', 'This Instagram account is disconnected or being deleted.');
-        return;
-      }
-      const reply = automation.publicReplies[Math.floor(Math.random() * automation.publicReplies.length)];
-      const result = await this.meta.replyToComment(token, job.commentId, reply, loginMode);
-      if (!result.ok) {
-        if (result.retryable) throw new Error(`Retryable Meta error: ${result.error}`);
-        publicReplyFailure = 'The public comment reply failed; the direct message was still sent.';
-      }
-      await this.prisma.run.update({
-        where: { triggerEventId: runEventId(job) },
-        data: {
-          publicReplyAttemptedAt: new Date(),
-          publicReplyError: result.ok ? null : result.error,
-        },
-      });
     }
 
     const text = personalize(job.text, { username: job.recipientUsername, name: contact.name });
@@ -252,6 +279,7 @@ export class DmProcessorService {
       return;
     }
 
+    // 1. Send the Private Reply / DM first to ensure delivery before any public notification.
     const result = job.commentId
       ? await this.meta.sendCommentDm(igUserId, token, job.commentId, text, buttons, loginMode)
       : await this.meta.sendDirectMessage(igUserId, token, job.recipientIgsid, text, buttons, loginMode);
@@ -260,6 +288,25 @@ export class DmProcessorService {
       if (result.retryable) throw new Error(`Retryable Meta error: ${result.error}`);
       await this.recordRun(job, contact.id, 'FAILED', result.error);
       return;
+    }
+
+    // 2. Only after Private Reply succeeds, post rotated public comment reply if configured.
+    if (automation.replyToComment && job.commentId && automation.publicReplies.length && !existing?.publicReplyAttemptedAt) {
+      const currentPostStatus = await this.currentAutomationStatus(job.automationId);
+      if (currentPostStatus === 'LIVE' && (await this.accountMaySend(job.igAccountId))) {
+        const reply = await this.getNextPublicReply(job.automationId, automation.publicReplies);
+        const replyResult = await this.meta.replyToComment(token, job.commentId, reply, loginMode);
+        if (!replyResult.ok) {
+          publicReplyFailure = 'The public comment reply failed; the direct message was successfully sent.';
+        }
+        await this.prisma.run.update({
+          where: { triggerEventId: runEventId(job) },
+          data: {
+            publicReplyAttemptedAt: new Date(),
+            publicReplyError: replyResult.ok ? null : replyResult.error,
+          },
+        });
+      }
     }
 
     const followUpRestriction = automationRestriction(plan, { followUpCount: automation.followUps.length });
@@ -525,4 +572,33 @@ export class DmProcessorService {
       this.log.warn(`Dashboard delivery update unavailable (${safeErrorLabel(error)})`);
     }
   }
+
+  private async getNextPublicReply(automationId: string, replies: string[]): Promise<string> {
+    if (!replies.length) return '';
+    if (replies.length === 1) return replies[0];
+    try {
+      const redis = await this.dmQueue.client as unknown as { incr?: (k: string) => Promise<number> };
+      if (redis && typeof redis.incr === 'function') {
+        const count = await redis.incr(`rotation:public_reply:${automationId}`);
+        return pickRotatedReply(replies, automationId, count);
+      }
+    } catch {
+      // In-memory sequential fallback for tests and environments without Redis
+    }
+    return pickRotatedReply(replies, automationId);
+  }
+}
+
+const inMemoryRotationCounters = new Map<string, number>();
+
+export function pickRotatedReply(replies: string[], seed: string, redisCount?: number): string {
+  if (!replies.length) return '';
+  if (replies.length === 1) return replies[0];
+  if (typeof redisCount === 'number' && Number.isFinite(redisCount)) {
+    const index = Math.abs(Math.floor(redisCount) - 1) % replies.length;
+    return replies[index];
+  }
+  const current = inMemoryRotationCounters.get(seed) ?? 0;
+  inMemoryRotationCounters.set(seed, current + 1);
+  return replies[current % replies.length];
 }

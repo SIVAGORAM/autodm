@@ -38,7 +38,7 @@ export const createAutomationSchema = z.object({
   // an automation mode that cannot be executed.
   matchMode: z.enum(['KEYWORDS', 'ANY']).default('KEYWORDS'),
   keywords: z.array(z.string().min(1)).default([]),
-  publicReplies: z.array(z.string().min(1)).max(3).default([]),
+  publicReplies: z.array(z.string().min(1)).max(10).default([]),
   replyToComment: z.boolean().default(false),
   askToFollow: z.boolean().default(false),
   collectEmail: z.boolean().default(false),
