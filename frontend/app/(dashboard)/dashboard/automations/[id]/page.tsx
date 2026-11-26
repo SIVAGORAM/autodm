@@ -34,7 +34,23 @@ export default function AutomationDetail({ params }: { params: Promise<{ id: str
 
   const setStatus = useMutation({
     mutationFn: (status: 'LIVE' | 'PAUSED') => automationApi.setStatus(id, status),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['automation', id] }); qc.invalidateQueries({ queryKey: ['automations'] }); },
+    onMutate: async (status) => {
+      await qc.cancelQueries({ queryKey: ['automation', id] });
+      const previous = qc.getQueryData<any>(['automation', id]);
+      if (previous) {
+        qc.setQueryData(['automation', id], { ...previous, status });
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        qc.setQueryData(['automation', id], context.previous);
+      }
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['automation', id] });
+      qc.invalidateQueries({ queryKey: ['automations'] });
+    },
   });
 
   const health = a.data?.health;

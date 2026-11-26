@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { User, AtSign, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
-import { authApi } from '../../../services/api';
+import { api, authApi, getApiErrorMessage } from '../../../services/api';
 import { useAuthStore } from '../../../store/authStore';
 import { AuthBrand, AC } from '../../../components/auth-brand';
 import { meetsPasswordPolicy, passwordRequirements, PASSWORD_POLICY_MESSAGE } from '../../../lib/password-policy';
@@ -22,6 +22,11 @@ export default function SignupPage() {
   const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false);
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const productionSignupClosed = process.env.NODE_ENV === 'production' && !LEGAL_POLICIES_APPROVED;
+
+  // Pre-warm backend container while user fills form
+  useEffect(() => {
+    void api.get('/version').catch(() => undefined);
+  }, []);
 
   const requirements = passwordRequirements(form.password);
 
@@ -42,7 +47,7 @@ export default function SignupPage() {
       setUser(res.data.data.user);
       router.push('/verify');
     } catch (err: any) {
-      setError(err.response?.data?.message ?? err.response?.data?.error?.message ?? 'Sign up failed');
+      setError(getApiErrorMessage(err, 'Sign up failed. Please try again.'));
     } finally {
       setLoading(false);
     }

@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
-import { authApi } from '../../../services/api';
+import { api, authApi, getApiErrorMessage } from '../../../services/api';
 import { AuthBrand, AC } from '../../../components/auth-brand';
 import { meetsPasswordPolicy, passwordRequirements, PASSWORD_POLICY_MESSAGE } from '../../../lib/password-policy';
 
@@ -19,14 +19,24 @@ function ResetForm() {
   const [error, setError] = useState<string | null>(null);
   const requirements = passwordRequirements(password);
 
+  // Pre-warm backend container while user types password
+  useEffect(() => {
+    void api.get('/version').catch(() => undefined);
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!meetsPasswordPolicy(password)) return setError(PASSWORD_POLICY_MESSAGE);
     if (password !== confirmPassword) return setError('Passwords do not match');
     setLoading(true); setError(null);
-    try { await authApi.resetPassword({ token: token ?? '', password }); router.push('/login'); }
-    catch (err: any) { setError(err.response?.data?.message || 'This reset link is invalid or expired.'); }
-    finally { setLoading(false); }
+    try {
+      await authApi.resetPassword({ token: token ?? '', password });
+      router.push('/login?reset=success');
+    } catch (err: any) {
+      setError(getApiErrorMessage(err, 'This reset link is invalid or expired.'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

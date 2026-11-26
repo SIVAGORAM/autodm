@@ -27,11 +27,24 @@ export default function AutomationsPage() {
   });
   const toggle = useMutation({
     mutationFn: ({ id, status }: { id: string; status: 'LIVE' | 'PAUSED' }) => automationApi.setStatus(id, status),
-    onMutate: () => setToggleError(''),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['automations'] }),
-    onError: (error: any) => {
+    onMutate: async ({ id, status }) => {
+      setToggleError('');
+      await qc.cancelQueries({ queryKey: ['automations'] });
+      const previous = qc.getQueryData<Automation[]>(['automations']);
+      if (previous) {
+        qc.setQueryData<Automation[]>(['automations'], previous.map((a) => (a.id === id ? { ...a, status } : a)));
+      }
+      return { previous };
+    },
+    onError: (error: any, _vars, context) => {
+      if (context?.previous) {
+        qc.setQueryData(['automations'], context.previous);
+      }
       const message = error?.response?.data?.message;
       setToggleError(typeof message === 'string' ? message : 'Could not update the automation. Please try again.');
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['automations'] });
     },
   });
 

@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AtSign, ArrowRight } from 'lucide-react';
-import { authApi, getApiErrorMessage } from '../../../services/api';
+import { api, authApi, getApiErrorMessage } from '../../../services/api';
 import { AuthBrand, AC } from '../../../components/auth-brand';
 
 export default function ForgotPasswordPage() {
@@ -11,6 +11,11 @@ export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Pre-warm backend container while user enters email
+  useEffect(() => {
+    void api.get('/version').catch(() => undefined);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setLoading(true); setError(null); setMessage(null);
