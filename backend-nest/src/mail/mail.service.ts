@@ -11,6 +11,7 @@ export class MailService {
   private readonly from: string;
   private readonly frontend: string;
   private brevoApiKey: string | null = null;
+  private resendApiKey: string | null = null;
 
   constructor(private config: ConfigService) {
     this.from = config.get<string>('MAIL_FROM')
@@ -23,6 +24,12 @@ export class MailService {
     const user = config.get<string>('SMTP_USER');
     const pass = config.get<string>('SMTP_PASS') || config.get<string>('SMTP_PASSWORD');
     const explicitBrevoKey = config.get<string>('BREVO_API_KEY');
+    const explicitResendKey = config.get<string>('RESEND_API_KEY');
+
+    if (explicitResendKey && explicitResendKey.trim()) {
+      this.resendApiKey = explicitResendKey.trim();
+      this.log.log('Resend API key configured; enabling Resend REST API transport.');
+    }
 
     // Detect Brevo REST API key: either explicitly configured via BREVO_API_KEY
     // or passed inside SMTP_PASS (starts with xkeysib-)
@@ -45,12 +52,12 @@ export class MailService {
       });
     }
 
-    if (!this.transporter && !this.brevoApiKey) {
-      this.log.warn('Neither SMTP nor Brevo API is configured; email send attempts will report delivery failure.');
+    if (!this.transporter && !this.brevoApiKey && !this.resendApiKey) {
+      this.log.warn('Neither HTTP Email API (Brevo/Resend) nor SMTP is configured; email send attempts will report delivery failure.');
     }
   }
 
-  get isConfigured() { return this.transporter !== null || this.brevoApiKey !== null; }
+  get isConfigured() { return this.transporter !== null || this.brevoApiKey !== null || this.resendApiKey !== null; }
 
   private parseSender(): { name: string; email: string } {
     const match = this.from.match(/^(?:(?:"?([^"]*)"?\s)?<([^>]+)>|([^<>\s]+))$/);
@@ -124,7 +131,52 @@ export class MailService {
     }
   }
 
-  async verifyConnection(): Promise<{ ok: boolean; method: 'brevo_api' | 'smtp' | 'none'; message: string }> {
+  private async sendViaResendApi(to: string, subject: string, html: string): Promise<boolean> {
+    if (!this.resendApiKey) return false;
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.resendApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: this.from,
+          to: [to],
+          subject,
+          html,
+        }),
+      });
+
+      if (res.ok) {
+        this.log.debug(`Email delivered via Resend REST API to ${to}`);
+        return true;
+      }
+
+      const body = await res.text().catch(() => '');
+      this.log.warn(`Resend API delivery failed (HTTP ${res.status}): ${body.slice(0, 160)}`);
+      return false;
+    } catch (err: any) {
+      this.log.warn(`Resend API network error: ${err?.message || 'unknown error'}`);
+      return false;
+    }
+  }
+
+  async verifyConnection(): Promise<{ ok: boolean; method: 'resend_api' | 'brevo_api' | 'smtp' | 'none'; message: string }> {
+    if (this.resendApiKey) {
+      try {
+        const res = await fetch('https://api.resend.com/api-keys', {
+          headers: { Authorization: `Bearer ${this.resendApiKey}` },
+        });
+        if (res.ok) {
+          return { ok: true, method: 'resend_api', message: 'Connected to Resend API (key verified)' };
+        }
+        return { ok: false, method: 'resend_api', message: `Resend API rejected key (HTTP ${res.status})` };
+      } catch (err: any) {
+        return { ok: false, method: 'resend_api', message: `Resend API connection error: ${err?.message || 'network failed'}` };
+      }
+    }
+
     if (this.brevoApiKey) {
       try {
         const res = await fetch('https://api.brevo.com/v3/account', {
@@ -149,7 +201,7 @@ export class MailService {
       }
     }
 
-    return { ok: false, method: 'none', message: 'Neither SMTP nor Brevo API is configured' };
+    return { ok: false, method: 'none', message: 'Neither HTTP Email API (Resend/Brevo) nor SMTP is configured' };
   }
 
   private escapeHtml(value: string) {
@@ -159,6 +211,13 @@ export class MailService {
   }
 
   private async send(to: string, subject: string, html: string): Promise<boolean> {
+    if (this.resendApiKey) {
+      const ok = await this.sendViaResendApi(to, subject, html);
+      if (ok) return true;
+      if (!this.brevoApiKey && !this.transporter) return false;
+      this.log.log('Resend REST API failed, attempting fallbacks...');
+    }
+
     if (this.brevoApiKey) {
       const ok = await this.sendViaBrevoApi(to, subject, html);
       if (ok) return true;
@@ -167,7 +226,7 @@ export class MailService {
     }
 
     if (!this.transporter) {
-      this.log.warn('Email suppressed: Neither SMTP nor Brevo API is configured.');
+      this.log.warn('Email suppressed: Neither HTTP Email API nor SMTP is configured.');
       return false;
     }
 
