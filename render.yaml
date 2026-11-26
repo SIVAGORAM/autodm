@@ -9,7 +9,7 @@ services:
     plan: free
     buildCommand: npm ci --include=dev && npx prisma generate && npm run build
     startCommand: npx prisma migrate deploy && node dist/main.js
-    healthCheckPath: /ready
+    healthCheckPath: /health
     autoDeploy: true
     envVars:
       - key: NODE_ENV

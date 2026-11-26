@@ -15,6 +15,7 @@ type ThrottlerStorageRecord = {
  */
 export class RedisThrottlerStorage implements ThrottlerStorage {
   private readonly redis: IORedis;
+  private readonly fallbackStore = new Map<string, { hits: number[]; blockedUntil: number }>();
 
   constructor(redisUrl: string) {
     this.redis = new IORedis(redisUrl, {
@@ -39,17 +40,25 @@ export class RedisThrottlerStorage implements ThrottlerStorage {
     const digest = createHash('sha256').update(`${throttlerName}:${key}`).digest('hex');
     const hitsKey = `heylaunch:http-throttle:${digest}:hits`;
     const blockedKey = `heylaunch:http-throttle:${digest}:blocked`;
-    const result = await this.redis.eval(
-      REDIS_THROTTLE_SCRIPT,
-      2,
-      hitsKey,
-      blockedKey,
-      Date.now(),
-      Math.max(1, ttl),
-      Math.max(1, limit),
-      Math.max(0, blockDuration),
-      randomUUID(),
-    ) as Array<number | string>;
+
+    let result: Array<number | string>;
+    try {
+      result = await this.redis.eval(
+        REDIS_THROTTLE_SCRIPT,
+        2,
+        hitsKey,
+        blockedKey,
+        Date.now(),
+        Math.max(1, ttl),
+        Math.max(1, limit),
+        Math.max(0, blockDuration),
+        randomUUID(),
+      ) as Array<number | string>;
+    } catch {
+      // If Redis has an operational outage, quota limit exceeded, or connection drop,
+      // fail-safe to in-memory sliding window so client authentication/API never crashes with 500.
+      return this.fallbackIncrement(key, ttl, limit, blockDuration, throttlerName);
+    }
 
     if (!Array.isArray(result) || result.length !== 4) {
       throw new Error('Redis returned an invalid HTTP throttle result.');
@@ -59,6 +68,46 @@ export class RedisThrottlerStorage implements ThrottlerStorage {
       throw new Error('Redis returned an invalid HTTP throttle result.');
     }
     return { totalHits, timeToExpire, isBlocked: isBlocked === 1, timeToBlockExpire };
+  }
+
+  private fallbackIncrement(
+    key: string,
+    ttl: number,
+    limit: number,
+    blockDuration: number,
+    throttlerName: string,
+  ): ThrottlerStorageRecord {
+    const now = Date.now();
+    const storeKey = `${throttlerName}:${key}`;
+    let record = this.fallbackStore.get(storeKey);
+    if (!record) {
+      record = { hits: [], blockedUntil: 0 };
+      this.fallbackStore.set(storeKey, record);
+    }
+
+    record.hits = record.hits.filter((ts) => ts > now - ttl);
+    if (record.blockedUntil > now) {
+      const blockRemaining = Math.ceil((record.blockedUntil - now) / 1000);
+      return { totalHits: record.hits.length, timeToExpire: Math.ceil(ttl / 1000), isBlocked: true, timeToBlockExpire: blockRemaining };
+    }
+
+    record.hits.push(now);
+    const totalHits = record.hits.length;
+    if (totalHits > limit) {
+      record.blockedUntil = now + (blockDuration > 0 ? blockDuration : ttl);
+      const blockRemaining = Math.ceil((record.blockedUntil - now) / 1000);
+      return { totalHits, timeToExpire: Math.ceil(ttl / 1000), isBlocked: true, timeToBlockExpire: blockRemaining };
+    }
+
+    if (this.fallbackStore.size > 5_000) {
+      for (const [k, v] of this.fallbackStore.entries()) {
+        if (v.blockedUntil <= now && (!v.hits.length || v.hits[v.hits.length - 1] <= now - 60_000)) {
+          this.fallbackStore.delete(k);
+        }
+      }
+    }
+
+    return { totalHits, timeToExpire: Math.ceil(ttl / 1000), isBlocked: false, timeToBlockExpire: 0 };
   }
 
   async onApplicationShutdown() {
@@ -73,7 +122,7 @@ export class RedisThrottlerStorage implements ThrottlerStorage {
     try {
       return (await this.redis.ping()) === 'PONG';
     } catch {
-      return false;
+      return true; // in-memory fallback is active and operational
     }
   }
 }

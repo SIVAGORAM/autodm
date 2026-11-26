@@ -81,8 +81,17 @@ export class InProcessWorkerService implements OnApplicationBootstrap, OnApplica
         async (job) => {
           await processDmQueueJob(job, this.webhookService, this.dmProcessor);
         },
-        { connection: this.connection, concurrency: 5 },
+        {
+          connection: this.connection,
+          concurrency: 2,
+          drainDelay: 30, // 30-second delay when drained saves thousands of Upstash requests
+          stalledInterval: 120_000,
+        },
       );
+
+      this.worker.on('error', (err) => {
+        this.log.warn(`Delivery worker stream error: ${safeErrorLabel(err)}`);
+      });
 
       this.worker.on('completed', (job) => {
         this.log.debug(`Job ${job.id} completed successfully`);
@@ -92,7 +101,7 @@ export class InProcessWorkerService implements OnApplicationBootstrap, OnApplica
         this.log.warn(`Job ${job?.id} failed: ${safeErrorLabel(err)}`);
       });
 
-      this.log.log('In-process delivery worker started successfully (concurrency: 5).');
+      this.log.log('In-process delivery worker started successfully (concurrency: 2).');
     } catch (err) {
       this.log.warn(`Could not start in-process delivery worker: ${safeErrorLabel(err)}`);
     }
