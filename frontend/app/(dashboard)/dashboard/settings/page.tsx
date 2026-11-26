@@ -9,6 +9,7 @@ import { RL, Card, Btn, PageHead } from '../../../../components/rl-kit';
 import {
   User, Lock, Mail, ShieldCheck, Download, Trash2, Smartphone,
   Key, Copy, Check, ChevronDown, ChevronUp, AlertTriangle, RefreshCw, X, ShieldAlert,
+  Eye, EyeOff,
 } from 'lucide-react';
 import { meetsPasswordPolicy, PASSWORD_POLICY_MESSAGE } from '../../../../lib/password-policy';
 
@@ -19,6 +20,67 @@ const field: React.CSSProperties = {
 const lbl: React.CSSProperties = {
   fontSize: 13, fontWeight: 600, color: 'var(--text)', display: 'block', marginBottom: 7,
 };
+
+function PasswordInput({
+  value,
+  onChange,
+  placeholder,
+  autoComplete,
+  id,
+  maxLength,
+  autoFocus,
+  onKeyDown,
+  style,
+}: {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+  autoComplete?: string;
+  id?: string;
+  maxLength?: number;
+  autoFocus?: boolean;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  style?: React.CSSProperties;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      <input
+        id={id}
+        type={show ? 'text' : 'password'}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+        maxLength={maxLength}
+        autoFocus={autoFocus}
+        onKeyDown={onKeyDown}
+        style={{ ...field, ...style, paddingRight: 40 }}
+      />
+      <button
+        type="button"
+        onClick={() => setShow((v) => !v)}
+        aria-label="Toggle password visibility"
+        style={{
+          position: 'absolute',
+          right: 12,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          background: 'none',
+          border: 0,
+          color: RL.muted,
+          cursor: 'pointer',
+          padding: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {show ? <EyeOff style={{ width: 17, height: 17 }} /> : <Eye style={{ width: 17, height: 17 }} />}
+      </button>
+    </div>
+  );
+}
 
 interface MfaStatus {
   enabled: boolean;
@@ -308,10 +370,10 @@ export default function SettingsPage() {
         </div>
         <div style={{ display: 'grid', gap: 16 }}>
           <p style={{ margin: 0, color: RL.muted, fontSize: 13 }}>{PASSWORD_POLICY_MESSAGE} Other sessions lose refresh access immediately; current access tokens expire within 15 minutes.</p>
-          <div><label style={lbl}>Current password</label><input type="password" autoComplete="current-password" style={field} value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} /></div>
+          <div><label style={lbl}>Current password</label><PasswordInput autoComplete="current-password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div><label style={lbl}>New password</label><input type="password" autoComplete="new-password" maxLength={128} style={field} value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} /></div>
-            <div><label style={lbl}>Confirm new</label><input type="password" autoComplete="new-password" maxLength={128} style={field} value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} /></div>
+            <div><label style={lbl}>New password</label><PasswordInput autoComplete="new-password" maxLength={128} value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} /></div>
+            <div><label style={lbl}>Confirm new</label><PasswordInput autoComplete="new-password" maxLength={128} value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} /></div>
           </div>
           <div><Btn onClick={savePw} disabled={savingPw}>{savingPw ? 'Updating…' : 'Update password'}</Btn></div>
         </div>
@@ -403,7 +465,7 @@ export default function SettingsPage() {
           <Btn variant="ghost" onClick={() => setDeletionOpen(true)}>Continue to account deletion</Btn>
         ) : (
           <div style={{ display: 'grid', gap: 14 }}>
-            <div><label style={lbl} htmlFor="delete-account-password">Current password</label><input id="delete-account-password" autoComplete="current-password" type="password" style={field} value={deletionPassword} onChange={(e) => setDeletionPassword(e.target.value)} /></div>
+            <div><label style={lbl} htmlFor="delete-account-password">Current password</label><PasswordInput id="delete-account-password" autoComplete="current-password" value={deletionPassword} onChange={(e) => setDeletionPassword(e.target.value)} /></div>
             <div><label style={lbl} htmlFor="delete-account-email">Type {user?.email} to confirm</label><input id="delete-account-email" autoComplete="email" type="email" style={field} value={deletionEmail} onChange={(e) => setDeletionEmail(e.target.value)} /></div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <Btn variant="ghost" onClick={() => setDeletionOpen(false)} disabled={deleting}>Cancel</Btn>
@@ -440,10 +502,8 @@ export default function SettingsPage() {
                 </p>
                 <div>
                   <label style={lbl}>Current password</label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     autoComplete="current-password"
-                    style={field}
                     placeholder="Enter password"
                     value={setupPassword}
                     onChange={(e) => setSetupPassword(e.target.value)}
@@ -597,10 +657,8 @@ export default function SettingsPage() {
             <div style={{ display: 'grid', gap: 14 }}>
               <div>
                 <label style={lbl}>Current password</label>
-                <input
-                  type="password"
+                <PasswordInput
                   autoComplete="current-password"
-                  style={field}
                   placeholder="Enter current password"
                   value={disablePassword}
                   onChange={(e) => setDisablePassword(e.target.value)}
@@ -655,10 +713,8 @@ export default function SettingsPage() {
                 </p>
                 <div>
                   <label style={lbl}>Current password</label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     autoComplete="current-password"
-                    style={field}
                     placeholder="Enter current password"
                     value={regenPassword}
                     onChange={(e) => setRegenPassword(e.target.value)}

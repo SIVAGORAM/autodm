@@ -15,6 +15,7 @@ export default function SignupPage() {
   const setUser = useAuthStore((s) => s.setUser);
   const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' });
   const [showPass, setShowPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -71,7 +72,8 @@ export default function SignupPage() {
             {field(<AtSign style={{ width: 18, height: 18 }} />, { type: 'email', required: true, placeholder: 'Email address', value: form.email, onChange: (e) => setForm({ ...form, email: e.target.value }) })}
             {field(<Lock style={{ width: 18, height: 18 }} />, { type: showPass ? 'text' : 'password', required: true, maxLength: 128, placeholder: 'Password', autoComplete: 'new-password', 'aria-describedby': 'password-requirements', value: form.password, onChange: (e) => setForm({ ...form, password: e.target.value }) },
               <button type="button" onClick={() => setShowPass((v) => !v)} aria-label="Toggle password" style={{ position: 'absolute', right: 12, top: 13, color: AC.muted, background: 'none', border: 0, cursor: 'pointer' }}>{showPass ? <EyeOff style={{ width: 18, height: 18 }} /> : <Eye style={{ width: 18, height: 18 }} />}</button>)}
-            {field(<Lock style={{ width: 18, height: 18 }} />, { type: 'password', required: true, maxLength: 128, placeholder: 'Confirm password', autoComplete: 'new-password', value: form.confirmPassword, onChange: (e) => setForm({ ...form, confirmPassword: e.target.value }) })}
+            {field(<Lock style={{ width: 18, height: 18 }} />, { type: showConfirmPass ? 'text' : 'password', required: true, maxLength: 128, placeholder: 'Confirm password', autoComplete: 'new-password', value: form.confirmPassword, onChange: (e) => setForm({ ...form, confirmPassword: e.target.value }) },
+              <button type="button" onClick={() => setShowConfirmPass((v) => !v)} aria-label="Toggle confirm password" style={{ position: 'absolute', right: 12, top: 13, color: AC.muted, background: 'none', border: 0, cursor: 'pointer' }}>{showConfirmPass ? <EyeOff style={{ width: 18, height: 18 }} /> : <Eye style={{ width: 18, height: 18 }} />}</button>)}
             <ul id="password-requirements" aria-label="Password requirements" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 12px', margin: '-2px 0 0', padding: 0, listStyle: 'none', fontSize: 12, color: AC.muted }}>
               {requirements.map((requirement) => (
                 <li key={requirement.label} style={{ display: 'flex', alignItems: 'center', gap: 6, color: requirement.met ? 'var(--success)' : AC.muted }}>

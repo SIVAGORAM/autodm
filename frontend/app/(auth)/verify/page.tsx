@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { authApi, userApi } from '../../../services/api';
 import { useAuthStore } from '../../../store/authStore';
 import { AuthBrand, AC } from '../../../components/auth-brand';
@@ -18,6 +18,7 @@ export default function VerifyPage() {
   const [checkingMail, setCheckingMail] = useState(false);
   const [deletionOpen, setDeletionOpen] = useState(false);
   const [deletionPassword, setDeletionPassword] = useState('');
+  const [showDeletionPassword, setShowDeletionPassword] = useState(false);
   const [deletionEmail, setDeletionEmail] = useState('');
   const [deleting, setDeleting] = useState(false);
   const inputRefs = useRef<HTMLInputElement[]>([]);
@@ -161,7 +162,24 @@ export default function VerifyPage() {
               <div style={{ display: 'grid', gap: 10 }}>
                 <p style={{ margin: 0, color: AC.muted, fontSize: 12, lineHeight: 1.5 }}>Submitting immediately signs out all sessions and disables connected accounts and automations. A background worker removes remaining account data after queued work drains and a 15-minute processing delay. That delay is not a cancellation period, and the account cannot be restored after submission. Payment transaction references may be retained without your account link.</p>
                 <label htmlFor="verify-delete-password" style={{ color: AC.muted, fontSize: 12 }}>Current password</label>
-                <input id="verify-delete-password" type="password" autoComplete="current-password" value={deletionPassword} onChange={(event) => setDeletionPassword(event.target.value)} style={{ height: 42, padding: '0 12px', borderRadius: 9, border: `1px solid ${AC.line}` }} />
+                <div style={{ position: 'relative' }}>
+                  <input
+                    id="verify-delete-password"
+                    type={showDeletionPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    value={deletionPassword}
+                    onChange={(event) => setDeletionPassword(event.target.value)}
+                    style={{ width: '100%', height: 42, padding: '0 38px 0 12px', borderRadius: 9, border: `1px solid ${AC.line}`, fontSize: 14, color: AC.ink }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowDeletionPassword((v) => !v)}
+                    aria-label="Toggle password visibility"
+                    style={{ position: 'absolute', right: 10, top: 11, color: AC.muted, background: 'none', border: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                  >
+                    {showDeletionPassword ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
+                  </button>
+                </div>
                 <label htmlFor="verify-delete-email" style={{ color: AC.muted, fontSize: 12 }}>Type {user?.email} to confirm</label>
                 <input id="verify-delete-email" type="email" autoComplete="email" value={deletionEmail} onChange={(event) => setDeletionEmail(event.target.value)} style={{ height: 42, padding: '0 12px', borderRadius: 9, border: `1px solid ${AC.line}` }} />
                 <div style={{ display: 'flex', gap: 10, marginTop: 3 }}>
