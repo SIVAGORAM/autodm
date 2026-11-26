@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { AtSign, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import QRCode from 'qrcode';
+import { AtSign, Lock, Eye, EyeOff, ArrowRight, Copy, Check } from 'lucide-react';
 import { api, authApi, getApiErrorMessage } from '../../../services/api';
 import { useAuthStore } from '../../../store/authStore';
 import { AuthBrand, AC } from '../../../components/auth-brand';
@@ -18,6 +19,9 @@ export default function LoginPage() {
   const [adminStep, setAdminStep] = useState<'credentials' | 'setup' | 'verify' | 'recovery'>('credentials');
   const [mfaCode, setMfaCode] = useState('');
   const [mfaSetup, setMfaSetup] = useState<{ secret: string; otpauthUri: string } | null>(null);
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
+  const [copiedKey, setCopiedKey] = useState(false);
+  const [showManualKey, setShowManualKey] = useState(false);
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
 
   // Pre-warm backend container while user enters credentials
@@ -49,7 +53,22 @@ export default function LoginPage() {
       const res = await authApi.login(form);
       if (res.data?.data?.mfaSetupRequired) {
         setAdminStep('setup');
-        setError('Administrator accounts must enroll an authenticator before opening the dashboard.');
+        setError('');
+        // Immediately fetch setup data and generate QR code
+        try {
+          const mfaRes = await authApi.beginAdminMfaSetup(form.password);
+          setMfaSetup(mfaRes.data.data);
+          if (mfaRes.data.data.otpauthUri) {
+            const url = await QRCode.toDataURL(mfaRes.data.data.otpauthUri, {
+              width: 260,
+              margin: 2,
+              color: { dark: '#17171B', light: '#ffffff' },
+            });
+            setQrCodeUrl(url);
+          }
+        } catch {
+          // Fall back to manual button if automatic start fails
+        }
       } else if (res.data?.data?.mfaRequired) {
         setAdminStep('verify');
         setError('Enter the code from your authenticator app or a recovery code.');
@@ -71,7 +90,14 @@ export default function LoginPage() {
     try {
       const response = await authApi.beginAdminMfaSetup(form.password);
       setMfaSetup(response.data.data);
-      setError('Add this secret to an authenticator app, then enter the generated six-digit code.');
+      if (response.data.data.otpauthUri) {
+        const url = await QRCode.toDataURL(response.data.data.otpauthUri, {
+          width: 260,
+          margin: 2,
+          color: { dark: '#17171B', light: '#ffffff' },
+        });
+        setQrCodeUrl(url);
+      }
     } catch (err: any) {
       setError(getApiErrorMessage(err, 'Could not start administrator MFA setup. Sign in again.'));
       if (err.response?.status === 401) setAdminStep('credentials');
@@ -124,18 +150,108 @@ export default function LoginPage() {
             <button type="submit" disabled={loading} style={{ height: 48, borderRadius: 11, background: AC.teal, color: 'var(--btn-primary-text)', fontWeight: 600, fontSize: 15.5, border: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: loading ? .7 : 1 }}>
               {loading ? 'Signing in…' : <>Sign in <ArrowRight style={{ width: 17, height: 17 }} /></>}
             </button>
-          </form> : adminStep === 'setup' ? <div style={{ marginTop: 22, display: 'grid', gap: 14 }}>
-            {!mfaSetup ? <button type="button" onClick={startMfaSetup} disabled={loading} style={{ height: 46, borderRadius: 10, background: AC.teal, color: 'white', fontWeight: 650, border: 0, cursor: 'pointer' }}>{loading ? 'Preparing…' : 'Set up authenticator'}</button> : <>
-              <div style={{ padding: 14, borderRadius: 10, background: 'var(--surface)', border: `1px solid ${AC.line}` }}>
-                <label style={{ display: 'block', color: AC.muted, fontSize: 12, marginBottom: 7 }}>Manual setup key</label>
-                <code style={{ display: 'block', color: AC.ink, overflowWrap: 'anywhere', fontSize: 14 }}>{mfaSetup.secret}</code>
-                <a href={mfaSetup.otpauthUri} style={{ display: 'inline-block', marginTop: 10, color: AC.teal, fontSize: 13 }}>Open in authenticator app</a>
-              </div>
-              <form onSubmit={verifyMfa} style={{ display: 'grid', gap: 12 }}>
-                <input className="ai" aria-label="Authenticator code" inputMode="numeric" autoComplete="one-time-code" maxLength={32} required value={mfaCode} onChange={(event) => setMfaCode(event.target.value)} placeholder="6-digit authenticator code" style={{ width: '100%', height: 48, borderRadius: 11, border: `1px solid ${AC.line}`, padding: '0 14px', fontSize: 15, color: AC.ink }} />
-                <button type="submit" disabled={loading} style={{ height: 48, borderRadius: 11, background: AC.teal, color: 'white', fontWeight: 600, border: 0, cursor: 'pointer' }}>{loading ? 'Verifying…' : 'Confirm and continue'}</button>
-              </form>
-            </>}
+          </form> : adminStep === 'setup' ? <div style={{ marginTop: 20, display: 'grid', gap: 16 }}>
+            {!mfaSetup ? (
+              <button type="button" onClick={startMfaSetup} disabled={loading} style={{ height: 46, borderRadius: 10, background: AC.teal, color: 'white', fontWeight: 650, border: 0, cursor: 'pointer' }}>
+                {loading ? 'Preparing…' : 'Set up authenticator'}
+              </button>
+            ) : (
+              <>
+                <div style={{ background: '#ffffff', border: `1px solid ${AC.line}`, borderRadius: 14, padding: 18, textAlign: 'center', boxShadow: '0 4px 14px rgba(0,0,0,0.04)' }}>
+                  {qrCodeUrl ? (
+                    <img src={qrCodeUrl} alt="Scan QR code in Authenticator App" style={{ width: 190, height: 190, margin: '0 auto', display: 'block', borderRadius: 8 }} />
+                  ) : (
+                    <div style={{ width: 190, height: 190, margin: '0 auto', display: 'grid', placeItems: 'center', color: AC.muted, fontSize: 13 }}>
+                      Loading QR code…
+                    </div>
+                  )}
+                  <p style={{ fontSize: 13, color: AC.muted, marginTop: 10, lineHeight: 1.4 }}>
+                    Scan with <strong>Google Authenticator</strong>, <strong>Microsoft Authenticator</strong>, or <strong>1Password</strong>.
+                  </p>
+                </div>
+
+                <div style={{ textAlign: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowManualKey((v) => !v)}
+                    style={{ background: 'none', border: 0, color: AC.teal, fontSize: 13, fontWeight: 500, cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    {showManualKey ? 'Hide manual setup key' : "Can't scan? Use manual setup key"}
+                  </button>
+                  {showManualKey && (
+                    <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: 'var(--surface)', border: `1px solid ${AC.line}`, textAlign: 'left' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <span style={{ fontSize: 11.5, color: AC.muted, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Secret Key</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (mfaSetup?.secret) {
+                              navigator.clipboard.writeText(mfaSetup.secret);
+                              setCopiedKey(true);
+                              setTimeout(() => setCopiedKey(false), 2000);
+                            }
+                          }}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 0, color: AC.teal, fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
+                        >
+                          {copiedKey ? <><Check style={{ width: 13, height: 13 }} /> Copied</> : <><Copy style={{ width: 13, height: 13 }} /> Copy</>}
+                        </button>
+                      </div>
+                      <code style={{ display: 'block', color: AC.ink, overflowWrap: 'anywhere', fontSize: 13.5, fontFamily: 'monospace' }}>
+                        {mfaSetup.secret}
+                      </code>
+                    </div>
+                  )}
+                </div>
+
+                <form onSubmit={verifyMfa} style={{ display: 'grid', gap: 12 }}>
+                  <div>
+                    <label style={{ display: 'block', color: AC.ink, fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                      6-Digit Authenticator Code
+                    </label>
+                    <input
+                      className="ai"
+                      aria-label="Authenticator code"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      required
+                      value={mfaCode}
+                      onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, ''))}
+                      placeholder="000000"
+                      style={{
+                        width: '100%',
+                        height: 50,
+                        borderRadius: 11,
+                        border: `1px solid ${AC.line}`,
+                        padding: '0 14px',
+                        fontSize: 22,
+                        textAlign: 'center',
+                        letterSpacing: 6,
+                        fontWeight: 700,
+                        color: AC.ink,
+                      }}
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={loading || mfaCode.trim().length < 6}
+                    style={{
+                      height: 48,
+                      borderRadius: 11,
+                      background: AC.teal,
+                      color: 'white',
+                      fontWeight: 600,
+                      fontSize: 15,
+                      border: 0,
+                      cursor: 'pointer',
+                      opacity: loading || mfaCode.trim().length < 6 ? 0.7 : 1,
+                    }}
+                  >
+                    {loading ? 'Verifying…' : 'Confirm and continue'}
+                  </button>
+                </form>
+              </>
+            )}
           </div> : adminStep === 'verify' ? <form onSubmit={verifyMfa} style={{ marginTop: 22, display: 'grid', gap: 12 }}>
             <input className="ai" aria-label="Authenticator or recovery code" autoComplete="one-time-code" maxLength={32} required value={mfaCode} onChange={(event) => setMfaCode(event.target.value)} placeholder="Authenticator or recovery code" style={{ width: '100%', height: 48, borderRadius: 11, border: `1px solid ${AC.line}`, padding: '0 14px', fontSize: 15, color: AC.ink }} />
             <button type="submit" disabled={loading} style={{ height: 48, borderRadius: 11, background: AC.teal, color: 'white', fontWeight: 600, border: 0, cursor: 'pointer' }}>{loading ? 'Verifying…' : 'Verify and sign in'}</button>
