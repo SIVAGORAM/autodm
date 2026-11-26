@@ -1,7 +1,18 @@
-import { getWorkerHealth, hasFreshWorkerHeartbeat, WORKER_HEARTBEAT_KEY } from './worker-health';
+import {
+  deactivateLocalWorker,
+  getWorkerHealth,
+  hasFreshWorkerHeartbeat,
+  isLocalWorkerActive,
+  recordLocalWorkerHeartbeat,
+  WORKER_HEARTBEAT_KEY,
+} from './worker-health';
 
 describe('worker health snapshot', () => {
   const now = 1_800_000_000_000;
+
+  beforeEach(() => {
+    deactivateLocalWorker();
+  });
 
   function queueWithHeartbeat(value: string | null) {
     return {
@@ -79,5 +90,15 @@ describe('hasFreshWorkerHeartbeat', () => {
   it('fails closed when Redis cannot provide the heartbeat', async () => {
     const queue = { client: Promise.reject(new Error('redis unavailable')) } as any;
     await expect(hasFreshWorkerHeartbeat(queue, now)).resolves.toBe(false);
+  });
+
+  it('reports healthy when in-process worker is active locally, even if Redis is unavailable', async () => {
+    recordLocalWorkerHeartbeat();
+    const rejectedPromise = Promise.reject(new Error('redis quota exceeded'));
+    rejectedPromise.catch(() => {}); // prevent unhandled rejection in node
+    const queue = { client: rejectedPromise } as any;
+    await expect(hasFreshWorkerHeartbeat(queue, Date.now())).resolves.toBe(true);
+    deactivateLocalWorker();
+    expect(isLocalWorkerActive()).toBe(false);
   });
 });

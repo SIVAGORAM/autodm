@@ -4,8 +4,28 @@ export const WORKER_HEARTBEAT_KEY = 'heylaunch:worker:heartbeat';
 export const WORKER_HEARTBEAT_INTERVAL_MS = 15_000;
 export const WORKER_HEARTBEAT_TTL_SECONDS = 45;
 
+let localHeartbeatTimestamp = 0;
+let localWorkerActive = false;
+
+export function recordLocalWorkerHeartbeat(): void {
+  localHeartbeatTimestamp = Date.now();
+  localWorkerActive = true;
+}
+
+export function deactivateLocalWorker(): void {
+  localWorkerActive = false;
+  localHeartbeatTimestamp = 0;
+}
+
+export function isLocalWorkerActive(now = Date.now()): boolean {
+  return localWorkerActive && now - localHeartbeatTimestamp <= 60_000;
+}
+
 /** Fast worker liveness check for creator-facing automation health. */
 export async function hasFreshWorkerHeartbeat(queue: Queue, now = Date.now()): Promise<boolean> {
+  if (isLocalWorkerActive(now)) {
+    return true;
+  }
   try {
     const heartbeat = await (await queue.client).get(WORKER_HEARTBEAT_KEY);
     const timestamp = heartbeat === null ? Number.NaN : Number(heartbeat);
@@ -30,7 +50,7 @@ export async function getWorkerHealth(queue: Queue, now = Date.now()) {
   const heartbeatDate = new Date(timestamp);
   const validHeartbeatTimestamp = Number.isFinite(timestamp) && Number.isFinite(heartbeatDate.getTime());
   const heartbeatAgeMs = validHeartbeatTimestamp ? now - timestamp : null;
-  const alive = heartbeatAgeMs !== null && heartbeatAgeMs >= 0 && heartbeatAgeMs <= WORKER_HEARTBEAT_TTL_SECONDS * 1000;
+  const alive = isLocalWorkerActive(now) || (heartbeatAgeMs !== null && heartbeatAgeMs >= 0 && heartbeatAgeMs <= WORKER_HEARTBEAT_TTL_SECONDS * 1000);
   const oldestWaitingTimestamp = Number(oldestWaitingJobs[0]?.timestamp);
   const oldestWaitingDate = new Date(oldestWaitingTimestamp);
   const validOldestWaitingTimestamp = Number.isFinite(oldestWaitingTimestamp) && Number.isFinite(oldestWaitingDate.getTime());

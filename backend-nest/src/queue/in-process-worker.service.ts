@@ -14,7 +14,9 @@ import {
   WORKER_HEARTBEAT_INTERVAL_MS,
   WORKER_HEARTBEAT_KEY,
   WORKER_HEARTBEAT_TTL_SECONDS,
+  deactivateLocalWorker,
   hasFreshWorkerHeartbeat,
+  recordLocalWorkerHeartbeat,
 } from './worker-health';
 import { DmProcessorService } from './dm-processor.service';
 import { WebhookService } from '../webhook/webhook.service';
@@ -38,6 +40,7 @@ export class InProcessWorkerService implements OnApplicationBootstrap, OnApplica
   ) {}
 
   async refreshHeartbeat(): Promise<void> {
+    recordLocalWorkerHeartbeat();
     if (!this.heartbeatConnection) return;
     try {
       await this.heartbeatConnection.set(
@@ -108,6 +111,7 @@ export class InProcessWorkerService implements OnApplicationBootstrap, OnApplica
   }
 
   async onApplicationShutdown() {
+    deactivateLocalWorker();
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;

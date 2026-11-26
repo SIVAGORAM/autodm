@@ -1,13 +1,14 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { WebhookController } from './webhook.controller';
 import { WebhookAdminController } from './webhook-admin.controller';
 import { WebhookService } from './webhook.service';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { SuperAdminGuard } from '../common/guards/super-admin.guard';
 import { InstagramModule } from '../instagram/instagram.module';
+import { QueueServiceModule } from '../queue/queue-service.module';
 
 @Module({
-  imports: [InstagramModule],
+  imports: [InstagramModule, forwardRef(() => QueueServiceModule)],
   controllers: [WebhookController, WebhookAdminController],
   providers: [WebhookService, AdminGuard, SuperAdminGuard],
   exports: [WebhookService],

@@ -1,4 +1,4 @@
-import { ConflictException, Inject, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger, NotFoundException, Optional, ServiceUnavailableException, forwardRef } from '@nestjs/common';
 import { createHash, randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { Queue } from 'bullmq';
@@ -13,6 +13,7 @@ import { safeErrorLabel } from '../common/safe-error-label';
 import { DashboardEventsService } from '../queue/dashboard-events.service';
 import { InstagramService } from '../instagram/instagram.service';
 import { EncryptionService } from '../common/encryption.service';
+import { DmProcessorService } from '../queue/dm-processor.service';
 
 function commentValues(value: unknown): unknown[] {
   if (Array.isArray(value)) return value;
@@ -47,6 +48,9 @@ export class WebhookService {
     private dashboardEvents: DashboardEventsService,
     private readonly instagram: InstagramService,
     private readonly encryption: EncryptionService,
+    @Optional()
+    @Inject(forwardRef(() => DmProcessorService))
+    private readonly dmProcessor?: DmProcessorService,
   ) {}
 
   // Apply an abuse limit only after signature verification fails. The generic
@@ -813,13 +817,20 @@ export class WebhookService {
   }
 
   private async enqueue(job: DmJob) {
-    // During rollout, don't create a second job when an older worker already
-    // queued this event under its pre-hash ID.
-    if (await this.dmQueue.getJob(job.triggerEventId)) return;
-    await this.dmQueue.add('send', job, {
-      jobId: dmQueueJobId(job.triggerEventId),
-      ...(job.triggerType === 'LIVE_COMMENT' ? { attempts: 1 } : {}),
-    });
+    try {
+      if (await this.dmQueue.getJob(job.triggerEventId)) return;
+      await this.dmQueue.add('send', job, {
+        jobId: dmQueueJobId(job.triggerEventId),
+        ...(job.triggerType === 'LIVE_COMMENT' ? { attempts: 1 } : {}),
+      });
+    } catch (err) {
+      if (this.dmProcessor) {
+        this.log.warn(`DM queue unavailable; processing DM directly in-process: ${safeErrorLabel(err)}`);
+        await this.dmProcessor.process(job);
+      } else {
+        throw err;
+      }
+    }
   }
 
 }
