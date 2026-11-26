@@ -4,7 +4,7 @@ import { Throttle } from '@nestjs/throttler';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import '@fastify/cookie';
 import { AuthService } from './auth.service';
-import { adminMfaCodeSchema, adminMfaSetupSchema, forgotPasswordSchema, legalAcceptanceSchema, loginSchema, resetPasswordSchema, signupSchema, verifyOtpSchema } from './auth.dto';
+import { adminMfaCodeSchema, adminMfaSetupSchema, forgotPasswordSchema, legalAcceptanceSchema, loginSchema, resetPasswordSchema, signupSchema, user2faConfirmSchema, user2faDisableSchema, user2faRegenerateSchema, user2faSetupSchema, verifyOtpSchema } from './auth.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -96,6 +96,44 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async me(@CurrentUser('userId') userId: string) {
     return { success: true, data: { user: await this.auth.me(userId) } };
+  }
+
+  @Get('2fa/status')
+  @UseGuards(JwtAuthGuard)
+  async get2faStatus(@CurrentUser('userId') userId: string) {
+    return { success: true, data: await this.auth.getUser2faStatus(userId) };
+  }
+
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('2fa/setup')
+  @UseGuards(JwtAuthGuard)
+  async beginUser2faSetup(@CurrentUser('userId') userId: string, @Body() body: unknown) {
+    const { currentPassword } = user2faSetupSchema.parse(body);
+    return { success: true, data: await this.auth.beginUser2faSetup(userId, currentPassword) };
+  }
+
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('2fa/confirm')
+  @UseGuards(JwtAuthGuard)
+  async confirmUser2fa(@CurrentUser('userId') userId: string, @Body() body: unknown) {
+    const { code } = user2faConfirmSchema.parse(body);
+    return { success: true, data: await this.auth.confirmUser2faSetup(userId, code) };
+  }
+
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('2fa/disable')
+  @UseGuards(JwtAuthGuard)
+  async disableUser2fa(@CurrentUser('userId') userId: string, @Body() body: unknown) {
+    const { currentPassword, code } = user2faDisableSchema.parse(body);
+    return { success: true, data: await this.auth.disableUser2fa(userId, currentPassword, code) };
+  }
+
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('2fa/recovery-codes')
+  @UseGuards(JwtAuthGuard)
+  async regenerateUserRecoveryCodes(@CurrentUser('userId') userId: string, @Body() body: unknown) {
+    const { currentPassword, code } = user2faRegenerateSchema.parse(body);
+    return { success: true, data: await this.auth.regenerateUserRecoveryCodes(userId, currentPassword, code) };
   }
 
   @Post('accept-policies')

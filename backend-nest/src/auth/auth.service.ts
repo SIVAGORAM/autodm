@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import bcrypt from 'bcryptjs';
@@ -82,10 +82,10 @@ export class AuthService {
     if (!user || !valid || user.deletionRequestedAt || user.suspendedAt || (user.role !== 'INFLUENCER' && !user.isVerified)) {
       throw new UnauthorizedException('Invalid email or password');
     }
-    if (user.role !== 'INFLUENCER') {
+    if (user.role !== 'INFLUENCER' || user.adminMfaEnabledAt) {
       const challenge = await this.createAdminMfaChallenge(user.id, user.email, user.role, user.sessionVersion,
         user.adminMfaEnabledAt ? 'verify' : 'setup');
-      return { mfaRequired: !!user.adminMfaEnabledAt, mfaSetupRequired: !user.adminMfaEnabledAt, challenge };
+      return { mfaRequired: !!user.adminMfaEnabledAt, mfaSetupRequired: !user.adminMfaEnabledAt && user.role !== 'INFLUENCER', challenge };
     }
     if (user.termsVersion !== TERMS_VERSION || user.privacyVersion !== PRIVACY_VERSION) {
       const now = new Date();
@@ -109,6 +109,7 @@ export class AuthService {
         adminPermissions: user.adminPermissions,
         plan: effectivePlan(user), isVerified: user.isVerified,
         termsVersion: user.termsVersion, privacyVersion: user.privacyVersion, ageConfirmedAt: user.ageConfirmedAt,
+        mfaEnabled: false,
       },
       ...tokens,
     };
@@ -167,7 +168,8 @@ export class AuthService {
       user: { id: user.id, name: user.name, email: user.email, role: user.role,
         adminPermissions: user.adminPermissions,
         plan: effectivePlan(user), isVerified: user.isVerified, termsVersion: user.termsVersion,
-        privacyVersion: user.privacyVersion, ageConfirmedAt: user.ageConfirmedAt },
+        privacyVersion: user.privacyVersion, ageConfirmedAt: user.ageConfirmedAt,
+        mfaEnabled: true },
       recoveryCodes, ...tokens,
     };
   }
@@ -176,7 +178,7 @@ export class AuthService {
     const claims = await this.verifyAdminChallenge(challengeToken, 'admin-mfa-challenge');
     const challengeHash = hashRefreshToken(challengeToken);
     const user = await this.prisma.user.findFirst({
-      where: { id: claims.sub, sessionVersion: claims.sv, role: { in: ['ADMIN', 'SUPER_ADMIN'] }, deletionRequestedAt: null, suspendedAt: null,
+      where: { id: claims.sub, sessionVersion: claims.sv, role: { in: ['ADMIN', 'SUPER_ADMIN', 'INFLUENCER'] }, deletionRequestedAt: null, suspendedAt: null,
         adminMfaEnabledAt: { not: null }, adminMfaSecretEnc: { not: null }, adminMfaChallengeHash: challengeHash,
         adminMfaChallengeExpiresAt: { gt: new Date() } },
       select: { id: true, name: true, email: true, role: true, adminPermissions: true, sessionVersion: true, plan: true, planExpiresAt: true,
@@ -210,7 +212,8 @@ export class AuthService {
       user: { id: user.id, name: user.name, email: user.email, role: user.role,
         adminPermissions: user.adminPermissions,
         plan: effectivePlan(user), isVerified: user.isVerified, termsVersion: user.termsVersion,
-        privacyVersion: user.privacyVersion, ageConfirmedAt: user.ageConfirmedAt },
+        privacyVersion: user.privacyVersion, ageConfirmedAt: user.ageConfirmedAt,
+        mfaEnabled: true },
       ...tokens,
     };
   }
@@ -223,7 +226,7 @@ export class AuthService {
     );
     const expiresAt = new Date(Date.now() + 5 * 60_000);
     const saved = await this.prisma.user.updateMany({
-      where: { id: userId, role: { in: ['ADMIN', 'SUPER_ADMIN'] }, sessionVersion, deletionRequestedAt: null, suspendedAt: null },
+      where: { id: userId, role: { in: ['ADMIN', 'SUPER_ADMIN', 'INFLUENCER'] }, sessionVersion, deletionRequestedAt: null, suspendedAt: null },
       data: { adminMfaChallengeHash: hashRefreshToken(token), adminMfaChallengeExpiresAt: expiresAt },
     });
     if (saved.count !== 1) throw new UnauthorizedException('Invalid email or password');
@@ -325,6 +328,7 @@ export class AuthService {
       select: {
         id: true, name: true, email: true, role: true, adminPermissions: true, plan: true, planExpiresAt: true, trialEndsAt: true, isVerified: true, createdAt: true,
         termsVersion: true, termsAcceptedAt: true, privacyVersion: true, privacyAcknowledgedAt: true, ageConfirmedAt: true,
+        adminMfaEnabledAt: true,
         igAccounts: { select: { id: true, username: true, isActive: true } },
       },
     });
@@ -344,8 +348,13 @@ export class AuthService {
       user.termsVersion = TERMS_VERSION;
       user.privacyVersion = PRIVACY_VERSION;
     }
-    const { planExpiresAt, trialEndsAt, ...profile } = user;
-    return { ...profile, plan: effectivePlan({ ...user, planExpiresAt, trialEndsAt }) };
+    const { planExpiresAt, trialEndsAt, adminMfaEnabledAt, ...profile } = user;
+    return {
+      ...profile,
+      mfaEnabled: !!adminMfaEnabledAt,
+      mfaEnabledAt: adminMfaEnabledAt,
+      plan: effectivePlan({ ...user, planExpiresAt, trialEndsAt }),
+    };
   }
 
   async acceptLegalPolicies(userId: string, termsVersion: string, privacyVersion: string) {
@@ -505,5 +514,179 @@ export class AuthService {
     );
     const refreshTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     return { accessToken, refreshToken, refreshTokenId: jti, refreshTokenFamilyId: familyId, refreshTokenExpiresAt };
+  }
+
+  async getUser2faStatus(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true, adminMfaEnabledAt: true, adminMfaRecoveryCodeHashes: true },
+    });
+    if (!user) throw new UnauthorizedException('User not found');
+    return {
+      enabled: !!user.adminMfaEnabledAt,
+      enabledAt: user.adminMfaEnabledAt,
+      recoveryCodesRemaining: user.adminMfaRecoveryCodeHashes.length,
+      isMandatory: user.role !== 'INFLUENCER',
+    };
+  }
+
+  async beginUser2faSetup(userId: string, currentPassword: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, passwordHash: true, deletionRequestedAt: true, suspendedAt: true },
+    });
+    if (!user || user.deletionRequestedAt || user.suspendedAt) {
+      throw new UnauthorizedException('Account not found or suspended');
+    }
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) throw new UnauthorizedException('Incorrect current password');
+
+    const secret = newTotpSecret();
+    const updated = await this.prisma.user.updateMany({
+      where: { id: user.id },
+      data: { adminMfaPendingSecretEnc: this.encryption.encrypt(secret) },
+    });
+    if (updated.count !== 1) throw new UnauthorizedException('Could not initiate 2FA setup');
+
+    return {
+      secret,
+      otpauthUri: authenticatorUri(secret, user.email),
+    };
+  }
+
+  async confirmUser2faSetup(userId: string, code: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, adminMfaPendingSecretEnc: true },
+    });
+    if (!user?.adminMfaPendingSecretEnc) {
+      throw new BadRequestException('No two-factor setup in progress. Please start setup again.');
+    }
+    let secret: string;
+    try {
+      secret = this.encryption.decrypt(user.adminMfaPendingSecretEnc);
+    } catch {
+      throw new BadRequestException('Invalid setup secret. Please start setup again.');
+    }
+    const step = totpStep(secret, code);
+    if (step === null) {
+      throw new BadRequestException('Invalid authenticator code. Check that your device time is synchronized and try again.');
+    }
+    const recoveryCodes = newRecoveryCodes();
+    const recoveryHashes = recoveryCodes.map((val) => recoveryCodeHash(val, this.config.getOrThrow('JWT_ACCESS_SECRET')));
+    const enabledAt = new Date();
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        adminMfaEnabledAt: enabledAt,
+        adminMfaSecretEnc: user.adminMfaPendingSecretEnc,
+        adminMfaPendingSecretEnc: null,
+        adminMfaRecoveryCodeHashes: recoveryHashes,
+        adminMfaLastUsedStep: BigInt(step),
+      },
+    });
+
+    return {
+      success: true,
+      enabledAt,
+      recoveryCodes,
+    };
+  }
+
+  async disableUser2fa(userId: string, currentPassword: string, code: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        role: true,
+        passwordHash: true,
+        adminMfaEnabledAt: true,
+        adminMfaSecretEnc: true,
+        adminMfaRecoveryCodeHashes: true,
+      },
+    });
+    if (!user) throw new UnauthorizedException('User not found');
+    if (user.role !== 'INFLUENCER') {
+      throw new ForbiddenException('Two-factor authentication is mandatory for administrators and cannot be disabled.');
+    }
+    if (!user.adminMfaEnabledAt || !user.adminMfaSecretEnc) {
+      throw new BadRequestException('Two-factor authentication is not currently enabled.');
+    }
+    const validPw = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!validPw) throw new UnauthorizedException('Incorrect current password');
+
+    let secret: string;
+    try {
+      secret = this.encryption.decrypt(user.adminMfaSecretEnc);
+    } catch {
+      throw new BadRequestException('Two-factor authentication secret is corrupted. Please contact support.');
+    }
+
+    const step = totpStep(secret, code);
+    const recoveryHash = step === null ? recoveryCodeHash(code, this.config.getOrThrow('JWT_ACCESS_SECRET')) : null;
+    const recoveryIndex = recoveryHash ? user.adminMfaRecoveryCodeHashes.indexOf(recoveryHash) : -1;
+
+    if (step === null && recoveryIndex < 0) {
+      throw new UnauthorizedException('Invalid authenticator or recovery code.');
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        adminMfaEnabledAt: null,
+        adminMfaSecretEnc: null,
+        adminMfaPendingSecretEnc: null,
+        adminMfaRecoveryCodeHashes: [],
+        adminMfaLastUsedStep: null,
+      },
+    });
+
+    return { success: true };
+  }
+
+  async regenerateUserRecoveryCodes(userId: string, currentPassword: string, code: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        passwordHash: true,
+        adminMfaEnabledAt: true,
+        adminMfaSecretEnc: true,
+      },
+    });
+    if (!user) throw new UnauthorizedException('User not found');
+    if (!user.adminMfaEnabledAt || !user.adminMfaSecretEnc) {
+      throw new BadRequestException('Two-factor authentication is not enabled.');
+    }
+    const validPw = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!validPw) throw new UnauthorizedException('Incorrect current password');
+
+    let secret: string;
+    try {
+      secret = this.encryption.decrypt(user.adminMfaSecretEnc);
+    } catch {
+      throw new BadRequestException('Two-factor authentication secret is corrupted. Please contact support.');
+    }
+
+    const step = totpStep(secret, code);
+    if (step === null) {
+      throw new UnauthorizedException('Invalid authenticator code. Check your device time and try again.');
+    }
+
+    const recoveryCodes = newRecoveryCodes();
+    const recoveryHashes = recoveryCodes.map((val) => recoveryCodeHash(val, this.config.getOrThrow('JWT_ACCESS_SECRET')));
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        adminMfaRecoveryCodeHashes: recoveryHashes,
+        adminMfaLastUsedStep: BigInt(step),
+      },
+    });
+
+    return {
+      recoveryCodes,
+    };
   }
 }

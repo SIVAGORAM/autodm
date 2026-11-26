@@ -25,6 +25,24 @@ export const loginSchema = z.object({
 export const adminMfaCodeSchema = z.object({ code: z.string().trim().min(1).max(32) });
 export const adminMfaSetupSchema = z.object({ currentPassword: z.string().min(1).max(128) });
 
+export const user2faSetupSchema = z.object({
+  currentPassword: z.string().min(1).max(128),
+});
+
+export const user2faConfirmSchema = z.object({
+  code: z.string().trim().min(6).max(8),
+});
+
+export const user2faDisableSchema = z.object({
+  currentPassword: z.string().min(1).max(128),
+  code: z.string().trim().min(1).max(32),
+});
+
+export const user2faRegenerateSchema = z.object({
+  currentPassword: z.string().min(1).max(128),
+  code: z.string().trim().min(1).max(32),
+});
+
 export const verifyOtpSchema = z.object({
   code: z.string().regex(/^\d{6}$/),
 }).strict();

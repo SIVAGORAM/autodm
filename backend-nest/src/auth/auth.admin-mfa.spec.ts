@@ -40,7 +40,7 @@ describe('AuthService administrator MFA', () => {
       });
       expect(prisma.refreshToken.create).not.toHaveBeenCalled();
       expect(prisma.user.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-        where: expect.objectContaining({ id: admin.id, role: { in: ['ADMIN', 'SUPER_ADMIN'] }, sessionVersion: 3 }),
+        where: expect.objectContaining({ id: admin.id, role: { in: ['ADMIN', 'SUPER_ADMIN', 'INFLUENCER'] }, sessionVersion: 3 }),
         data: expect.objectContaining({ adminMfaChallengeHash: hashRefreshToken('setup-challenge') }),
       }));
     } finally { compare.mockRestore(); }

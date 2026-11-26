@@ -127,8 +127,8 @@ export default function LoginPage() {
       <AuthBrand />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px' }}>
         <div style={{ width: '100%', maxWidth: 384 }}>
-          <h1 style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-.8px', color: AC.ink }}>{adminStep === 'credentials' ? 'Welcome back' : adminStep === 'setup' ? 'Secure your admin account' : adminStep === 'verify' ? 'Administrator verification' : 'Save your recovery codes'}</h1>
-          <p style={{ color: AC.muted, fontSize: 15, marginTop: 6 }}>{adminStep === 'credentials' ? 'Log in to your HeyLaunch dashboard.' : adminStep === 'setup' ? 'Set up an authenticator to finish administrator sign-in.' : adminStep === 'verify' ? 'Your admin account requires a second factor.' : 'Each recovery code works once. Store them somewhere private.'}</p>
+          <h1 style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-.8px', color: AC.ink }}>{adminStep === 'credentials' ? 'Welcome back' : adminStep === 'setup' ? 'Secure your account' : adminStep === 'verify' ? 'Two-factor verification' : 'Save your recovery codes'}</h1>
+          <p style={{ color: AC.muted, fontSize: 15, marginTop: 6 }}>{adminStep === 'credentials' ? 'Log in to your HeyLaunch dashboard.' : adminStep === 'setup' ? 'Set up an authenticator to finish account sign-in.' : adminStep === 'verify' ? 'Enter the code from your authenticator app or an emergency recovery code.' : 'Each recovery code works once. Store them somewhere private.'}</p>
           {error && <div style={{ marginTop: 18, background: 'var(--error-soft)', color: 'var(--error)', border: '1px solid var(--error)', borderRadius: 10, padding: '10px 14px', fontSize: 14 }}>{error}</div>}
           {adminStep === 'credentials' ? <form onSubmit={handleSubmit} style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ position: 'relative' }}>

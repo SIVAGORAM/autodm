@@ -123,6 +123,11 @@ export const authApi = {
   }) => api.post('/auth/accept-policies', data),
   logout: () => api.post('/auth/logout'),
   me: () => api.get('/auth/me'),
+  get2faStatus: () => api.get('/auth/2fa/status'),
+  begin2faSetup: (currentPassword: string) => api.post('/auth/2fa/setup', { currentPassword }),
+  confirm2faSetup: (code: string) => api.post('/auth/2fa/confirm', { code }),
+  disable2fa: (data: { currentPassword: string; code: string }) => api.post('/auth/2fa/disable', data),
+  regenerate2faRecoveryCodes: (data: { currentPassword: string; code: string }) => api.post('/auth/2fa/recovery-codes', data),
 };
 
 export const instagramApi = {

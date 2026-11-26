@@ -11,6 +11,8 @@ interface User {
   plan?: 'FREE' | 'CREATOR' | 'PRO' | 'AGENCY' | 'PAID';
   profilePicUrl?: string | null;
   isVerified?: boolean;
+  mfaEnabled?: boolean;
+  mfaEnabledAt?: string | null;
   termsVersion?: string | null;
   privacyVersion?: string | null;
   ageConfirmedAt?: string | null;
