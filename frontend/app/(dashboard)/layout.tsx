@@ -11,6 +11,7 @@ import { LEGAL_POLICIES_APPROVED, PRIVACY_VERSION, TERMS_VERSION } from '../../l
 import { RLStyles, Spinner } from '../../components/rl-kit';
 import { TrialBanner } from '../../components/trial-banner';
 import { ThemeToggle } from '../../components/theme-toggle';
+import { NotificationBell } from '../../components/notification-bell';
 import type { LucideIcon } from 'lucide-react';
 import { LayoutDashboard, Send, Instagram, BarChart2, FileText, CreditCard, Settings, Bell, HelpCircle, LogOut, ChevronRight, Menu, X, Sparkles, UsersRound, ShieldAlert, LifeBuoy, Mail, MessageSquareText, Link2 } from 'lucide-react';
 
@@ -216,9 +217,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Link href="/dashboard/billing" className="rl-b" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 34, background: 'var(--lime)', color: 'var(--on-lime)', padding: '0 15px', borderRadius: 999, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
               <Sparkles style={{ width: 14, height: 14 }} aria-hidden /> <span className="hl-hide-xs">Upgrade</span>
             </Link>
-            <Link href="/dashboard/notifications" aria-label="Notifications" style={{ position: 'relative', color: 'var(--text-muted)', padding: 7, borderRadius: 10, display: 'grid', placeItems: 'center' }} className="rl-nav">
-              <Bell style={{ width: 18, height: 18 }} aria-hidden />
-            </Link>
+            <NotificationBell />
             <div style={{ position: 'relative' }}>
               <button onClick={() => setMenu((m) => !m)} aria-haspopup="menu" aria-expanded={menu} aria-label="Account menu"
                 style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--nav-selected)', color: 'var(--text)', fontSize: 14, fontWeight: 700, border: '1px solid var(--border)', cursor: 'pointer' }}>{initial}</button>
