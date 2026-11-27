@@ -20,17 +20,19 @@ import {
   LANGUAGE_OPTIONS,
   PUBLIC_COMMENT_REPLIES,
   DM_BODY_TEMPLATES,
+  STORY_MENTION_TEMPLATES,
 } from '../../../../../lib/automation-templates';
 
 const STEPS = ['Trigger & Media', 'Keywords & Replies', 'Direct Message'];
 
 type Btn = { title: string; url: string };
-const paidTriggers = ['ANY_POST', 'STORY_REPLY', 'LIVE_COMMENT', 'DM'];
+const paidTriggers = ['ANY_POST', 'STORY_REPLY', 'STORY_MENTION', 'LIVE_COMMENT', 'DM'];
 
 const triggerOptions = [
   { value: 'POST_COMMENT', label: 'Comment on a specific post / Reel', icon: MessageCircle, paid: false },
   { value: 'ANY_POST', label: 'Comment on any post / Reel', icon: MessageCircle, paid: true },
-  { value: 'STORY_REPLY', label: 'Story reply', icon: Film, paid: true },
+  { value: 'STORY_REPLY', label: 'Story reply (replied to your story)', icon: Film, paid: true },
+  { value: 'STORY_MENTION', label: 'Story mention (tagged @you in a story)', icon: AtSign, paid: true },
   { value: 'LIVE_COMMENT', label: 'Comment during a live broadcast', icon: MessageCircle, paid: true },
   { value: 'DM', label: 'Incoming direct message', icon: Mail, paid: true },
 ];
@@ -276,7 +278,15 @@ export default function NewAutomationPage() {
                         <button
                           key={o.value}
                           type="button"
-                          onClick={() => !locked && setTriggerType(o.value)}
+                          onClick={() => {
+                            if (!locked) {
+                              setTriggerType(o.value);
+                              if (o.value === 'STORY_MENTION') {
+                                setMatchMode('ANY');
+                                setDmText(STORY_MENTION_TEMPLATES[language][0].text);
+                              }
+                            }
+                          }}
                           aria-pressed={active}
                           className={`flex items-center gap-3 rounded-lg border p-3.5 text-left text-sm transition-all ${
                             active
@@ -319,6 +329,20 @@ export default function NewAutomationPage() {
                     Watches for incoming replies or reactions sent to any of your active 24-hour Stories.
                     <span className="block mt-1 font-medium text-foreground">
                       Platform Note: Instagram Stories do not have public comment threads; all viewer responses arrive as direct messages and are processed through the official Meta Messaging API.
+                    </span>
+                  </p>
+                </div>
+              )}
+
+              {triggerType === 'STORY_MENTION' && (
+                <div className="rounded-lg border border-primary/25 bg-primary/10 p-4 text-xs space-y-1.5">
+                  <div className="flex items-center gap-2 font-semibold text-primary">
+                    <AtSign className="h-4 w-4" /> Story Mention Automation (Fan Loyalty Booster ❤️)
+                  </div>
+                  <p className="text-muted-foreground leading-relaxed">
+                    Triggers automatically when a fan tags or mentions <span className="font-semibold text-foreground">@{selectedAccount?.username ?? 'your handle'}</span> in their own Instagram story.
+                    <span className="block mt-1 font-medium text-foreground">
+                      Instant Appreciation: Automatically delivers your warm thank-you message within seconds, turning casual viewers into loyal superfans.
                     </span>
                   </p>
                 </div>
@@ -615,12 +639,12 @@ export default function NewAutomationPage() {
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                       <Sparkles className="h-3.5 w-3.5 text-primary" />
-                      1-Click {language === 'TENGLISH' ? 'Telugu (English letters)' : language === 'TELUGU_ENGLISH' ? 'Telugu-English Hybrid' : 'English'} Message Templates
+                      1-Click {language === 'TENGLISH' ? 'Telugu (English letters)' : language === 'TELUGU_ENGLISH' ? 'Telugu-English Hybrid' : 'English'} {triggerType === 'STORY_MENTION' ? 'Story Mention Templates' : 'Message Templates'}
                     </span>
                     <span className="text-[10px] text-muted-foreground">Tap to apply</span>
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
-                    {DM_BODY_TEMPLATES[language].map((tpl, i) => (
+                    {(triggerType === 'STORY_MENTION' ? STORY_MENTION_TEMPLATES[language] : DM_BODY_TEMPLATES[language]).map((tpl, i) => (
                       <button
                         key={i}
                         type="button"
@@ -876,6 +900,7 @@ export default function NewAutomationPage() {
         <div className="lg:sticky lg:top-6 h-fit">
           <AutomationMessagePreview
             accountUsername={selectedAccount?.username ?? 'yourbrand'}
+            triggerType={triggerType}
             publicReply={replyToComment ? publicReplies.find((r) => r.trim()) : undefined}
             autoLikeComment={supportsPublicCommentReply && autoLikeComment}
             dmText={dmText}

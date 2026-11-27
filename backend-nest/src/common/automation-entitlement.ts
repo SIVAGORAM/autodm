@@ -33,7 +33,7 @@ export function automationRestriction(
   // entitlement even though new global rules use the explicit ANY_POST type.
   const isGlobalComment = automation.triggerType === 'ANY_POST'
     || (automation.triggerType === 'POST_COMMENT' && (automation.mediaId === null || automation.mediaId?.trim() === ''));
-  if ((['STORY_REPLY', 'LIVE_COMMENT', 'DM'].includes(automation.triggerType ?? '') || isGlobalComment) && !plan.features.paidTriggers) {
+  if ((['STORY_REPLY', 'STORY_MENTION', 'LIVE_COMMENT', 'DM'].includes(automation.triggerType ?? '') || isGlobalComment) && !plan.features.paidTriggers) {
     return 'This trigger needs a higher plan.';
   }
   if (options.includeFollowUps !== false && (automation.followUpCount ?? 0) > 0 && !plan.features.followUps) {

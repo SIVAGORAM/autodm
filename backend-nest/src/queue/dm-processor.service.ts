@@ -139,7 +139,7 @@ export class DmProcessorService {
       }
       return;
     }
-    if (job.triggerType === 'DM' || job.triggerType === 'STORY_REPLY') {
+    if (job.triggerType === 'DM' || job.triggerType === 'STORY_REPLY' || job.triggerType === 'STORY_MENTION') {
       // Meta's standard messaging window begins at the viewer's inbound
       // message. Preserve compatibility with already-queued jobs by falling
       // back to BullMQ's immutable enqueue timestamp during rollout.

@@ -558,6 +558,7 @@ enum TriggerType {
   NEXT_POST
   ANY_POST
   STORY_REPLY
+  STORY_MENTION // when a fan mentions @creator in their story
   LIVE_COMMENT
   DM
 }

@@ -264,4 +264,43 @@ describe('WebhookService automation selection', () => {
     }), expect.objectContaining({ jobId: expect.stringMatching(/^dm-[a-f0-9]{64}$/) }));
     expect(queue.add.mock.calls[0][1]).not.toHaveProperty('messageWindow');
   });
+
+  it('routes Instagram story mentions to a STORY_MENTION automation', async () => {
+    const storyMentionRule = {
+      ...automation('rule-mention', 'STORY_MENTION', new Date('2026-03-01T00:00:00.000Z')),
+      matchMode: 'ANY',
+      keywords: [],
+    };
+    const { service, prisma, queue } = setup([storyMentionRule]);
+    const messageTimestamp = Date.now() - 5_000;
+
+    await (service as any).onMessage(
+      { id: account.igUserId },
+      {
+        sender: { id: 'fan-1' },
+        timestamp: messageTimestamp,
+        message: {
+          mid: 'mention-mid-1',
+          attachments: [
+            {
+              type: 'story_mention',
+              payload: { url: 'https://cdn.example.com/story.jpg' },
+            },
+          ],
+        },
+      },
+    );
+
+    expect(prisma.automation.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { igAccountId: account.id, status: 'LIVE', triggerType: 'STORY_MENTION' },
+    }));
+    expect(queue.add).toHaveBeenCalledWith('send', expect.objectContaining({
+      automationId: storyMentionRule.id,
+      triggerType: 'STORY_MENTION',
+      triggerEventId: `story-mention:${account.igUserId}:mention-mid-1`,
+      recipientIgsid: 'fan-1',
+      text: 'Reply from rule-mention',
+      replyReceivedAt: new Date(messageTimestamp).toISOString(),
+    }), expect.objectContaining({ jobId: expect.stringMatching(/^dm-[a-f0-9]{64}$/) }));
+  });
 });

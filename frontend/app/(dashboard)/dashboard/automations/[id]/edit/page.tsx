@@ -24,11 +24,12 @@ type MessageButton = { title: string; url: string };
 const triggers = [
   { value: 'POST_COMMENT', label: 'Comment on a post' },
   { value: 'ANY_POST', label: 'Comment on any post', paid: true },
-  { value: 'STORY_REPLY', label: 'Story reply', paid: true },
+  { value: 'STORY_REPLY', label: 'Story reply (replied to your story)', paid: true },
+  { value: 'STORY_MENTION', label: 'Story mention (tagged @you in a story)', paid: true },
   { value: 'LIVE_COMMENT', label: 'Comment during a live broadcast', paid: true },
   { value: 'DM', label: 'Incoming DM', paid: true },
 ];
-const paidTriggers = ['ANY_POST', 'STORY_REPLY', 'LIVE_COMMENT', 'DM'];
+const paidTriggers = ['ANY_POST', 'STORY_REPLY', 'STORY_MENTION', 'LIVE_COMMENT', 'DM'];
 const supportedTriggers = triggers.map((trigger) => trigger.value);
 const unavailableFollowUpConditions: Record<string, string> = {
   BOUGHT: 'Purchase event (integration unavailable)',
@@ -546,6 +547,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
       <aside className="h-fit lg:sticky lg:top-6">
         <AutomationMessagePreview
           accountUsername={automation.data.igAccount?.username ?? 'yourbrand'}
+          triggerType={triggerType}
           publicReply={supportsPublicCommentReply && replyToComment ? publicReplies.find((reply) => reply.trim()) : undefined}
           autoLikeComment={supportsPublicCommentReply && autoLikeComment}
           dmText={dmText}

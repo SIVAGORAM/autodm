@@ -30,6 +30,7 @@ function personalize(text: string, name: string, username: string) {
 
 export function AutomationMessagePreview({
   accountUsername,
+  triggerType,
   publicReply,
   autoLikeComment = false,
   dmText,
@@ -39,6 +40,7 @@ export function AutomationMessagePreview({
   language = 'ENGLISH',
 }: {
   accountUsername?: string;
+  triggerType?: string;
   publicReply?: string;
   autoLikeComment?: boolean;
   dmText: string;
@@ -122,6 +124,23 @@ export function AutomationMessagePreview({
               <p className="text-[10px] text-muted-foreground">Instagram Direct</p>
             </div>
           </div>
+
+          {/* Story Mention Event Simulation */}
+          {triggerType === 'STORY_MENTION' && (
+            <div className="mb-3 flex items-center gap-2.5 rounded-xl border border-primary/20 bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-amber-500/10 p-2.5">
+              <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-tr from-purple-600 via-pink-500 to-amber-500 p-0.5 shadow-xs">
+                <div className="flex h-full w-full items-center justify-center rounded-[6px] bg-background text-[11px] font-bold text-foreground">
+                  📷
+                </div>
+              </div>
+              <div className="min-w-0 text-xs">
+                <p className="font-semibold text-foreground truncate">
+                  @{sampleUsername} mentioned you
+                </p>
+                <p className="text-[10px] text-muted-foreground">In their Instagram story</p>
+              </div>
+            </div>
+          )}
 
           {/* Comment & Auto-Like / Public Reply Simulation */}
           {(autoLikeComment || publicReply?.trim()) && (

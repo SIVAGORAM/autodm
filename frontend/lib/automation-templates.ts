@@ -314,6 +314,60 @@ export const STORY_REPLY_TEMPLATES: Record<AutomationLanguage, string[]> = {
   ],
 };
 
+// ─── 7. Story Mention Default Templates (Fan Loyalty Booster) ──
+export const STORY_MENTION_TEMPLATES: Record<AutomationLanguage, Array<{ title: string; text: string; hasButton?: boolean }>> = {
+  ENGLISH: [
+    {
+      title: 'Warm Fan Thank-You (No Link)',
+      text: 'Hey {{first_name}}! 🙌 Thank you so much for the story mention! Really appreciate your love and support bro ❤️',
+    },
+    {
+      title: 'Shoutout Appreciation',
+      text: 'Loved the story tag {{first_name}}! ✨ Means the world to have followers like you. Hope you have an awesome week! 🔥',
+    },
+    {
+      title: 'With Special Gift / Resource (Optional)',
+      text: 'Thank you so much for the story mention, {{first_name}}! 🎁 To show my appreciation, here is a special link just for you:',
+      hasButton: true,
+    },
+    {
+      title: 'VIP Community Invite',
+      text: 'Thanks for the story shoutout! 🙌 If you want to connect closer with us, join our VIP community below:',
+      hasButton: true,
+    },
+  ],
+  TENGLISH: [
+    {
+      title: 'Warm Fan Thank-You (No Link)',
+      text: 'Hey {{first_name}}! 🙌 Story lo tag chesinandhuku chala chala thanks bro! Mee love and support ki nijanga thankful ❤️',
+    },
+    {
+      title: 'Casual Shoutout Love',
+      text: 'Story mention chusanu {{first_name}}! Chala happy ga anipinchindi bro. Thanks a lot for the love! 🔥✨',
+    },
+    {
+      title: 'With Special Gift / Resource (Optional)',
+      text: 'Story lo mention chesinandhuku thanks {{first_name}}! 🎁 Mee support ki gratitude ga ee special link share chestunna:',
+      hasButton: true,
+    },
+  ],
+  TELUGU_ENGLISH: [
+    {
+      title: 'Warm Fan Thank-You (No Link)',
+      text: 'Hey {{first_name}}! 🙌 Thanks so much for the story tag! Mee continuous support means a lot to me bro ❤️',
+    },
+    {
+      title: 'Shoutout Appreciation',
+      text: 'Loved the story mention {{first_name}}! ✨ Thank you for sharing the love with your friends! 🔥',
+    },
+    {
+      title: 'With Special Gift / Resource (Optional)',
+      text: 'Thanks for tagging me in your story {{first_name}}! 🎁 Here is an exclusive gift link just for you:',
+      hasButton: true,
+    },
+  ],
+};
+
 // ─── 7. Helpers ─────────────────────────────────────────────────
 export function normalizeLanguage(lang?: string | null): AutomationLanguage {
   if (lang === 'TENGLISH' || lang === 'TELUGU_ENGLISH') return lang;

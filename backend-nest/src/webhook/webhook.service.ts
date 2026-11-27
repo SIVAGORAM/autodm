@@ -473,7 +473,9 @@ export class WebhookService {
     const mid = msg.message?.mid ?? msg.postback?.mid ?? (msg.timestamp ? `postback:${senderId}:${msg.timestamp}` : '');
     if (!senderId || senderId === igUserId || !mid) return;
     if (msg.reaction || msg.read || msg.delivery || msg.message?.is_echo) return;
-    if (!text || !text.trim()) return;
+    const isStoryMention = Array.isArray(msg.message?.attachments) &&
+      msg.message.attachments.some((att: any) => att?.type === 'story_mention');
+    if (!isStoryMention && (!text || !text.trim())) return;
     const providerTimestamp = typeof msg.timestamp === 'number' || (typeof msg.timestamp === 'string' && /^\d+$/.test(msg.timestamp))
       ? Number(msg.timestamp)
       : Number.NaN;
@@ -533,7 +535,7 @@ export class WebhookService {
     const pendingFollowTag = currentTags.find((t) => t.startsWith('pending_follow:'));
     const pendingEmailTag = currentTags.find((t) => t.startsWith('pending_email:'));
 
-    if (pendingFollowTag) {
+    if (!isStoryMention && pendingFollowTag) {
       const targetAutoId = pendingFollowTag.replace('pending_follow:', '');
       const targetAuto = await this.prisma.automation.findUnique({
         where: { id: targetAutoId },
@@ -611,7 +613,7 @@ export class WebhookService {
       }
     }
 
-    if (pendingEmailTag) {
+    if (!isStoryMention && pendingEmailTag) {
       const targetAutoId = pendingEmailTag.replace('pending_email:', '');
       const targetAuto = await this.prisma.automation.findUnique({
         where: { id: targetAutoId },
@@ -698,15 +700,16 @@ export class WebhookService {
       }
     }
 
-    // A story reply arrives as a message with reply_to.story; a plain DM does not.
-    const kind = msg.message?.reply_to?.story ? 'STORY_REPLY' : 'DM';
+    // Story mention arrives with attachment type 'story_mention'; story reply has reply_to.story; plain DM has neither.
+    const isStoryReply = Boolean(msg.message?.reply_to?.story);
+    const kind = isStoryMention ? 'STORY_MENTION' : isStoryReply ? 'STORY_REPLY' : 'DM';
     const adReferral = msg.message?.referral;
     const adId = adReferral?.ad_id;
     const hasMetaAdId = (typeof adId === 'number' && Number.isSafeInteger(adId) && adId > 0)
       || (typeof adId === 'string' && /^\d+$/.test(adId));
     // Meta documents this signed messages-webhook marker for Click-to-Direct
     // ads. Require the complete marker and only extend ordinary DM triggers;
-    // story replies and generic referrals stay on the 24-hour rule.
+    // story replies, story mentions, and generic referrals stay on the 24-hour rule.
     const clickToDirectAd = kind === 'DM' && adReferral?.source === 'ADS'
       && adReferral?.type === 'OPEN_THREAD' && hasMetaAdId;
 
@@ -716,9 +719,13 @@ export class WebhookService {
     });
     automations.sort(createdAutomationOrder);
     for (const a of automations) {
-      const res = matchComment({ text, matchMode: a.matchMode as MatchMode, keywords: a.keywords });
+      const res = (isStoryMention || a.triggerType === 'STORY_MENTION')
+        ? { matched: true, keyword: undefined }
+        : matchComment({ text: text || '', matchMode: a.matchMode as MatchMode, keywords: a.keywords });
       if (!res.matched) continue;
-      const triggerEventId = `message:${igUserId}:${mid}`;
+      const triggerEventId = isStoryMention
+        ? `story-mention:${igUserId}:${mid}`
+        : `message:${igUserId}:${mid}`;
       const restriction = accountRestriction ?? automationRestriction(plan, a, { includeFollowUps: false });
       if (restriction) {
         await this.recordSkipped(a.id, account.id, triggerEventId, contact.id, restriction);

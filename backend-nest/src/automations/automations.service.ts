@@ -80,7 +80,7 @@ export class AutomationsService {
   private requiredWebhookField(triggerType: string): string | null {
     if (['POST_COMMENT', 'ANY_POST'].includes(triggerType)) return 'comments';
     if (triggerType === 'LIVE_COMMENT') return 'live_comments';
-    if (['STORY_REPLY', 'DM'].includes(triggerType)) return 'messages';
+    if (['STORY_REPLY', 'STORY_MENTION', 'DM'].includes(triggerType)) return 'messages';
     return null;
   }
 

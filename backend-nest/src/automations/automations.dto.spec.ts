@@ -42,6 +42,11 @@ describe('automation trigger support', () => {
     expect(updateAutomationSchema.safeParse({ triggerType: 'LIVE_COMMENT' }).success).toBe(true);
   });
 
+  it('accepts a Story Mention trigger on create and update', () => {
+    expect(createAutomationSchema.safeParse({ ...base, triggerType: 'STORY_MENTION' }).success).toBe(true);
+    expect(updateAutomationSchema.safeParse({ triggerType: 'STORY_MENTION' }).success).toBe(true);
+  });
+
   it('rejects the unsupported NEXT_POST trigger on update', () => {
     const triggerType = 'NEXT_POST';
     expect(updateAutomationSchema.safeParse({ triggerType }).success).toBe(false);

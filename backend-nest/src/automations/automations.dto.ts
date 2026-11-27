@@ -26,7 +26,7 @@ const followUpSchema = z.object({
 // These are the trigger types currently routed by WebhookService. Keep the
 // database enum's legacy values readable for existing rows, but do not accept
 // them in new or edited API payloads.
-export const supportedTriggerTypes = ['POST_COMMENT', 'ANY_POST', 'STORY_REPLY', 'LIVE_COMMENT', 'DM'] as const;
+export const supportedTriggerTypes = ['POST_COMMENT', 'ANY_POST', 'STORY_REPLY', 'STORY_MENTION', 'LIVE_COMMENT', 'DM'] as const;
 
 export const createAutomationSchema = z.object({
   igAccountId: z.string().uuid(),

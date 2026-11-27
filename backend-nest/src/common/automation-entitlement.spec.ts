@@ -15,6 +15,8 @@ describe('automation plan entitlements', () => {
 
   it('blocks paid triggers, over-limit keywords, and follow-ups after downgrade', () => {
     expect(automationRestriction(PLANS.FREE, { triggerType: 'ANY_POST' })).toMatch(/higher plan/i);
+    expect(automationRestriction(PLANS.FREE, { triggerType: 'STORY_MENTION' })).toMatch(/higher plan/i);
+    expect(automationRestriction(PLANS.CREATOR, { triggerType: 'STORY_MENTION' })).toBeNull();
     expect(automationRestriction(PLANS.FREE, { triggerType: 'POST_COMMENT', matchMode: 'KEYWORDS', keywords: ['one', 'two'] })).toMatch(/keyword limit/i);
     expect(automationRestriction(PLANS.FREE, { followUpCount: 1 })).toMatch(/follow-ups/i);
   });
