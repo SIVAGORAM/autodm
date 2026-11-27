@@ -5,6 +5,7 @@ import './globals.css';
 import { Providers } from './providers';
 import { Toaster } from 'sonner';
 import { getPublicSiteUrl } from '../lib/site-url';
+import { CookieConsentBanner } from '../components/cookie-consent-banner';
 
 // Inter, bundled locally (SIL Open Font License) — see app/fonts/Inter-OFL-LICENSE.txt.
 // Served from the repo so production builds never depend on fonts.googleapis.com.
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           {children}
           <Toaster richColors position="bottom-right" expand={true} />
+          <CookieConsentBanner />
         </Providers>
       </body>
     </html>

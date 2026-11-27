@@ -305,7 +305,7 @@ export default function Home() {
           <div className={styles.footerBrand}><Brand /><p>Thoughtful Instagram comment automation for creators and small teams.</p><span>Independent product. Not affiliated with or endorsed by Instagram or Meta.</span></div>
           <div className={styles.footerColumn}><h2>Explore</h2><a href="#how-it-works">How it works</a><a href="#plans">Plans</a><a href="#questions">Questions</a></div>
           <div className={styles.footerColumn}><h2>HeyLaunch</h2><Link href="/contact">Contact</Link><Link href="/login">Log in</Link><Link href={signupCtaHref}>{signupCtaLabel}</Link></div>
-          <div className={styles.footerColumn}><h2>Legal</h2><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/refunds">Refunds</Link><Link href="/delivery">Delivery</Link><Link href="/data-deletion">Data Deletion</Link></div>
+          <div className={styles.footerColumn}><h2>Legal</h2><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/cookies">Cookies</Link><Link href="/refunds">Refunds</Link><Link href="/delivery">Delivery</Link><Link href="/data-deletion">Data Deletion</Link></div>
         </div>
         <div className={styles.footerBottom}><span>© 2026 HeyLaunch. All rights reserved.</span><a href="#top">Back to top <ArrowUpRight size={14} aria-hidden="true" /></a></div>
       </footer>

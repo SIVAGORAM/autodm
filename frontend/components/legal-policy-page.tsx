@@ -18,6 +18,7 @@ export function LegalPolicyPage({ title, children }: { title: string; children: 
           <nav aria-label="Legal documents" style={{ display: 'flex', gap: 18, flexWrap: 'wrap', borderTop: '1px solid var(--border)', marginTop: 40, paddingTop: 20, fontSize: 13, color: 'var(--text-muted)' }}>
             <Link href="/terms" style={{ color: 'var(--text)', textDecoration: 'none' }}>Terms of Service</Link>
             <Link href="/privacy" style={{ color: 'var(--text)', textDecoration: 'none' }}>Privacy Policy</Link>
+            <Link href="/cookies" style={{ color: 'var(--text)', textDecoration: 'none' }}>Cookie Policy</Link>
             <Link href="/refunds" style={{ color: 'var(--text)', textDecoration: 'none' }}>Refund & Cancellation</Link>
             <Link href="/delivery" style={{ color: 'var(--text)', textDecoration: 'none' }}>Digital Delivery</Link>
             <Link href="/data-deletion" style={{ color: 'var(--text)', textDecoration: 'none' }}>User Data Deletion</Link>

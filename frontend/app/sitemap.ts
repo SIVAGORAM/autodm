@@ -6,5 +6,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return [
     { url: base.toString() },
     { url: new URL('/contact', base).toString() },
+    { url: new URL('/cookies', base).toString() },
+    { url: new URL('/privacy', base).toString() },
+    { url: new URL('/terms', base).toString() },
   ];
 }
