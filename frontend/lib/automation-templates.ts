@@ -1,8 +1,8 @@
 // frontend/lib/automation-templates.ts
 // Multi-Language automation templates and helpers
-// Supports TENGLISH (Telugu in English letters), ENGLISH, and TELUGU_ENGLISH (Hybrid)
+// Supports TENGLISH (Telugu in English letters), ENGLISH, TELUGU_ENGLISH (Hybrid), and HINGLISH (Hindi in English letters)
 
-export type AutomationLanguage = 'ENGLISH' | 'TENGLISH' | 'TELUGU_ENGLISH';
+export type AutomationLanguage = 'ENGLISH' | 'TENGLISH' | 'TELUGU_ENGLISH' | 'HINGLISH';
 
 export interface LanguageOption {
   value: AutomationLanguage;
@@ -13,6 +13,13 @@ export interface LanguageOption {
 }
 
 export const LANGUAGE_OPTIONS: LanguageOption[] = [
+  {
+    value: 'HINGLISH',
+    label: 'Hinglish (Hindi in English letters)',
+    badge: '150M+ Pan-India Audience 🇮🇳',
+    description: 'Casual, high-conversion Hindi written in English letters. The #1 spoken & texted format for creators across India.',
+    previewExample: 'Bhai DM check karo! Link bhej diya hai 📩',
+  },
   {
     value: 'TENGLISH',
     label: 'Telugu (English Letters)',
@@ -79,6 +86,20 @@ export const PUBLIC_COMMENT_REPLIES: Record<AutomationLanguage, string[]> = {
     'Sent to your inbox friend! Hope this helps you 🤝',
     'Check your DM bro, just dropped the link! 🚀',
     'Mee message inbox ki link deliver ayyindi! 💌',
+  ],
+  HINGLISH: [
+    'Bhai DM check karo! Link bhej diya hai 📩',
+    'Sent bro! Check your DM inbox right now ⚡',
+    'Inbox me link de diya bhai, check karlo! 🙌',
+    'Check your inbox dost! Link share kar diya hai ✨',
+    'DM bheja hai bhai! Ek baar check karlo 🚀',
+    'Check karo inbox bhai! Link mil gaya hoga 📬',
+    'Hey dost! Check your DM, link bhej diya hai ❤️',
+    'Bhai inbox dekho, saari details bhej di hain! 🔥',
+    'Link send ho gaya bhai, DM check karo! 📩',
+    'Sent you the link bro! Check your inbox right now 🚀',
+    'Inbox me check karo dost! Sab de diya hai ⚡',
+    'Bhai DM check kar lo! Link bhej diya hai ✨',
   ],
 };
 
@@ -210,6 +231,40 @@ export const DM_BODY_TEMPLATES: Record<AutomationLanguage, Array<{ title: string
       text: "All set! 🎉 Link is ready for you. Check out the link below and let's grow together! 🎁",
     },
   ],
+  HINGLISH: [
+    {
+      title: 'Casual & Friendly',
+      text: 'Hey dost! 🙌 Jo exclusive link aapne maanga tha wo ye raha. Tap karke explore karo! Kuch bhi poochhna ho toh DM me batana ✨',
+    },
+    {
+      title: 'Bhai Style (Community)',
+      text: 'Arey bhai! 🔥 Saari details aur direct link niche de diya hai. Check karke batao kaisa laga! 🚀',
+    },
+    {
+      title: 'Giveaway Lucky Ticket 🎟️',
+      text: "You're entered in the giveaway! 🎉 Aapka lucky ticket # is {{ticket_number}} 🎟️ Results jaldi announce honge. All the best dost! 🎁",
+    },
+    {
+      title: 'Value Resource Delivery',
+      text: 'Hello dost! 🎁 Special guide aur resources yaha ready hain. Save kar lo taaki baad me miss na ho! 💫',
+    },
+    {
+      title: 'VIP Exclusive',
+      text: 'Super excited to share this! 🌟 Yeh VIP link specifically hamare active followers ke liye hai. Abhi check karo ⚡',
+    },
+    {
+      title: 'Quick & Direct',
+      text: 'Hey there! 📬 Jo link aapne comment kiya tha wo direct niche available hai. Button tap karke access karo! 📩',
+    },
+    {
+      title: 'Action Taker',
+      text: 'Love that you took action bhai! 🚀 Direct resource link niche ready hai. Enjoy karo! 🔥',
+    },
+    {
+      title: 'Helpful Mentor',
+      text: 'Hi friend! 🤗 Link share kar diya hai. Aaram se check karo, koi bhi problem ho toh I am always here to help! 💡',
+    },
+  ],
 };
 
 // ─── 3. Follow-Gate Initial Prompts ─────────────────────────────
@@ -245,10 +300,23 @@ export const FOLLOW_GATE_PROMPTS: Record<AutomationLanguage, (username: string, 
     `Hey ${name || 'bro'}! ✨ Exclusive link mana community members kosame! Follow @${username} and tap 'Follow Ayanu'! 🔥`,
     `Just one quick step! 🤝 Hit 'Visit Profile' below to follow @${username}, then press 'Follow Ayanu'! ⚡`,
   ],
+  HINGLISH: (username, name) => [
+    `Arey ruko bro! 👀 Pehle @${username} ko follow karo, fir link unlock ho jayega ✨ Niche 'Profile Dekho' pe tap karke follow karo, fir 'Follow Kar Liya' click karo!`,
+    `Wait bhai! 🥺 Pehle @${username} ko follow kar lo dost, fir turant link mil jayega! 👇`,
+    `Chhota sa step bro! 🤗 Exclusive link access karne ke liye @${username} ko follow karo, aur 'Follow Kar Liya' tap karo! 🚀`,
+    `Hey ${name || 'dost'}! ✨ Exclusive resource hamari community ke liye hai. Pehle @${username} ko follow karo, phir 'Follow Kar Liya' click karo! 🔥`,
+    `Almost done bhai! 🎯 Bas ek tap door ho—profile visit karke follow karo aur 'Follow Kar Liya' dabao! ⚡`,
+  ],
 };
 
 // ─── 4. Follow-Gate Button Labels ───────────────────────────────
 export function getFollowButtons(language: AutomationLanguage, username = 'creator') {
+  if (language === 'HINGLISH') {
+    return [
+      { title: 'Profile Dekho ↗', url: `https://instagram.com/${username}` },
+      { title: 'Follow Kar Liya ⚡', url: '#confirm-follow' },
+    ];
+  }
   if (language === 'TENGLISH' || language === 'TELUGU_ENGLISH') {
     return [
       { title: 'Profile Chudandi', url: `https://instagram.com/${username}` },
@@ -294,6 +362,12 @@ export const EMAIL_COLLECTION_PROMPTS: Record<AutomationLanguage, (name?: string
     `Hey ${name || 'there'}! 🤝 Drop your email below so you never lose this link!`,
     `Super excited! 🎁 Where should I send the link? Mee email reply ivvandi!`,
   ],
+  HINGLISH: (name) => [
+    `Hey ${name || 'dost'}! 🎉 Link bhejne ke liye aapka best email ID kya hai? Niche reply karo! 📩`,
+    `Super! ✨ Guide & link aapke paas hamesha rahe, isliye apna email address yaha type karo! 🚀`,
+    `Awesome ${name || 'bhai'}! 🎁 Direct link deliver karne ke liye apna email ID niche share karo! 👇`,
+    `Quick question ${name || 'dost'}! ⚡ Aapka email address kya hai? Reply karo aur turant link access karo! 📬`,
+  ],
 };
 
 // ─── 6. Story Reply & Live Comment Templates ────────────────────
@@ -311,6 +385,11 @@ export const STORY_REPLY_TEMPLATES: Record<AutomationLanguage, string[]> = {
   TELUGU_ENGLISH: [
     'Thanks for your story reply bro! Here is your link 🚀',
     'Hey friend! Story lo chusina link mee kosam sent ✨',
+  ],
+  HINGLISH: [
+    'Story pe reply karne ke liye thanks bhai! Yeh raha aapka link 🚀',
+    'Hey dost! Story dekhne ke liye shukriya, link inbox me send kar diya hai ✨',
+    'Story exclusive link ready hai bhai, niche tap karke dekho! 🔥',
   ],
 };
 
@@ -366,11 +445,31 @@ export const STORY_MENTION_TEMPLATES: Record<AutomationLanguage, Array<{ title: 
       hasButton: true,
     },
   ],
+  HINGLISH: [
+    {
+      title: 'Warm Fan Thank-You (No Link)',
+      text: 'Hey {{first_name}}! 🙌 Story me tag karne ke liye bohot bohot shukriya bhai! Dil se support ke liye thanks ❤️',
+    },
+    {
+      title: 'Casual Shoutout Love',
+      text: 'Story mention dekha {{first_name}}! Bohot accha laga bhai. Thanks a lot for your love and support! 🔥✨',
+    },
+    {
+      title: 'With Special Gift / Resource (Optional)',
+      text: 'Story me mention karne ke liye shukriya {{first_name}}! 🎁 Aapke support ke liye yeh special gift link share kar raha hoon:',
+      hasButton: true,
+    },
+    {
+      title: 'VIP Community Invite',
+      text: 'Story shoutout ke liye thanks {{first_name}}! 🙌 Hamari exclusive VIP community join karne ke liye niche click karo:',
+      hasButton: true,
+    },
+  ],
 };
 
-// ─── 7. Helpers ─────────────────────────────────────────────────
+// ─── 8. Helpers ─────────────────────────────────────────────────
 export function normalizeLanguage(lang?: string | null): AutomationLanguage {
-  if (lang === 'TENGLISH' || lang === 'TELUGU_ENGLISH') return lang;
+  if (lang === 'TENGLISH' || lang === 'TELUGU_ENGLISH' || lang === 'HINGLISH') return lang;
   return 'ENGLISH';
 }
 

@@ -331,4 +331,78 @@ describe('AutomationsService tracked follow-up links', () => {
       dmBlocks: [{ type: 'text', text: 'Thanks!' }], status: 'DRAFT', followUps: [],
     })).rejects.toThrow('This trigger needs a higher plan.');
   });
+
+  describe('AutomationsService giveaway picker', () => {
+    it('returns giveaway entries and winner stats', async () => {
+      const prisma: any = {
+        automation: { findUnique: jest.fn().mockResolvedValue({ id: 'auto-1', igAccount: { userId: 'user-1' } }) },
+        giveawayEntry: {
+          count: jest.fn().mockResolvedValue(42),
+          findFirst: jest.fn().mockResolvedValue({
+            id: 'entry-winner',
+            ticketNumber: 1015,
+            igUsername: 'lucky_fan',
+            wonAt: new Date('2026-11-20T12:00:00Z'),
+            contact: { username: 'lucky_fan', name: 'Lucky Fan' },
+          }),
+          findMany: jest.fn().mockResolvedValue([
+            { id: 'entry-1', ticketNumber: 1001, igUsername: 'fan1', status: 'ENTERED', createdAt: new Date() },
+          ]),
+        },
+      };
+      const service = new AutomationsService(prisma, {} as any, {} as any, {} as any, {} as any);
+
+      const result = await service.getGiveaway('user-1', 'auto-1');
+      expect(result.totalEntries).toBe(42);
+      expect(result.winner?.ticketNumber).toBe(1015);
+      expect(result.winner?.username).toBe('lucky_fan');
+    });
+
+    it('picks a random winner from eligible entries and marks wonAt', async () => {
+      const eligibleEntries = [
+        { id: 'entry-1', ticketNumber: 1001, igUsername: 'fan1', status: 'ENTERED', contact: { username: 'fan1', name: 'Fan One' } },
+        { id: 'entry-2', ticketNumber: 1002, igUsername: 'fan2', status: 'ENTERED', contact: { username: 'fan2', name: 'Fan Two' } },
+      ];
+      const prisma: any = {
+        automation: { findUnique: jest.fn().mockResolvedValue({ id: 'auto-1', igAccount: { userId: 'user-1' } }) },
+        giveawayEntry: {
+          findMany: jest.fn().mockResolvedValue(eligibleEntries),
+          update: jest.fn().mockResolvedValue({ id: 'entry-1', status: 'WON' }),
+        },
+      };
+      const service = new AutomationsService(prisma, {} as any, {} as any, {} as any, {} as any);
+
+      const winner = await service.pickGiveawayWinner('user-1', 'auto-1');
+      expect(winner).toHaveProperty('ticketNumber');
+      expect(['fan1', 'fan2']).toContain(winner.username);
+      expect(prisma.giveawayEntry.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ status: 'WON' }),
+      }));
+    });
+
+    it('throws when no eligible entries exist to pick', async () => {
+      const prisma: any = {
+        automation: { findUnique: jest.fn().mockResolvedValue({ id: 'auto-1', igAccount: { userId: 'user-1' } }) },
+        giveawayEntry: { findMany: jest.fn().mockResolvedValue([]) },
+      };
+      const service = new AutomationsService(prisma, {} as any, {} as any, {} as any, {} as any);
+
+      await expect(service.pickGiveawayWinner('user-1', 'auto-1')).rejects.toThrow('No eligible entries found in this giveaway');
+    });
+
+    it('resets winners back to ENTERED status', async () => {
+      const prisma: any = {
+        automation: { findUnique: jest.fn().mockResolvedValue({ id: 'auto-1', igAccount: { userId: 'user-1' } }) },
+        giveawayEntry: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      };
+      const service = new AutomationsService(prisma, {} as any, {} as any, {} as any, {} as any);
+
+      const res = await service.resetGiveawayWinner('user-1', 'auto-1');
+      expect(res.success).toBe(true);
+      expect(prisma.giveawayEntry.updateMany).toHaveBeenCalledWith({
+        where: { automationId: 'auto-1', status: 'WON' },
+        data: { status: 'ENTERED', wonAt: null },
+      });
+    });
+  });
 });

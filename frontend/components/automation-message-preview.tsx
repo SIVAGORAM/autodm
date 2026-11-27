@@ -60,7 +60,9 @@ export function AutomationMessagePreview({
   const emailPrompt = getRandomEmailPrompt(language, sampleName);
 
   const langBadgeText =
-    language === 'TENGLISH'
+    language === 'HINGLISH'
+      ? 'Hinglish (Hindi in English)'
+      : language === 'TENGLISH'
       ? 'Telugu (English Letters)'
       : language === 'TELUGU_ENGLISH'
       ? 'Telugu-English Hybrid'

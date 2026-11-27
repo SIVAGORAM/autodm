@@ -79,7 +79,7 @@ describe('MailService', () => {
   });
 
   it('escapes public contact replies and enquiry IDs in notification links', async () => {
-    const config: any = { get: (key: string, fallback?: unknown) => fallback ?? 'https://heylaunch.example' };
+    const config: any = { get: (key: string, fallback?: unknown) => (key === 'FRONTEND_URL' || key === 'APP_URL' ? 'https://heylaunch.example' : fallback) };
     const mail = new MailService(config);
     const sendMail = jest.fn().mockResolvedValue({});
     (mail as any).transporter = { sendMail };
@@ -96,10 +96,10 @@ describe('MailService', () => {
     expect(notification.html).toContain('/dashboard/admin/enquiries/enquiry-1');
     expect(notification.html).toContain('&lt;script&gt;subject&lt;/script&gt;');
     expect(notification.html).not.toContain('visitor email');
-  }, 15_000);
+  });
 
   it('sends a time-limited admin invite link without exposing it in an HTTP query string', async () => {
-    const config: any = { get: (key: string, fallback?: unknown) => fallback ?? 'https://heylaunch.example' };
+    const config: any = { get: (key: string, fallback?: unknown) => (key === 'FRONTEND_URL' || key === 'APP_URL' ? 'https://heylaunch.example' : fallback) };
     const mail = new MailService(config);
     const sendMail = jest.fn().mockResolvedValue({});
     (mail as any).transporter = { sendMail };

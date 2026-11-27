@@ -14,7 +14,8 @@ describe('MailAdminController', () => {
   it('validates filters and returns redacted outbox data through the service', async () => {
     const mailOutbox: any = { listForAdmin: jest.fn().mockResolvedValue({ counts: {}, messages: [], hasMore: false }) };
     const mail: any = { verifyConnection: jest.fn().mockResolvedValue({ ok: true, method: 'smtp', message: 'ok' }) };
-    const controller = new MailAdminController(mailOutbox, mail);
+    const weeklyDigest: any = { sendWeeklyCelebrationSweep: jest.fn().mockResolvedValue(undefined) };
+    const controller = new MailAdminController(mailOutbox, mail, weeklyDigest);
 
     await expect(controller.list('2', 'FAILED')).resolves.toEqual({
       success: true,
@@ -28,5 +29,11 @@ describe('MailAdminController', () => {
       success: true,
       data: { ok: true, method: 'smtp', message: 'ok' },
     });
+
+    await expect(controller.triggerWeeklyCelebration()).resolves.toEqual({
+      success: true,
+      message: 'Weekly celebration sweep initiated.',
+    });
+    expect(weeklyDigest.sendWeeklyCelebrationSweep).toHaveBeenCalled();
   });
 });

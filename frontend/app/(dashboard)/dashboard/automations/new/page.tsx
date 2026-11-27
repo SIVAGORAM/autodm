@@ -13,7 +13,7 @@ import {
 } from '../../../../../components/ui/primitives';
 import {
   ArrowLeft, ArrowRight, MessageCircle, Film, Mail, Plus, Trash2, Check,
-  UserCheck, AtSign, ShieldAlert, Sparkles, Languages, Heart,
+  UserCheck, AtSign, ShieldAlert, Sparkles, Languages, Heart, Gift,
 } from 'lucide-react';
 import {
   AutomationLanguage,
@@ -64,6 +64,7 @@ export default function NewAutomationPage() {
   const [buttons, setButtons] = useState<Btn[]>([{ title: '', url: '' }]);
   const [askToFollow, setAskToFollow] = useState(false);
   const [collectEmail, setCollectEmail] = useState(false);
+  const [isGiveaway, setIsGiveaway] = useState(false);
   const [trackClicks, setTrackClicks] = useState(true);
   const [followUps, setFollowUps] = useState<{ condition: string; delayMinutes: number; text: string }[]>([]);
 
@@ -131,6 +132,7 @@ export default function NewAutomationPage() {
           : [],
         replyToComment: supportsPublicCommentReply && replyToComment,
         autoLikeComment: supportsPublicCommentReply && autoLikeComment,
+        isGiveaway,
         askToFollow,
         collectEmail,
         trackClicks,
@@ -742,6 +744,37 @@ export default function NewAutomationPage() {
                     </div>
                   </div>
                   <Toggle checked={collectEmail} onChange={setCollectEmail} label="Collect email" />
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg border border-purple-500/20 bg-purple-500/5 p-3.5">
+                  <div className="flex items-start gap-3">
+                    <Gift className="mt-0.5 h-4 w-4 text-purple-600 shrink-0" />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-foreground">Viral Giveaway / Lucky Draw</p>
+                        <Badge tone="primary" className="text-[10px]">Viral Growth 🎁</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Automatically issues unique lucky lottery tickets (e.g. #1042) via DM with <code>&#123;&#123;ticket_number&#125;&#125;</code> and lets you pick random verified winners with 1 click!
+                      </p>
+                    </div>
+                  </div>
+                  <Toggle
+                    checked={isGiveaway}
+                    onChange={(val) => {
+                      setIsGiveaway(val);
+                      if (val && !dmText.includes('{{ticket_number}}')) {
+                        setDmText(
+                          language === 'HINGLISH'
+                            ? "You're entered in the giveaway! 🎉 Aapka lucky ticket # is {{ticket_number}} 🎟️ Results jaldi announce honge. All the best dost! 🎁"
+                            : language === 'TENGLISH'
+                            ? "Giveaway lo enter ayyaru! 🎉 Mee lucky ticket # is {{ticket_number}} 🎟️ Results Reel lo announce chestam. All the best! 🎁"
+                            : "You're entered! 🎉 Your lucky giveaway ticket # is {{ticket_number}} 🎟️ We will announce the winner soon. Good luck! 🎁"
+                        );
+                      }
+                    }}
+                    label="Giveaway mode"
+                  />
                 </div>
 
                 <div className="flex items-center justify-between rounded-lg border border-border p-3.5">

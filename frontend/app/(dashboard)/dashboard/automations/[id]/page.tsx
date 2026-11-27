@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { automationApi } from '../../../../../services/api';
 import { Button, Card, Badge, Skeleton, StatTile } from '../../../../../components/ui/primitives';
-import { ArrowLeft, AlertTriangle, CheckCircle2, PauseCircle, Pencil, Play, RefreshCw } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, CheckCircle2, PauseCircle, Pencil, Play, RefreshCw, Gift, Sparkles, Download, RotateCcw } from 'lucide-react';
+import { toast } from 'sonner';
 
 const healthTone: Record<string, 'success' | 'warning' | 'danger' | 'muted'> = {
   healthy: 'success', at_risk: 'warning', needs_reconnect: 'danger', paused: 'muted', draft: 'muted',
@@ -53,6 +54,66 @@ export default function AutomationDetail({ params }: { params: Promise<{ id: str
     },
   });
 
+  const giveaway = useQuery({
+    queryKey: ['automation-giveaway', id],
+    queryFn: async () => (await automationApi.getGiveaway(id)).data.data,
+    enabled: !!a.data?.isGiveaway,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+  });
+
+  const pickWinner = useMutation({
+    mutationFn: () => automationApi.pickGiveawayWinner(id),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ['automation-giveaway', id] });
+      const winner = res.data?.data;
+      toast.success(`🎉 Winner picked: @${winner?.username} with ticket #${winner?.ticketNumber}!`);
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Could not pick winner.');
+    },
+  });
+
+  const resetWinner = useMutation({
+    mutationFn: () => automationApi.resetGiveawayWinner(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['automation-giveaway', id] });
+      toast.info('Giveaway winner reset. You can draw again anytime.');
+    },
+  });
+
+  const handleExportCsv = async () => {
+    try {
+      const res = await automationApi.exportGiveawayEntries(id);
+      const rows = res.data?.data ?? [];
+      if (!rows.length) return toast.info('No entries to export yet.');
+      const headers = ['Ticket Number', 'Instagram Username', 'Name', 'Email', 'Status', 'Won At', 'Entered At'];
+      const csvContent = [
+        headers.join(','),
+        ...rows.map((r: any) => [
+          r.ticketNumber,
+          `"${r.username || ''}"`,
+          `"${r.name || ''}"`,
+          `"${r.email || ''}"`,
+          r.status,
+          r.wonAt || '',
+          r.createdAt || '',
+        ].join(',')),
+      ].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `giveaway-entries-${id.slice(0, 8)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success('Giveaway entries exported successfully!');
+    } catch {
+      toast.error('Could not export giveaway entries.');
+    }
+  };
+
   const health = a.data?.health;
   const HIcon = health?.level === 'healthy' ? CheckCircle2 : health?.level === 'needs_reconnect' ? AlertTriangle : health?.level === 'paused' ? PauseCircle : AlertTriangle;
 
@@ -71,7 +132,9 @@ export default function AutomationDetail({ params }: { params: Promise<{ id: str
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl font-semibold text-foreground">{a.data.name}</h1>
                 <Badge tone="primary" className="text-xs">
-                  {a.data.language === 'TENGLISH'
+                  {a.data.language === 'HINGLISH'
+                    ? 'Hinglish (Hindi in English letters)'
+                    : a.data.language === 'TENGLISH'
                     ? 'Telugu (English letters)'
                     : a.data.language === 'TELUGU_ENGLISH'
                     ? 'Telugu-English Hybrid'
@@ -122,6 +185,93 @@ export default function AutomationDetail({ params }: { params: Promise<{ id: str
             <StatTile label="Sent" value={stats.data?.sent ?? (stats.isLoading ? '—' : 0)} />
             <StatTile label="Clicks" value={stats.data?.clicks ?? (stats.isLoading ? '—' : 0)} />
           </div>
+
+          {/* 1-Click Viral Giveaway / Lucky Draw Picker */}
+          {(a.data.isGiveaway || (giveaway.data?.totalEntries ?? 0) > 0) && (
+            <Card className="p-5 border-purple-500/30 bg-gradient-to-br from-purple-500/5 via-background to-pink-500/5 shadow-sm space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-600/10 text-purple-600">
+                    <Gift className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base font-semibold text-foreground">Viral Giveaway / Lucky Draw</h2>
+                      <Badge tone="primary">Live Giveaway 🎟️</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {giveaway.data?.totalEntries ?? 0} participants entered with verified ticket numbers
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    className="h-8 text-xs"
+                    onClick={handleExportCsv}
+                    disabled={!giveaway.data?.totalEntries}
+                  >
+                    <Download className="mr-1.5 h-3.5 w-3.5" /> Export Entries
+                  </Button>
+                  <Button
+                    variant="accent"
+                    className="h-8 bg-purple-600 hover:bg-purple-700 text-xs font-semibold text-white"
+                    loading={pickWinner.isPending}
+                    disabled={!giveaway.data?.totalEntries || pickWinner.isPending}
+                    onClick={() => pickWinner.mutate()}
+                  >
+                    <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Pick Random Winner 🎲
+                  </Button>
+                </div>
+              </div>
+
+              {/* Winner Highlight Card */}
+              {giveaway.data?.winner ? (
+                <div className="rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/10 via-yellow-500/10 to-orange-500/10 p-4 animate-in fade-in zoom-in-95 duration-300">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/20 text-2xl">
+                        🏆
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Official Winner Selected</span>
+                          <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-300">
+                            Ticket #{giveaway.data.winner.ticketNumber}
+                          </span>
+                        </div>
+                        <h3 className="text-lg font-bold text-foreground">
+                          @{giveaway.data.winner.username}
+                          {giveaway.data.winner.name && <span className="ml-2 text-sm font-normal text-muted-foreground">({giveaway.data.winner.name})</span>}
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                          Drawn on {new Date(giveaway.data.winner.wonAt).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        className="h-8 text-xs text-muted-foreground hover:text-foreground"
+                        loading={resetWinner.isPending}
+                        onClick={() => resetWinner.mutate()}
+                      >
+                        <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Redraw / Reset
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-border p-4 text-center">
+                  <p className="text-xs text-muted-foreground">
+                    {giveaway.data?.totalEntries
+                      ? `Ready to draw! Click "Pick Random Winner" above to draw from ${giveaway.data.totalEntries} verified entries.`
+                      : 'No entries yet. When followers comment on your giveaway post, their unique lucky ticket numbers will appear here.'}
+                  </p>
+                </div>
+              )}
+            </Card>
+          )}
 
           {/* Delivery log */}
           <div>

@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { VerifiedEmailGuard } from '../common/guards/verified-email.guard';
 import { MailOutboxService } from './mail-outbox.service';
 import { MailService } from './mail.service';
+import { WeeklyDigestService } from './weekly-digest.service';
 
 const mailStatusSchema = z.enum(['PENDING', 'PROCESSING', 'SENT', 'FAILED', 'CANCELLED']).optional();
 
@@ -15,6 +16,7 @@ export class MailAdminController {
   constructor(
     private readonly mailOutbox: MailOutboxService,
     private readonly mail: MailService,
+    private readonly weeklyDigest: WeeklyDigestService,
   ) {}
 
   @Get()
@@ -30,5 +32,12 @@ export class MailAdminController {
   async verifyConnection() {
     const result = await this.mail.verifyConnection();
     return { success: result.ok, data: result };
+  }
+
+  @Post('trigger-weekly-celebration')
+  @RequireAdminPermission('MAIL_READ')
+  async triggerWeeklyCelebration() {
+    await this.weeklyDigest.sendWeeklyCelebrationSweep();
+    return { success: true, message: 'Weekly celebration sweep initiated.' };
   }
 }

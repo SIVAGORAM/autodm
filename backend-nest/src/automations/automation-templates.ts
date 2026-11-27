@@ -1,7 +1,7 @@
 // Multi-Language automation templates and helpers
-// Supports TENGLISH (Telugu in English letters), ENGLISH, and TELUGU_ENGLISH (Hybrid)
+// Supports TENGLISH (Telugu in English letters), ENGLISH, TELUGU_ENGLISH (Hybrid), and HINGLISH (Hindi in English letters)
 
-export type AutomationLanguage = 'ENGLISH' | 'TENGLISH' | 'TELUGU_ENGLISH';
+export type AutomationLanguage = 'ENGLISH' | 'TENGLISH' | 'TELUGU_ENGLISH' | 'HINGLISH';
 
 export type DmButtonPrompt = {
   title: string;
@@ -52,6 +52,20 @@ export const PUBLIC_COMMENT_REPLIES: Record<AutomationLanguage, string[]> = {
     'Special link mee kosam sent, check now 🎁',
     'Sent to your inbox friend! Hope this helps you 🤝',
   ],
+  HINGLISH: [
+    'Bhai DM check karo! Link bhej diya hai 📩',
+    'Sent bro! Check your DM inbox right now ⚡',
+    'Inbox me link de diya bhai, check karlo! 🙌',
+    'Check your inbox dost! Link share kar diya hai ✨',
+    'DM bheja hai bhai! Ek baar check karlo 🚀',
+    'Check karo inbox bhai! Link mil gaya hoga 📬',
+    'Hey dost! Check your DM, link bhej diya hai ❤️',
+    'Bhai inbox dekho, saari details bhej di hain! 🔥',
+    'Link send ho gaya bhai, DM check karo! 📩',
+    'Sent you the link bro! Check your inbox right now 🚀',
+    'Inbox me check karo dost! Sab de diya hai ⚡',
+    'Bhai DM check kar lo! Link bhej diya hai ✨',
+  ],
 };
 
 // ─── 2. Follow-Gate Initial Prompts ────────────────────────────
@@ -87,10 +101,23 @@ export const FOLLOW_GATE_PROMPTS: Record<AutomationLanguage, (username: string, 
     `Hey ${name || 'bro'}! ✨ Exclusive link mana community members kosame! Follow @${username} and tap 'Follow Ayanu'! 🔥`,
     `Just one quick step! 🤝 Hit 'Visit Profile' below to follow @${username}, then press 'Follow Ayanu'! ⚡`,
   ],
+  HINGLISH: (username, name) => [
+    `Arey ruko bro! 👀 Pehle @${username} ko follow karo, fir link unlock ho jayega ✨ Niche 'Profile Dekho' pe tap karke follow karo, fir 'Follow Kar Liya' click karo!`,
+    `Wait bhai! 🥺 Pehle @${username} ko follow kar lo dost, fir turant link mil jayega! 👇`,
+    `Chhota sa step bro! 🤗 Ee link access karne ke liye @${username} ko follow karo, aur 'Follow Kar Liya' tap karo! 🚀`,
+    `Hey ${name || 'dost'}! ✨ Exclusive resource hamari community ke liye hai. Pehle @${username} ko follow karo, phir 'Follow Kar Liya' click karo! 🔥`,
+    `Almost done bhai! 🎯 Bas ek tap door ho—profile visit karke follow karo aur 'Follow Kar Liya' dabao! ⚡`,
+  ],
 };
 
 // ─── 3. Follow-Gate Button Labels ──────────────────────────────
 export function getFollowButtons(language: AutomationLanguage, username: string): DmButtonPrompt[] {
+  if (language === 'HINGLISH') {
+    return [
+      { title: 'Profile Dekho ↗', url: `https://instagram.com/${username}`, type: 'web_url' },
+      { title: 'Follow Kar Liya ⚡', type: 'postback', payload: 'CONFIRM_FOLLOW' },
+    ];
+  }
   if (language === 'TENGLISH' || language === 'TELUGU_ENGLISH') {
     return [
       { title: 'Profile Chudandi', url: `https://instagram.com/${username}`, type: 'web_url' },
@@ -120,6 +147,11 @@ export const FOLLOW_RETRY_PROMPTS: Record<AutomationLanguage, (username: string)
   TELUGU_ENGLISH: (username) => [
     `Hmm, checked but follow inka raledu! 🔍 Please tap 'Visit Profile', follow @${username}, and tap 'Follow Ayanu'! ✨`,
     `Still not seeing your follow bro! 👀 No worries, tap 'Visit Profile' to follow @${username}, then press 'Follow Ayanu'! 🚀`,
+  ],
+  HINGLISH: (username) => [
+    `Arey bhai abhi tak follow nahi hua! 🔍👀 'Profile Dekho' pe tap karke @${username} ko follow karo aur fir 'Follow Kar Liya' click karo dost! ✨`,
+    `Follow abhi tak detect nahi hua bro! 👀 Ek baar @${username} profile visit karke follow karo, fir yaha 'Follow Kar Liya' tap karo! 🚀`,
+    `Check kiya bhai, par follow nahi mila! 🥺 Profile pe jaake follow dabao, phir 'Follow Kar Liya' pe click karo! 👇`,
   ],
 };
 
@@ -155,6 +187,12 @@ export const EMAIL_COLLECTION_PROMPTS: Record<AutomationLanguage, (name?: string
     `Quick question ${name || 'bro'}! ⚡ Mee email address kindha share cheyandi, link send chestha! 📬`,
     `Hey ${name || 'there'}! 🤝 Drop your email below so you never lose this link!`,
   ],
+  HINGLISH: (name) => [
+    `Hey ${name || 'dost'}! 🎉 Link deliver karne ke liye aapka best email ID kya hai? Niche reply karo! 📩`,
+    `Super! ✨ E-book & link aapke paas hamesha rahe, isliye apna email address yaha type karo! 🚀`,
+    `Awesome ${name || 'bhai'}! 🎁 Direct link bhejne ke liye apna email ID niche share karo! 👇`,
+    `Quick question ${name || 'dost'}! ⚡ Aapka email kya hai? Bas reply karo aur turant link unlock karo! 📬`,
+  ],
 };
 
 // ─── 6. Email Collection Retry Prompts (Invalid Email Entered) ──
@@ -173,10 +211,17 @@ export const EMAIL_RETRY_PROMPTS: Record<AutomationLanguage, string[]> = {
     `Oops, that doesn't look like a valid email bro! ✉️ Please reply with your valid email (e.g. name@gmail.com) to get your link! ✨`,
     `Format mistake anukunta friend! 📩 Please send your real email address right here! 🚀`,
   ],
+  HINGLISH: [
+    `Arey, yeh valid email address nahi lag raha! ✉️ Apna sahi email (jaise name@gmail.com) niche reply karo, link turant mil jayega! ✨`,
+    `Thodi mistake lag rahi hai dost! 👀 Please apna correct email address share karo taaki link drop kar saku! 🚀`,
+  ],
 };
 
 // ─── 7. Follow-Verified Success + Email Transition Prompt ──────
 export function getFollowVerifiedEmailPrompt(language: AutomationLanguage, username: string): string {
+  if (language === 'HINGLISH') {
+    return `Super bhai! @${username} ko follow karne ke liye shukriya ❤️ Ab bas apna email ID bhej do, link turant bhejta hoon: 📩`;
+  }
   if (language === 'TENGLISH' || language === 'TELUGU_ENGLISH') {
     return `Super bro! @${username} ni follow chesinanduku thanks! 🎉 Link pampadaniki, mee email address enti? Kindha reply ivvandi! 📩`;
   }
@@ -185,7 +230,7 @@ export function getFollowVerifiedEmailPrompt(language: AutomationLanguage, usern
 
 // ─── 8. Helper Functions ───────────────────────────────────────
 export function normalizeLanguage(lang?: string | null): AutomationLanguage {
-  if (lang === 'TENGLISH' || lang === 'TELUGU_ENGLISH') return lang;
+  if (lang === 'TENGLISH' || lang === 'TELUGU_ENGLISH' || lang === 'HINGLISH') return lang;
   return 'ENGLISH';
 }
 

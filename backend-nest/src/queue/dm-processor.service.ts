@@ -283,7 +283,17 @@ export class DmProcessorService {
       await reserveCommentPrivateReply(this.dmQueue, queueJob, queueJob.token);
     }
 
-    const text = personalize(job.text, { username: job.recipientUsername, name: contact.name });
+    let ticketNumber: number | null = null;
+    if (automation.isGiveaway || (job.text && (job.text.includes('{{ticket_number}}') || job.text.includes('{{ticket}}')))) {
+      ticketNumber = await this.getOrCreateGiveawayTicket(
+        automation.id,
+        contact.id,
+        job.recipientUsername || contact.username,
+        job.recipientIgsid,
+      );
+    }
+
+    const text = personalize(job.text, { username: job.recipientUsername, name: contact.name, ticketNumber });
     const attributionSecret = automation.trackClicks && automation.trackedLinks.length > 0
       ? this.config.getOrThrow<string>('ENCRYPTION_KEY')
       : undefined;
@@ -619,6 +629,45 @@ export class DmProcessorService {
       // Never retry a provider delivery just because the optional UI
       // invalidation lookup failed after the run was durably recorded.
       this.log.warn(`Dashboard delivery update unavailable (${safeErrorLabel(error)})`);
+    }
+  }
+
+  private async getOrCreateGiveawayTicket(
+    automationId: string,
+    contactId: string,
+    igUsername?: string | null,
+    igScopedId?: string,
+  ): Promise<number> {
+    try {
+      const existing = await this.prisma.giveawayEntry.findUnique({
+        where: { automationId_contactId: { automationId, contactId } },
+        select: { ticketNumber: true },
+      });
+      if (existing) return existing.ticketNumber;
+
+      return await this.prisma.$transaction(async (tx) => {
+        const highest = await tx.giveawayEntry.findFirst({
+          where: { automationId },
+          orderBy: { ticketNumber: 'desc' },
+          select: { ticketNumber: true },
+        });
+        const nextTicket = (highest?.ticketNumber ?? 1000) + 1;
+        const created = await tx.giveawayEntry.create({
+          data: {
+            automationId,
+            contactId,
+            ticketNumber: nextTicket,
+            igUsername: igUsername ?? null,
+            igScopedId: igScopedId ?? '',
+            status: 'ENTERED',
+          },
+          select: { ticketNumber: true },
+        });
+        return created.ticketNumber;
+      });
+    } catch (err) {
+      this.log.warn(`Could not assign giveaway ticket for contact ${contactId}: ${safeErrorLabel(err)}`);
+      return 1001;
     }
   }
 

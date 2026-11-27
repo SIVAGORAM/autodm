@@ -124,3 +124,39 @@ describe('automation auto-like comment validation', () => {
     }
   });
 });
+
+describe('automation Hinglish and giveaway validation', () => {
+  it('accepts HINGLISH as a valid language on create and update', () => {
+    const createResult = createAutomationSchema.safeParse({ ...base, language: 'HINGLISH' });
+    expect(createResult.success).toBe(true);
+    if (createResult.success) {
+      expect(createResult.data.language).toBe('HINGLISH');
+    }
+
+    const updateResult = updateAutomationSchema.safeParse({ language: 'HINGLISH' });
+    expect(updateResult.success).toBe(true);
+    if (updateResult.success) {
+      expect(updateResult.data.language).toBe('HINGLISH');
+    }
+  });
+
+  it('accepts isGiveaway as true on create and update and defaults to false', () => {
+    const defaultResult = createAutomationSchema.safeParse(base);
+    expect(defaultResult.success).toBe(true);
+    if (defaultResult.success) {
+      expect(defaultResult.data.isGiveaway).toBe(false);
+    }
+
+    const createResult = createAutomationSchema.safeParse({ ...base, isGiveaway: true });
+    expect(createResult.success).toBe(true);
+    if (createResult.success) {
+      expect(createResult.data.isGiveaway).toBe(true);
+    }
+
+    const updateResult = updateAutomationSchema.safeParse({ isGiveaway: true });
+    expect(updateResult.success).toBe(true);
+    if (updateResult.success) {
+      expect(updateResult.data.isGiveaway).toBe(true);
+    }
+  });
+});

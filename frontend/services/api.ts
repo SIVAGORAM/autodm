@@ -247,5 +247,9 @@ export const automationApi = {
     api.patch(`/automations/${id}/status`, { status }),
   analytics: (id: string) => api.get(`/automations/${id}/analytics`),
   runs: (id: string, cursor?: string) => api.get(`/automations/${id}/runs`, { params: cursor ? { cursor } : {} }),
+  getGiveaway: (id: string) => api.get(`/automations/${id}/giveaway`),
+  pickGiveawayWinner: (id: string) => api.post(`/automations/${id}/giveaway/pick-winner`),
+  resetGiveawayWinner: (id: string) => api.post(`/automations/${id}/giveaway/reset-winner`),
+  exportGiveawayEntries: (id: string) => api.get(`/automations/${id}/giveaway/export`),
   remove: (id: string) => api.delete(`/automations/${id}`),
 };

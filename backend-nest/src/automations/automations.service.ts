@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException, BadRequestException, ConflictException, ServiceUnavailableException, Inject, Optional } from '@nestjs/common';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomInt } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { Job, Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
@@ -161,6 +161,7 @@ export class AutomationsService {
           publicReplies: supportsPublicCommentReply ? dto.publicReplies : [],
           replyToComment: supportsPublicCommentReply && dto.replyToComment,
           autoLikeComment: supportsPublicCommentReply && (dto.autoLikeComment ?? false),
+          isGiveaway: dto.isGiveaway ?? false,
           askToFollow: dto.askToFollow, collectEmail: dto.collectEmail,
           trackClicks: dto.trackClicks, dmBlocks: dto.dmBlocks as object, status: dto.status,
           language: dto.language ?? 'ENGLISH',
@@ -489,5 +490,94 @@ export class AutomationsService {
 
   private async accountRestriction(userId: string, igAccountId: string, userPlan: string) {
     return accountPlanRestriction(PLANS[userPlan as Tier] ?? PLANS.FREE, await this.activeAccountIds(userId), igAccountId);
+  }
+
+  async getGiveaway(userId: string, id: string) {
+    await this.assertOwnsAutomation(userId, id);
+    const [totalEntries, winner, recentEntries] = await Promise.all([
+      this.prisma.giveawayEntry.count({ where: { automationId: id } }),
+      this.prisma.giveawayEntry.findFirst({
+        where: { automationId: id, status: 'WON' },
+        orderBy: { wonAt: 'desc' },
+        include: { contact: { select: { name: true, username: true } } },
+      }),
+      this.prisma.giveawayEntry.findMany({
+        where: { automationId: id },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        include: { contact: { select: { name: true, username: true } } },
+      }),
+    ]);
+    return {
+      totalEntries,
+      winner: winner
+        ? {
+            id: winner.id,
+            ticketNumber: winner.ticketNumber,
+            username: winner.igUsername || winner.contact?.username || 'user',
+            name: winner.contact?.name || null,
+            wonAt: winner.wonAt,
+          }
+        : null,
+      entries: recentEntries.map((e) => ({
+        id: e.id,
+        ticketNumber: e.ticketNumber,
+        username: e.igUsername || e.contact?.username || 'user',
+        status: e.status,
+        createdAt: e.createdAt,
+      })),
+    };
+  }
+
+  async pickGiveawayWinner(userId: string, id: string) {
+    await this.assertOwnsAutomation(userId, id);
+    const eligible = await this.prisma.giveawayEntry.findMany({
+      where: { automationId: id, status: 'ENTERED' },
+      include: { contact: { select: { name: true, username: true } } },
+    });
+    if (!eligible.length) {
+      throw new BadRequestException('No eligible entries found in this giveaway to pick a winner.');
+    }
+    const idx = randomInt(eligible.length);
+    const chosen = eligible[idx];
+    const now = new Date();
+    await this.prisma.giveawayEntry.update({
+      where: { id: chosen.id },
+      data: { status: 'WON', wonAt: now },
+    });
+    return {
+      id: chosen.id,
+      ticketNumber: chosen.ticketNumber,
+      username: chosen.igUsername || chosen.contact?.username || 'user',
+      name: chosen.contact?.name || null,
+      wonAt: now,
+    };
+  }
+
+  async resetGiveawayWinner(userId: string, id: string) {
+    await this.assertOwnsAutomation(userId, id);
+    await this.prisma.giveawayEntry.updateMany({
+      where: { automationId: id, status: 'WON' },
+      data: { status: 'ENTERED', wonAt: null },
+    });
+    return { success: true };
+  }
+
+  async exportGiveawayEntries(userId: string, id: string) {
+    await this.assertOwnsAutomation(userId, id);
+    const entries = await this.prisma.giveawayEntry.findMany({
+      where: { automationId: id },
+      orderBy: { ticketNumber: 'asc' },
+      include: { contact: { select: { name: true, username: true, email: true } } },
+    });
+    return entries.map((e) => ({
+      ticketNumber: e.ticketNumber,
+      username: e.igUsername || e.contact?.username || '',
+      name: e.contact?.name || '',
+      email: e.contact?.email || '',
+      status: e.status,
+      wonAt: e.wonAt ? e.wonAt.toISOString() : null,
+      createdAt: e.createdAt.toISOString(),
+    }));
   }
 }

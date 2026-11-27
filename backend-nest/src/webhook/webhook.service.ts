@@ -625,7 +625,7 @@ export class WebhookService {
         const trimmed = text.trim();
         const remainingTags = currentTags.filter((t) => t !== pendingEmailTag && !t.startsWith('last_reminder_at:'));
 
-        if (trimmed === 'CONFIRM_FOLLOW' || trimmed.toLowerCase() === "i'm following" || trimmed.toLowerCase() === 'following' || trimmed.toLowerCase() === 'follow ayanu') {
+        if (trimmed === 'CONFIRM_FOLLOW' || trimmed.toLowerCase() === "i'm following" || trimmed.toLowerCase() === 'following' || trimmed.toLowerCase() === 'follow ayanu' || trimmed.toLowerCase() === 'follow kar liya' || trimmed.toLowerCase() === 'kar liya') {
           const emailPrompt = getFollowVerifiedEmailPrompt(autoLang, targetAuto.igAccount.username);
           await this.enqueue({
             automationId: targetAuto.id,

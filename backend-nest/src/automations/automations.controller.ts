@@ -73,6 +73,30 @@ export class AutomationsController {
     return { success: true, data: await this.service.runs(userId, id, cursor) };
   }
 
+  @Get(':id/giveaway')
+  async getGiveaway(@CurrentUser('userId') userId: string, @Param('id') id: string) {
+    return { success: true, data: await this.service.getGiveaway(userId, id) };
+  }
+
+  @Post(':id/giveaway/pick-winner')
+  async pickGiveawayWinner(@CurrentUser('userId') userId: string, @Param('id') id: string) {
+    const data = await this.service.pickGiveawayWinner(userId, id);
+    this.publishAutomationUpdate(userId);
+    return { success: true, data };
+  }
+
+  @Post(':id/giveaway/reset-winner')
+  async resetGiveawayWinner(@CurrentUser('userId') userId: string, @Param('id') id: string) {
+    const data = await this.service.resetGiveawayWinner(userId, id);
+    this.publishAutomationUpdate(userId);
+    return { success: true, data };
+  }
+
+  @Get(':id/giveaway/export')
+  async exportGiveawayEntries(@CurrentUser('userId') userId: string, @Param('id') id: string) {
+    return { success: true, data: await this.service.exportGiveawayEntries(userId, id) };
+  }
+
   @Delete(':id')
   async remove(@CurrentUser('userId') userId: string, @Param('id') id: string) {
     const data = await this.service.remove(userId, id);

@@ -9,7 +9,7 @@ import { useAuthStore } from '../../../../../../store/authStore';
 import { InstagramPostSelector } from '../../../../../../components/instagram-post-selector';
 import { AutomationMessagePreview } from '../../../../../../components/automation-message-preview';
 import { Badge, Button, Card, Input, Label, TagInput, Textarea, Toggle } from '../../../../../../components/ui/primitives';
-import { ArrowLeft, Play, Plus, Save, Trash2, Sparkles, Languages, Check, Heart } from 'lucide-react';
+import { ArrowLeft, Play, Plus, Save, Trash2, Sparkles, Languages, Check, Heart, Gift } from 'lucide-react';
 import {
   AutomationLanguage,
   LANGUAGE_OPTIONS,
@@ -62,6 +62,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
   const [publicReplies, setPublicReplies] = useState<string[]>([]);
   const [askToFollow, setAskToFollow] = useState(false);
   const [collectEmail, setCollectEmail] = useState(false);
+  const [isGiveaway, setIsGiveaway] = useState(false);
   const [dmText, setDmText] = useState('');
   const [buttons, setButtons] = useState<MessageButton[]>([]);
   const [trackClicks, setTrackClicks] = useState(true);
@@ -103,6 +104,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
     );
     setAskToFollow(Boolean(current.askToFollow));
     setCollectEmail(Boolean(current.collectEmail));
+    setIsGiveaway(Boolean(current.isGiveaway));
     setDmText(typeof textBlock?.text === 'string' ? textBlock.text : '');
     setButtons(buttonBlocks.flatMap((block: any) => Array.isArray(block.buttons) ? block.buttons : []));
     setTrackClicks(current.trackClicks !== false);
@@ -142,6 +144,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
         publicReplies: supportsPublicCommentReply && replyToComment ? publicReplies.filter((reply) => reply.trim()).slice(0, 25) : [],
         replyToComment: supportsPublicCommentReply && replyToComment,
         autoLikeComment: supportsPublicCommentReply && autoLikeComment,
+        isGiveaway,
         askToFollow,
         collectEmail,
         trackClicks,
@@ -510,6 +513,37 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
                 <p className="text-xs text-muted-foreground">Ask the user for their email before sending the main link. If already in your Contacts, this step is skipped automatically.</p>
               </div>
               <Toggle checked={collectEmail} onChange={setCollectEmail} label="First-time email collection" />
+            </div>
+
+            <div className="flex items-center justify-between gap-4 border-t border-border/40 pt-3">
+              <div className="flex items-start gap-2.5">
+                <Gift className="mt-0.5 h-4 w-4 text-purple-600 shrink-0" />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-foreground">Viral Giveaway / Lucky Draw</p>
+                    <Badge tone="primary" className="text-[10px]">Viral Growth 🎁</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Automatically issues unique lucky lottery tickets (e.g. #1042) via DM with <code>&#123;&#123;ticket_number&#125;&#125;</code> and lets you pick random verified winners with 1 click!
+                  </p>
+                </div>
+              </div>
+              <Toggle
+                checked={isGiveaway}
+                onChange={(val) => {
+                  setIsGiveaway(val);
+                  if (val && !dmText.includes('{{ticket_number}}')) {
+                    setDmText(
+                      language === 'HINGLISH'
+                        ? "You're entered in the giveaway! 🎉 Aapka lucky ticket # is {{ticket_number}} 🎟️ Results jaldi announce honge. All the best dost! 🎁"
+                        : language === 'TENGLISH'
+                        ? "Giveaway lo enter ayyaru! 🎉 Mee lucky ticket # is {{ticket_number}} 🎟️ Results Reel lo announce chestam. All the best! 🎁"
+                        : "You're entered! 🎉 Your lucky giveaway ticket # is {{ticket_number}} 🎟️ We will announce the winner soon. Good luck! 🎁"
+                    );
+                  }
+                }}
+                label="Giveaway mode"
+              />
             </div>
           </div>
         </section>

@@ -389,4 +389,71 @@ export class MailService {
       </div>`;
     return this.send(to, 'Invitation to join the HeyLaunch admin team', html);
   }
+
+  async sendWeeklyCelebrationEmail(
+    to: string,
+    stats: {
+      creatorName: string;
+      dmsSent: number;
+      newFollowers: number;
+      linkClicks: number;
+      topAutomationName?: string | null;
+      topAutomationClickRate?: number | null;
+    },
+  ): Promise<boolean> {
+    const firstName = this.escapeHtml((stats.creatorName || 'there').split(' ')[0]);
+    const safeTopName = this.escapeHtml(stats.topAutomationName || 'Active Reels');
+    const safeRate = Math.min(Math.max(Number(stats.topAutomationClickRate ?? 0), 0), 100);
+    const link = this.escapeHtml(`${this.frontend}/dashboard/analytics`);
+    const subject = `🎉 ${firstName}, your automations were on fire this week!`;
+    const html = `
+      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:480px;margin:auto;padding:28px;background:#ffffff;border:1px solid #e2eaed;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,0.05)">
+        <div style="text-align:center;margin-bottom:20px">
+          <span style="display:inline-block;padding:6px 14px;background:#FFF4ED;border-radius:20px;color:#F46034;font-weight:700;font-size:12px">
+            🚀 WEEKLY CREATOR REPORT
+          </span>
+          <h2 style="color:#152024;font-size:22px;margin:12px 0 6px;font-weight:800">
+            Hey ${firstName}! 🎉
+          </h2>
+          <p style="color:#5E707A;font-size:14px;margin:0;line-height:1.5">
+            Your automations were on fire this week. Here is your Instagram growth for the past 7 days:
+          </p>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:20px 0">
+          <div style="background:#F8FAFB;border:1px solid #E5EBEF;border-radius:12px;padding:14px;text-align:center">
+            <div style="font-size:24px;font-weight:800;color:#17827E">${stats.dmsSent.toLocaleString()}</div>
+            <div style="font-size:12px;font-weight:600;color:#5E707A;margin-top:4px">⚡ DMs Delivered</div>
+          </div>
+          <div style="background:#F8FAFB;border:1px solid #E5EBEF;border-radius:12px;padding:14px;text-align:center">
+            <div style="font-size:24px;font-weight:800;color:#8B5CF6">+${stats.newFollowers.toLocaleString()}</div>
+            <div style="font-size:12px;font-weight:600;color:#5E707A;margin-top:4px">👤 New Followers</div>
+          </div>
+          <div style="background:#F8FAFB;border:1px solid #E5EBEF;border-radius:12px;padding:14px;text-align:center">
+            <div style="font-size:24px;font-weight:800;color:#F46034">${stats.linkClicks.toLocaleString()}</div>
+            <div style="font-size:12px;font-weight:600;color:#5E707A;margin-top:4px">🔗 Link Clicks</div>
+          </div>
+          <div style="background:#F8FAFB;border:1px solid #E5EBEF;border-radius:12px;padding:14px;text-align:center">
+            <div style="font-size:18px;font-weight:800;color:#152024;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${safeTopName}</div>
+            <div style="font-size:12px;font-weight:600;color:#5E707A;margin-top:4px">🏆 Top Automation (${safeRate}% CTR)</div>
+          </div>
+        </div>
+
+        <div style="background:#FFF9F5;border:1px solid #FFE6D5;border-radius:12px;padding:12px 14px;margin-bottom:22px">
+          <p style="margin:0;color:#9A3412;font-size:12px;line-height:1.5">
+            📸 <b>Story Tip:</b> Take a quick screenshot of this email and post it to your Instagram Story to celebrate with your fans and build brand authority!
+          </p>
+        </div>
+
+        <div style="text-align:center">
+          <a href="${link}" style="display:inline-block;background:#F46034;color:#ffffff;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px">
+            View Analytics Dashboard →
+          </a>
+        </div>
+        <p style="color:#9AA8AD;font-size:11px;text-align:center;margin-top:20px">
+          Keep crushing it! — Team HeyLaunch
+        </p>
+      </div>`;
+    return this.send(to, subject, html);
+  }
 }

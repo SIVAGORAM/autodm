@@ -65,6 +65,8 @@ model User {
   acceptedAdminInvitations       AdminInvitation[]       @relation("AdminInvitationAcceptedBy")
   publicProfile                  PublicProfile?
   reviewedPublicProfileReports   PublicProfileReport[]   @relation("PublicProfileReportReviewer")
+  weeklyDigestEnabled            Boolean                 @default(true)
+  lastWeeklyDigestAt             DateTime?
 
   @@index([trialEndsAt]) // speeds the trial-reminder sweep
   @@index([deletionRequestedAt])
@@ -162,6 +164,7 @@ model Automation {
   publicReplies     String[]         @default([]) // up to 3, rotated
   replyToComment    Boolean          @default(false)
   autoLikeComment   Boolean          @default(false)
+  isGiveaway        Boolean          @default(false)
   askToFollow       Boolean          @default(false)
   collectEmail      Boolean          @default(false)
   trackClicks       Boolean          @default(true)
@@ -174,9 +177,10 @@ model Automation {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
-  followUps    FollowUp[]
-  runs         Run[]
-  trackedLinks TrackedLink[]
+  followUps       FollowUp[]
+  runs            Run[]
+  trackedLinks    TrackedLink[]
+  giveawayEntries GiveawayEntry[]
 
   @@index([igAccountId])
   @@index([triggerType, status])
@@ -213,7 +217,8 @@ model Contact {
   lastInteraction  DateTime  @default(now())
   lastReplyAt      DateTime?
 
-  runs Run[]
+  runs            Run[]
+  giveawayEntries GiveawayEntry[]
 
   @@unique([igAccountId, igScopedId])
   @@index([igAccountId])
@@ -266,6 +271,25 @@ model Click {
 
   @@index([trackedLinkId])
   @@map("clicks")
+}
+
+model GiveawayEntry {
+  id           String      @id @default(uuid())
+  automationId String
+  automation   Automation  @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  contactId    String
+  contact      Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  ticketNumber Int
+  igUsername   String?
+  igScopedId   String
+  status       String      @default("ENTERED") // ENTERED, WON, DISQUALIFIED
+  wonAt        DateTime?
+  createdAt    DateTime    @default(now())
+
+  @@unique([automationId, contactId])
+  @@unique([automationId, ticketNumber])
+  @@index([automationId])
+  @@map("giveaway_entries")
 }
 
 // Processed webhook ids, for cross-process idempotency safety net.
@@ -579,6 +603,7 @@ enum AutomationLanguage {
   ENGLISH
   TENGLISH
   TELUGU_ENGLISH
+  HINGLISH
 }
 
 enum FollowCond {

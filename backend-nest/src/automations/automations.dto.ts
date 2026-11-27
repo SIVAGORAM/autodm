@@ -41,10 +41,11 @@ export const createAutomationSchema = z.object({
   publicReplies: z.array(z.string().min(1)).max(25).default([]),
   replyToComment: z.boolean().default(false),
   autoLikeComment: z.boolean().optional().default(false),
+  isGiveaway: z.boolean().optional().default(false),
   askToFollow: z.boolean().default(false),
   collectEmail: z.boolean().default(false),
   trackClicks: z.boolean().default(true),
-  language: z.enum(['ENGLISH', 'TENGLISH', 'TELUGU_ENGLISH']).optional().default('ENGLISH'),
+  language: z.enum(['ENGLISH', 'TENGLISH', 'TELUGU_ENGLISH', 'HINGLISH']).optional().default('ENGLISH'),
   dmBlocks: z.array(blockSchema).min(1),
   status: z.enum(['DRAFT', 'LIVE', 'PAUSED']).default('DRAFT'),
   followUps: z.array(followUpSchema).max(3).default([]),
@@ -60,8 +61,9 @@ const updateFollowUpSchema = followUpSchema.extend({
 export const updateAutomationSchema = createAutomationSchema.partial().omit({ igAccountId: true }).extend({
   followUps: z.array(updateFollowUpSchema).max(3).optional(),
 });
-export type CreateAutomationDto = Omit<z.infer<typeof createAutomationSchema>, 'language' | 'autoLikeComment'> & {
-  language?: 'ENGLISH' | 'TENGLISH' | 'TELUGU_ENGLISH';
+export type CreateAutomationDto = Omit<z.infer<typeof createAutomationSchema>, 'language' | 'autoLikeComment' | 'isGiveaway'> & {
+  language?: 'ENGLISH' | 'TENGLISH' | 'TELUGU_ENGLISH' | 'HINGLISH';
   autoLikeComment?: boolean;
+  isGiveaway?: boolean;
 };
 export type UpdateAutomationDto = z.infer<typeof updateAutomationSchema>;
