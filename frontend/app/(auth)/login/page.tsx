@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import QRCode from 'qrcode';
-import { AtSign, Lock, Eye, EyeOff, ArrowRight, Copy, Check } from 'lucide-react';
+import { AtSign, Lock, Eye, EyeOff, ArrowRight, Copy, Check, ShieldCheck, Smartphone, Key, ArrowLeft } from 'lucide-react';
 import { api, authApi, getApiErrorMessage } from '../../../services/api';
 import { useAuthStore } from '../../../store/authStore';
 import { AuthBrand, AC } from '../../../components/auth-brand';
@@ -18,6 +18,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [adminStep, setAdminStep] = useState<'credentials' | 'setup' | 'verify' | 'recovery'>('credentials');
   const [mfaCode, setMfaCode] = useState('');
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const [mfaSetup, setMfaSetup] = useState<{ secret: string; otpauthUri: string } | null>(null);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [copiedKey, setCopiedKey] = useState(false);
@@ -71,7 +72,8 @@ export default function LoginPage() {
         }
       } else if (res.data?.data?.mfaRequired) {
         setAdminStep('verify');
-        setError('Enter the code from your authenticator app or a recovery code.');
+        setUseRecoveryCode(false);
+        setError('');
       } else if (res.data?.data?.user) {
         setUser(res.data.data.user);
         router.replace('/dashboard');
@@ -127,8 +129,13 @@ export default function LoginPage() {
       <AuthBrand />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px' }}>
         <div style={{ width: '100%', maxWidth: 384 }}>
+          {adminStep === 'verify' && (
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: AC.tealSoft, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+              <ShieldCheck style={{ width: 22, height: 22, color: AC.teal }} />
+            </div>
+          )}
           <h1 style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-.8px', color: AC.ink }}>{adminStep === 'credentials' ? 'Welcome back' : adminStep === 'setup' ? 'Secure your account' : adminStep === 'verify' ? 'Two-factor verification' : 'Save your recovery codes'}</h1>
-          <p style={{ color: AC.muted, fontSize: 15, marginTop: 6 }}>{adminStep === 'credentials' ? 'Log in to your HeyLaunch dashboard.' : adminStep === 'setup' ? 'Set up an authenticator to finish account sign-in.' : adminStep === 'verify' ? 'Enter the code from your authenticator app or an emergency recovery code.' : 'Each recovery code works once. Store them somewhere private.'}</p>
+          <p style={{ color: AC.muted, fontSize: 15, marginTop: 6 }}>{adminStep === 'credentials' ? 'Log in to your HeyLaunch dashboard.' : adminStep === 'setup' ? 'Set up an authenticator to finish account sign-in.' : adminStep === 'verify' ? (useRecoveryCode ? 'Enter one of your emergency recovery codes to sign in.' : 'Enter the 6-digit code from your authenticator app.') : 'Each recovery code works once. Store them somewhere private.'}</p>
           {error && <div style={{ marginTop: 18, background: 'var(--error-soft)', color: 'var(--error)', border: '1px solid var(--error)', borderRadius: 10, padding: '10px 14px', fontSize: 14 }}>{error}</div>}
           {adminStep === 'credentials' ? <form onSubmit={handleSubmit} style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ position: 'relative' }}>
@@ -252,10 +259,141 @@ export default function LoginPage() {
                 </form>
               </>
             )}
-          </div> : adminStep === 'verify' ? <form onSubmit={verifyMfa} style={{ marginTop: 22, display: 'grid', gap: 12 }}>
-            <input className="ai" aria-label="Authenticator or recovery code" autoComplete="one-time-code" maxLength={32} required value={mfaCode} onChange={(event) => setMfaCode(event.target.value)} placeholder="Authenticator or recovery code" style={{ width: '100%', height: 48, borderRadius: 11, border: `1px solid ${AC.line}`, padding: '0 14px', fontSize: 15, color: AC.ink }} />
-            <button type="submit" disabled={loading} style={{ height: 48, borderRadius: 11, background: AC.teal, color: 'white', fontWeight: 600, border: 0, cursor: 'pointer' }}>{loading ? 'Verifying…' : 'Verify and sign in'}</button>
-          </form> : <div style={{ marginTop: 22, display: 'grid', gap: 14 }}>
+          </div> : adminStep === 'verify' ? (
+            <form onSubmit={verifyMfa} style={{ marginTop: 22, display: 'grid', gap: 14 }}>
+              {!useRecoveryCode ? (
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: AC.ink, marginBottom: 8 }}>
+                    6-Digit Authenticator Code
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <Smartphone style={{ position: 'absolute', left: 14, top: 15, width: 18, height: 18, color: AC.muted, pointerEvents: 'none' }} />
+                    <input
+                      className="ai"
+                      aria-label="6-digit authenticator code"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      autoFocus
+                      required
+                      value={mfaCode}
+                      onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, ''))}
+                      placeholder="000000"
+                      style={{
+                        width: '100%',
+                        height: 50,
+                        borderRadius: 11,
+                        border: `1px solid ${AC.line}`,
+                        padding: '0 16px 0 44px',
+                        fontSize: 22,
+                        letterSpacing: '6px',
+                        fontWeight: 700,
+                        color: AC.ink,
+                        background: '#ffffff',
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: AC.ink, marginBottom: 8 }}>
+                    Emergency Recovery Code
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <Key style={{ position: 'absolute', left: 14, top: 15, width: 18, height: 18, color: AC.muted, pointerEvents: 'none' }} />
+                    <input
+                      className="ai"
+                      aria-label="Emergency recovery code"
+                      autoComplete="one-time-code"
+                      maxLength={32}
+                      autoFocus
+                      required
+                      value={mfaCode}
+                      onChange={(event) => setMfaCode(event.target.value.trim())}
+                      placeholder="e.g. 4a2b-9c1d-8e"
+                      style={{
+                        width: '100%',
+                        height: 50,
+                        borderRadius: 11,
+                        border: `1px solid ${AC.line}`,
+                        padding: '0 16px 0 44px',
+                        fontSize: 16,
+                        fontWeight: 600,
+                        color: AC.ink,
+                        background: '#ffffff',
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading || mfaCode.trim().length === 0}
+                style={{
+                  height: 48,
+                  borderRadius: 11,
+                  background: AC.teal,
+                  color: 'white',
+                  fontWeight: 600,
+                  fontSize: 15.5,
+                  border: 0,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  opacity: loading || mfaCode.trim().length === 0 ? 0.7 : 1,
+                  transition: 'opacity 0.15s ease',
+                }}
+              >
+                {loading ? 'Verifying…' : <>Verify and sign in <ArrowRight style={{ width: 17, height: 17 }} /></>}
+              </button>
+
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, marginTop: 4 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUseRecoveryCode((v) => !v);
+                    setMfaCode('');
+                    setError('');
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 0,
+                    color: AC.teal,
+                    fontSize: 13,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  {useRecoveryCode ? 'Use 6-digit authenticator code instead' : 'Lost your phone? Use an emergency recovery code'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdminStep('credentials');
+                    setMfaCode('');
+                    setError('');
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 0,
+                    color: AC.muted,
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                  }}
+                >
+                  <ArrowLeft style={{ width: 14, height: 14 }} /> Back to log in
+                </button>
+              </div>
+            </form>
+          ) : <div style={{ marginTop: 22, display: 'grid', gap: 14 }}>
             <div style={{ padding: 14, border: `1px solid ${AC.line}`, borderRadius: 10, background: 'var(--surface)', display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
               {recoveryCodes.map((code) => <code key={code} style={{ color: AC.ink, fontSize: 13 }}>{code}</code>)}
             </div>
