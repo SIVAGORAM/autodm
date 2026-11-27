@@ -40,6 +40,7 @@ export const createAutomationSchema = z.object({
   keywords: z.array(z.string().min(1)).default([]),
   publicReplies: z.array(z.string().min(1)).max(25).default([]),
   replyToComment: z.boolean().default(false),
+  autoLikeComment: z.boolean().optional().default(false),
   askToFollow: z.boolean().default(false),
   collectEmail: z.boolean().default(false),
   trackClicks: z.boolean().default(true),
@@ -59,7 +60,8 @@ const updateFollowUpSchema = followUpSchema.extend({
 export const updateAutomationSchema = createAutomationSchema.partial().omit({ igAccountId: true }).extend({
   followUps: z.array(updateFollowUpSchema).max(3).optional(),
 });
-export type CreateAutomationDto = Omit<z.infer<typeof createAutomationSchema>, 'language'> & {
+export type CreateAutomationDto = Omit<z.infer<typeof createAutomationSchema>, 'language' | 'autoLikeComment'> & {
   language?: 'ENGLISH' | 'TENGLISH' | 'TELUGU_ENGLISH';
+  autoLikeComment?: boolean;
 };
 export type UpdateAutomationDto = z.infer<typeof updateAutomationSchema>;

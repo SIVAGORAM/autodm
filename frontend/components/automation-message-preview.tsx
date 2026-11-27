@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Eye, MessageCircle, UserCheck, Mail, ExternalLink, ShieldCheck, Languages } from 'lucide-react';
+import { Eye, MessageCircle, UserCheck, Mail, ExternalLink, ShieldCheck, Languages, Heart } from 'lucide-react';
 import { Badge, Card, Input, Label } from './ui/primitives';
 import {
   AutomationLanguage,
@@ -31,6 +31,7 @@ function personalize(text: string, name: string, username: string) {
 export function AutomationMessagePreview({
   accountUsername,
   publicReply,
+  autoLikeComment = false,
   dmText,
   buttons,
   askToFollow = false,
@@ -39,6 +40,7 @@ export function AutomationMessagePreview({
 }: {
   accountUsername?: string;
   publicReply?: string;
+  autoLikeComment?: boolean;
   dmText: string;
   buttons: PreviewButton[];
   askToFollow?: boolean;
@@ -121,15 +123,43 @@ export function AutomationMessagePreview({
             </div>
           </div>
 
-          {/* Public Comment Reply Preview (if configured) */}
-          {publicReply?.trim() && (
-            <div className="mb-3 rounded-lg border border-border/60 bg-muted/40 p-2.5">
-              <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                <MessageCircle className="h-2.5 w-2.5 text-primary" /> Public Comment Reply
+          {/* Comment & Auto-Like / Public Reply Simulation */}
+          {(autoLikeComment || publicReply?.trim()) && (
+            <div className="mb-3 space-y-2 rounded-lg border border-border/60 bg-muted/40 p-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-2 min-w-0">
+                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-foreground">
+                    {sampleName.slice(0, 1).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 text-xs">
+                    <span className="font-semibold text-foreground">@{sampleUsername}</span>{' '}
+                    <span className="text-muted-foreground">LINK please! 🔥</span>
+                  </div>
+                </div>
+                {autoLikeComment && (
+                  <span className="shrink-0 flex items-center text-rose-500" title="Liked by creator">
+                    <Heart className="h-3.5 w-3.5 fill-rose-500 text-rose-500 animate-pulse" />
+                  </span>
+                )}
               </div>
-              <p className="text-xs leading-relaxed text-foreground">
-                &ldquo;{publicReply}&rdquo;
-              </p>
+
+              {autoLikeComment && (
+                <div className="flex items-center gap-1 pl-7 text-[10px] font-medium text-rose-600 dark:text-rose-400">
+                  <Heart className="h-2.5 w-2.5 fill-rose-500 text-rose-500" />
+                  <span>Liked by @{cleanUsername}</span>
+                </div>
+              )}
+
+              {publicReply?.trim() && (
+                <div className="border-t border-border/40 pl-7 pt-1.5">
+                  <div className="mb-0.5 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <MessageCircle className="h-2.5 w-2.5 text-primary" /> Creator Reply
+                  </div>
+                  <p className="text-xs leading-relaxed text-foreground">
+                    &ldquo;{publicReply}&rdquo;
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

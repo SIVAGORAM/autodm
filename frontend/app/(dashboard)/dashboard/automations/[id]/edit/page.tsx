@@ -9,7 +9,7 @@ import { useAuthStore } from '../../../../../../store/authStore';
 import { InstagramPostSelector } from '../../../../../../components/instagram-post-selector';
 import { AutomationMessagePreview } from '../../../../../../components/automation-message-preview';
 import { Badge, Button, Card, Input, Label, TagInput, Textarea, Toggle } from '../../../../../../components/ui/primitives';
-import { ArrowLeft, Play, Plus, Save, Trash2, Sparkles, Languages, Check } from 'lucide-react';
+import { ArrowLeft, Play, Plus, Save, Trash2, Sparkles, Languages, Check, Heart } from 'lucide-react';
 import {
   AutomationLanguage,
   LANGUAGE_OPTIONS,
@@ -55,6 +55,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
   const [keywords, setKeywords] = useState<string[]>([]);
   const [excludedKeywords, setExcludedKeywords] = useState<string[]>([]);
   const [replyToComment, setReplyToComment] = useState(false);
+  const [autoLikeComment, setAutoLikeComment] = useState(false);
   const [language, setLanguage] = useState<AutomationLanguage>('TENGLISH');
   const [publicReplies, setPublicReplies] = useState<string[]>([]);
   const [askToFollow, setAskToFollow] = useState(false);
@@ -92,6 +93,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
     setExcludedKeywords(negative);
 
     setReplyToComment(!!current.replyToComment);
+    setAutoLikeComment(Boolean(current.autoLikeComment));
     setPublicReplies(
       Array.isArray(current.publicReplies) && current.publicReplies.length > 0
         ? current.publicReplies
@@ -137,6 +139,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
         keywords: formattedKeywords,
         publicReplies: supportsPublicCommentReply && replyToComment ? publicReplies.filter((reply) => reply.trim()).slice(0, 25) : [],
         replyToComment: supportsPublicCommentReply && replyToComment,
+        autoLikeComment: supportsPublicCommentReply && autoLikeComment,
         askToFollow,
         collectEmail,
         trackClicks,
@@ -402,6 +405,23 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
                 </div>
               </div>
             )}
+
+            {/* Auto-Like User's Comment (Algorithm Booster) */}
+            <div className="flex items-center justify-between rounded-lg border border-rose-500/20 bg-rose-500/5 p-4">
+              <div className="flex items-start gap-3">
+                <Heart className="mt-0.5 h-4 w-4 text-rose-500 fill-rose-500 shrink-0" />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-foreground">Auto-Like User&apos;s Comment</p>
+                    <Badge tone="primary" className="text-[10px]">Algorithm Booster 🔥</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Automatically gives a heart ❤️ to their comment. Notifies the user immediately and boosts post visibility in the Instagram algorithm.
+                  </p>
+                </div>
+              </div>
+              <Toggle checked={autoLikeComment} onChange={setAutoLikeComment} label="Auto-like comment" />
+            </div>
           </section>
         )}
 
@@ -527,6 +547,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
         <AutomationMessagePreview
           accountUsername={automation.data.igAccount?.username ?? 'yourbrand'}
           publicReply={supportsPublicCommentReply && replyToComment ? publicReplies.find((reply) => reply.trim()) : undefined}
+          autoLikeComment={supportsPublicCommentReply && autoLikeComment}
           dmText={dmText}
           buttons={buttons}
           askToFollow={askToFollow}

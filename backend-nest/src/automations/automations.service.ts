@@ -160,6 +160,7 @@ export class AutomationsService {
           matchMode: dto.matchMode, keywords: dto.keywords,
           publicReplies: supportsPublicCommentReply ? dto.publicReplies : [],
           replyToComment: supportsPublicCommentReply && dto.replyToComment,
+          autoLikeComment: supportsPublicCommentReply && (dto.autoLikeComment ?? false),
           askToFollow: dto.askToFollow, collectEmail: dto.collectEmail,
           trackClicks: dto.trackClicks, dmBlocks: dto.dmBlocks as object, status: dto.status,
           language: dto.language ?? 'ENGLISH',
@@ -330,6 +331,7 @@ export class AutomationsService {
       // to a message trigger. Story replies and incoming DMs have no comment.
       data.replyToComment = false;
       data.publicReplies = [];
+      data.autoLikeComment = false;
     }
     if (dto.dmBlocks) data.dmBlocks = dto.dmBlocks as object;
     delete (data as any).igAccountId;

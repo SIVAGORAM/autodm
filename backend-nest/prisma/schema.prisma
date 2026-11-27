@@ -161,6 +161,7 @@ model Automation {
   keywords          String[]         @default([])
   publicReplies     String[]         @default([]) // up to 3, rotated
   replyToComment    Boolean          @default(false)
+  autoLikeComment   Boolean          @default(false)
   askToFollow       Boolean          @default(false)
   collectEmail      Boolean          @default(false)
   trackClicks       Boolean          @default(true)

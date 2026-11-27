@@ -62,6 +62,11 @@ export class MetaService {
     return this.post(`/${commentId}/replies`, token, { message: text }, loginMode);
   }
 
+  // Like an Instagram comment (Algorithm & Engagement Booster).
+  async likeComment(igUserId: string, token: string, commentId: string, loginMode: InstagramLoginMode = 'INSTAGRAM_LOGIN') {
+    return this.post(`/${igUserId}/likes`, token, { comment_id: commentId }, loginMode);
+  }
+
   async getFollowerInfo(igUserId: string, token: string, igsid: string, loginMode: InstagramLoginMode = 'INSTAGRAM_LOGIN'): Promise<{ isFollower: boolean }> {
     try {
       const host = loginMode === 'UNIFIED_LOGIN' ? 'https://graph.facebook.com' : 'https://graph.instagram.com';
@@ -84,7 +89,7 @@ export class MetaService {
       const status = Number.isInteger(err?.response?.status) ? err.response.status : 'network';
       const rawCode = detail?.code;
       const code = Number.isInteger(rawCode) ? rawCode as number : undefined;
-      const operation = path.endsWith('/messages') ? 'send_message' : path.endsWith('/replies') ? 'reply_comment' : 'request';
+      const operation = path.endsWith('/messages') ? 'send_message' : path.endsWith('/replies') ? 'reply_comment' : path.endsWith('/likes') ? 'like_comment' : 'request';
       this.log.warn(`Meta ${operation} failed status=${status} providerCode=${code ?? 'unknown'}`);
       return {
         ok: false as const,

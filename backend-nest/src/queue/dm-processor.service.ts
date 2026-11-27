@@ -313,7 +313,16 @@ export class DmProcessorService {
       return;
     }
 
-    // 2. Only after Private Reply succeeds, post rotated public comment reply if configured.
+    // 2. Auto-Like the user's comment if configured (Algorithm & Dopamine Booster).
+    if (automation.autoLikeComment && job.commentId) {
+      try {
+        await this.meta.likeComment(igUserId, token, job.commentId, loginMode);
+      } catch (likeErr) {
+        this.log.warn(`Auto-like failed for comment ${job.commentId}: ${safeErrorLabel(likeErr)}`);
+      }
+    }
+
+    // 3. Only after Private Reply succeeds, post rotated public comment reply if configured.
     if (automation.replyToComment && job.commentId && automation.publicReplies.length && !existing?.publicReplyAttemptedAt) {
       const currentPostStatus = await this.currentAutomationStatus(job.automationId);
       if (currentPostStatus === 'LIVE' && (await this.accountMaySend(job.igAccountId))) {

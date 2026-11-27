@@ -13,7 +13,7 @@ import {
 } from '../../../../../components/ui/primitives';
 import {
   ArrowLeft, ArrowRight, MessageCircle, Film, Mail, Plus, Trash2, Check,
-  UserCheck, AtSign, ShieldAlert, Sparkles, Languages,
+  UserCheck, AtSign, ShieldAlert, Sparkles, Languages, Heart,
 } from 'lucide-react';
 import {
   AutomationLanguage,
@@ -55,6 +55,7 @@ export default function NewAutomationPage() {
   const [keywords, setKeywords] = useState<string[]>([]);
   const [excludedKeywords, setExcludedKeywords] = useState<string[]>([]);
   const [replyToComment, setReplyToComment] = useState(true);
+  const [autoLikeComment, setAutoLikeComment] = useState(true);
   const [language, setLanguage] = useState<AutomationLanguage>('TENGLISH');
   const [publicReplies, setPublicReplies] = useState<string[]>(PUBLIC_COMMENT_REPLIES.TENGLISH.slice(0, 5));
   const [dmText, setDmText] = useState(DM_BODY_TEMPLATES.TENGLISH[0].text);
@@ -127,6 +128,7 @@ export default function NewAutomationPage() {
           ? publicReplies.map((r) => r.trim()).filter(Boolean).slice(0, 25)
           : [],
         replyToComment: supportsPublicCommentReply && replyToComment,
+        autoLikeComment: supportsPublicCommentReply && autoLikeComment,
         askToFollow,
         collectEmail,
         trackClicks,
@@ -560,6 +562,25 @@ export default function NewAutomationPage() {
                   )}
                 </div>
               )}
+
+              {/* Auto-Like User's Comment (Algorithm Booster) */}
+              {supportsPublicCommentReply && (
+                <div className="flex items-center justify-between rounded-lg border border-rose-500/20 bg-rose-500/5 p-4">
+                  <div className="flex items-start gap-3">
+                    <Heart className="mt-0.5 h-4 w-4 text-rose-500 fill-rose-500 shrink-0" />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-foreground">Auto-Like User&apos;s Comment</p>
+                        <Badge tone="primary" className="text-[10px]">Algorithm Booster 🔥</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Automatically gives a heart ❤️ to their comment. Notifies the user immediately and boosts post visibility in the Instagram algorithm.
+                      </p>
+                    </div>
+                  </div>
+                  <Toggle checked={autoLikeComment} onChange={setAutoLikeComment} label="Auto-like comment" />
+                </div>
+              )}
             </div>
           )}
 
@@ -809,6 +830,9 @@ export default function NewAutomationPage() {
                 {supportsPublicCommentReply && replyToComment && (
                   <ReviewItem label="Public Replies" value={`${publicReplies.filter(Boolean).length} variations configured`} />
                 )}
+                {supportsPublicCommentReply && (
+                  <ReviewItem label="Auto-Like" value={autoLikeComment ? 'Enabled ❤️' : 'Disabled'} />
+                )}
               </dl>
               <p className="text-xs text-muted-foreground">
                 Check the live preview on the right. When ready, click Confirm &amp; Launch to start automating.
@@ -853,6 +877,7 @@ export default function NewAutomationPage() {
           <AutomationMessagePreview
             accountUsername={selectedAccount?.username ?? 'yourbrand'}
             publicReply={replyToComment ? publicReplies.find((r) => r.trim()) : undefined}
+            autoLikeComment={supportsPublicCommentReply && autoLikeComment}
             dmText={dmText}
             buttons={buttons.filter((b) => b.title.trim())}
             askToFollow={askToFollow}

@@ -272,8 +272,8 @@ export class UsersService {
           orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
           select: {
             id: true, igAccountId: true, name: true, triggerType: true, mediaId: true, matchMode: true,
-            keywords: true, publicReplies: true, replyToComment: true, askToFollow: true, collectEmail: true,
-            trackClicks: true, dmBlocks: true, status: true, dailyLimit: true, dailyCount: true,
+            keywords: true, publicReplies: true, replyToComment: true, autoLikeComment: true, askToFollow: true, collectEmail: true,
+            trackClicks: true, language: true, dmBlocks: true, status: true, dailyLimit: true, dailyCount: true,
             dailyCountResetAt: true, createdAt: true, updatedAt: true,
             followUps: {
               orderBy: { order: 'asc' },

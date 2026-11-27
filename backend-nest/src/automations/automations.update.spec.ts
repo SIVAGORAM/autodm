@@ -65,7 +65,7 @@ describe('AutomationsService.update follow-up integrity', () => {
     });
 
     await service.update('user-a', 'CREATOR', automationId, { status: 'PAUSED' });
-    expect(tx.automation.update).toHaveBeenCalledWith({ where: { id: automationId }, data: { status: 'PAUSED', replyToComment: false, publicReplies: [] } });
+    expect(tx.automation.update).toHaveBeenCalledWith({ where: { id: automationId }, data: { status: 'PAUSED', replyToComment: false, publicReplies: [], autoLikeComment: false } });
   });
 
   it('allows a supported automation to be paused when its webhook subscription is missing', async () => {
@@ -88,7 +88,7 @@ describe('AutomationsService.update follow-up integrity', () => {
     });
 
     expect(tx.automation.update).toHaveBeenCalledWith({ where: { id: automationId }, data: {
-      triggerType: 'STORY_REPLY', replyToComment: false, publicReplies: [],
+      triggerType: 'STORY_REPLY', replyToComment: false, publicReplies: [], autoLikeComment: false,
     } });
   });
 
@@ -100,7 +100,7 @@ describe('AutomationsService.update follow-up integrity', () => {
     });
 
     expect(tx.automation.update).toHaveBeenCalledWith({ where: { id: automationId }, data: {
-      replyToComment: false, publicReplies: [],
+      replyToComment: false, publicReplies: [], autoLikeComment: false,
     } });
     expect(tx.followUp.update).toHaveBeenCalledWith({
       where: { id: followUpId },
