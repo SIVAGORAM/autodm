@@ -13,7 +13,7 @@ type Automation = {
 };
 const triggerLabels: Record<string, string> = {
   POST_COMMENT: 'Post comment', NEXT_POST: 'Next post (legacy; unsupported)', ANY_POST: 'Any post',
-  STORY_REPLY: 'Story reply', LIVE_COMMENT: 'Live comment', DM: 'Incoming DM',
+  STORY_REPLY: 'Story reply', STORY_MENTION: 'Story mention', LIVE_COMMENT: 'Live comment', DM: 'Incoming DM',
 };
 const healthTone = (l?: string) => l === 'healthy' ? 'green' : l === 'needs_reconnect' ? 'coral' : l === 'at_risk' ? 'amber' : 'muted';
 const statusTone = (s: string) => s === 'LIVE' ? 'green' : s === 'PAUSED' ? 'amber' : 'muted';

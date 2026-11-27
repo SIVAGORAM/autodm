@@ -15,6 +15,7 @@ import {
   LANGUAGE_OPTIONS,
   PUBLIC_COMMENT_REPLIES,
   DM_BODY_TEMPLATES,
+  STORY_MENTION_TEMPLATES,
   normalizeLanguage,
 } from '../../../../../../lib/automation-templates';
 
@@ -224,7 +225,21 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
           </div>
           <div>
             <Label htmlFor="trigger-type">When someone…</Label>
-            <select id="trigger-type" value={triggerType} onChange={(event) => setTriggerType(event.target.value)} className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground">
+            <select
+              id="trigger-type"
+              value={triggerType}
+              onChange={(event) => {
+                const val = event.target.value;
+                setTriggerType(val);
+                if (val === 'STORY_MENTION') {
+                  setMatchMode('ANY');
+                  if (!dmText) {
+                    setDmText(STORY_MENTION_TEMPLATES[language][0].text);
+                  }
+                }
+              }}
+              className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
+            >
               {triggers.map((trigger) => (
                 <option key={trigger.value} value={trigger.value} disabled={!!trigger.paid && !isPaid || trigger.value === 'LIVE_COMMENT' && !liveCommentsEnabled && automation.data.triggerType !== 'LIVE_COMMENT'}>
                   {trigger.label}{trigger.paid && !isPaid ? ' (paid plan)' : trigger.value === 'LIVE_COMMENT' && !liveCommentsEnabled ? ' (not enabled)' : ''}
@@ -235,8 +250,13 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
           {triggerType === 'LIVE_COMMENT' && <p role="status" className="text-xs leading-relaxed text-muted-foreground">HeyLaunch attempts one private reply for a matching live comment. Meta may reject it if delivery occurs after the broadcast ends. This trigger requires the live_comments webhook and cannot use follow-ups.</p>}
           {triggerType === 'ANY_POST' && <p role="status" className="text-xs leading-relaxed text-muted-foreground">Meta documents comment events and private replies for Reels. Coverage still depends on your account permissions and active comment webhook subscription.</p>}
           {triggerType === 'STORY_REPLY' && <div role="status" className="rounded-md border border-sky-500/30 bg-sky-500/10 p-3 text-xs leading-relaxed text-foreground"><strong>Instagram Stories note:</strong> Instagram Stories do not have public comment threads on Meta. Story automation activates when a viewer <strong>replies directly to your Story</strong> via DM within its active 24-hour window.</div>}
+          {triggerType === 'STORY_MENTION' && (
+            <div role="status" className="rounded-md border border-purple-500/30 bg-purple-500/10 p-3 text-xs leading-relaxed text-foreground">
+              <strong>Instagram Story Mention note:</strong> Story mentions trigger automatically when someone tags your account (<code>@{automation.data.igAccount?.username ?? 'yourhandle'}</code>) in their Instagram Story. Stories expire after 24 hours and temporary media URLs are not permanently stored in accordance with Meta privacy policies.
+            </div>
+          )}
           {['POST_COMMENT', 'ANY_POST'].includes(triggerType) && <p className="text-xs leading-relaxed text-muted-foreground">Each comment can trigger one DM. A rule for the exact post takes priority over “Any post”; if multiple rules at the same priority match, the oldest automation handles it.</p>}
-          {['DM', 'STORY_REPLY'].includes(triggerType) && <p className="text-xs leading-relaxed text-muted-foreground">If multiple active rules match the same message, the oldest automation handles it.</p>}
+          {['DM', 'STORY_REPLY', 'STORY_MENTION'].includes(triggerType) && <p className="text-xs leading-relaxed text-muted-foreground">If multiple active rules match the same message, the oldest automation handles it.</p>}
           {triggerType === 'POST_COMMENT' && <InstagramPostSelector accountId={automation.data.igAccountId} value={mediaId} onChange={setMediaId} onEligibilityChange={setSelectedMediaSupported} />}
           <div>
             <Label>Match rule</Label>
@@ -437,12 +457,12 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                   <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  1-Click {language === 'TENGLISH' ? 'Telugu (English letters)' : language === 'TELUGU_ENGLISH' ? 'Telugu-English Hybrid' : 'English'} Templates
+                  1-Click {triggerType === 'STORY_MENTION' ? 'Story Mention' : language === 'TENGLISH' ? 'Telugu (English letters)' : language === 'TELUGU_ENGLISH' ? 'Telugu-English Hybrid' : 'English'} Templates
                 </span>
                 <span className="text-[10px] text-muted-foreground">Tap to replace message</span>
               </div>
               <div className="grid gap-2 sm:grid-cols-2">
-                {DM_BODY_TEMPLATES[language].map((tpl, i) => (
+                {(triggerType === 'STORY_MENTION' ? STORY_MENTION_TEMPLATES[language] : DM_BODY_TEMPLATES[language]).map((tpl, i) => (
                   <button
                     key={i}
                     type="button"
