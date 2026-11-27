@@ -638,37 +638,47 @@ export class DmProcessorService {
     igUsername?: string | null,
     igScopedId?: string,
   ): Promise<number> {
-    try {
-      const existing = await this.prisma.giveawayEntry.findUnique({
-        where: { automationId_contactId: { automationId, contactId } },
-        select: { ticketNumber: true },
-      });
-      if (existing) return existing.ticketNumber;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const existing = await this.prisma.giveawayEntry.findUnique({
+          where: { automationId_contactId: { automationId, contactId } },
+          select: { ticketNumber: true },
+        });
+        if (existing) return existing.ticketNumber;
 
-      return await this.prisma.$transaction(async (tx) => {
-        const highest = await tx.giveawayEntry.findFirst({
-          where: { automationId },
-          orderBy: { ticketNumber: 'desc' },
-          select: { ticketNumber: true },
+        return await this.prisma.$transaction(async (tx) => {
+          const highest = await tx.giveawayEntry.findFirst({
+            where: { automationId },
+            orderBy: { ticketNumber: 'desc' },
+            select: { ticketNumber: true },
+          });
+          const nextTicket = (highest?.ticketNumber ?? 1000) + 1;
+          const created = await tx.giveawayEntry.create({
+            data: {
+              automationId,
+              contactId,
+              ticketNumber: nextTicket,
+              igUsername: igUsername ?? null,
+              igScopedId: igScopedId ?? '',
+              status: 'ENTERED',
+            },
+            select: { ticketNumber: true },
+          });
+          return created.ticketNumber;
         });
-        const nextTicket = (highest?.ticketNumber ?? 1000) + 1;
-        const created = await tx.giveawayEntry.create({
-          data: {
-            automationId,
-            contactId,
-            ticketNumber: nextTicket,
-            igUsername: igUsername ?? null,
-            igScopedId: igScopedId ?? '',
-            status: 'ENTERED',
-          },
-          select: { ticketNumber: true },
-        });
-        return created.ticketNumber;
-      });
-    } catch (err) {
-      this.log.warn(`Could not assign giveaway ticket for contact ${contactId}: ${safeErrorLabel(err)}`);
-      return 1001;
+      } catch (err: any) {
+        if (err?.code === 'P2002' && attempt < 4) {
+          continue;
+        }
+        this.log.warn(`Could not assign giveaway ticket for contact ${contactId}: ${safeErrorLabel(err)}`);
+        break;
+      }
     }
+    const fallback = await this.prisma.giveawayEntry.findUnique({
+      where: { automationId_contactId: { automationId, contactId } },
+      select: { ticketNumber: true },
+    });
+    return fallback?.ticketNumber ?? 1001;
   }
 
   private async getNextPublicReply(automationId: string, replies: string[]): Promise<string> {

@@ -347,7 +347,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
                       className="h-7 text-xs"
                       onClick={() => setPublicReplies([...PUBLIC_COMMENT_REPLIES[language]])}
                     >
-                      <Sparkles className="mr-1 h-3 w-3 text-primary" /> Select All 12 ({language === 'TENGLISH' ? 'Telugu' : language === 'TELUGU_ENGLISH' ? 'Telugu-Eng' : 'English'})
+                      <Sparkles className="mr-1 h-3 w-3 text-primary" /> Select All 12 ({language === 'HINGLISH' ? 'Hinglish' : language === 'TENGLISH' ? 'Telugu' : language === 'TELUGU_ENGLISH' ? 'Telugu-Eng' : 'English'})
                     </Button>
                     <Button
                       type="button"
@@ -363,7 +363,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
                 {/* Template Pills for Quick Toggle */}
                 <div className="rounded-lg border border-border/60 bg-muted/20 p-2.5">
                   <p className="text-[11px] font-medium text-muted-foreground mb-1.5">
-                    Tap any {language === 'TENGLISH' ? 'Telugu (English letters)' : language === 'TELUGU_ENGLISH' ? 'Telugu-English hybrid' : 'English'} template to toggle:
+                    Tap any {language === 'HINGLISH' ? 'Hinglish (Hindi in English letters)' : language === 'TENGLISH' ? 'Telugu (English letters)' : language === 'TELUGU_ENGLISH' ? 'Telugu-English hybrid' : 'English'} template to toggle:
                   </p>
                   <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
                     {PUBLIC_COMMENT_REPLIES[language].map((template, idx) => {
@@ -454,13 +454,26 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
           <div>
             <Label htmlFor="edit-dm">Message</Label>
             <Textarea id="edit-dm" value={dmText} maxLength={1000} onChange={(event) => setDmText(event.target.value)} className="mt-1.5" />
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-muted-foreground">Personalize:</span>
+              {['{{first_name}}', '{{name}}', '{{username}}', '{{ticket_number}}'].map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => setDmText((t) => (t ? t + ' ' + tag : tag))}
+                  className="rounded border border-border bg-muted/60 px-2 py-0.5 text-xs font-mono font-medium text-foreground hover:bg-background"
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
             
             {/* 1-Click Casual Templates */}
             <div className="mt-3 rounded-lg border border-border/80 bg-muted/20 p-3">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                   <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  1-Click {triggerType === 'STORY_MENTION' ? 'Story Mention' : language === 'TENGLISH' ? 'Telugu (English letters)' : language === 'TELUGU_ENGLISH' ? 'Telugu-English Hybrid' : 'English'} Templates
+                  1-Click {triggerType === 'STORY_MENTION' ? 'Story Mention' : language === 'HINGLISH' ? 'Hinglish (Hindi in English letters)' : language === 'TENGLISH' ? 'Telugu (English letters)' : language === 'TELUGU_ENGLISH' ? 'Telugu-English Hybrid' : 'English'} Templates
                 </span>
                 <span className="text-[10px] text-muted-foreground">Tap to replace message</span>
               </div>

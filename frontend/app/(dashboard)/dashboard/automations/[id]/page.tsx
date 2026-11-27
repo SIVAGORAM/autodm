@@ -87,17 +87,24 @@ export default function AutomationDetail({ params }: { params: Promise<{ id: str
       const res = await automationApi.exportGiveawayEntries(id);
       const rows = res.data?.data ?? [];
       if (!rows.length) return toast.info('No entries to export yet.');
+      const sanitizeCsvField = (val: unknown) => {
+        const str = String(val ?? '').replace(/"/g, '""');
+        if (/^[=+\-@\t\r]/.test(str)) {
+          return `"'${str}"`;
+        }
+        return `"${str}"`;
+      };
       const headers = ['Ticket Number', 'Instagram Username', 'Name', 'Email', 'Status', 'Won At', 'Entered At'];
       const csvContent = [
         headers.join(','),
         ...rows.map((r: any) => [
           r.ticketNumber,
-          `"${r.username || ''}"`,
-          `"${r.name || ''}"`,
-          `"${r.email || ''}"`,
-          r.status,
-          r.wonAt || '',
-          r.createdAt || '',
+          sanitizeCsvField(r.username),
+          sanitizeCsvField(r.name),
+          sanitizeCsvField(r.email),
+          sanitizeCsvField(r.status),
+          sanitizeCsvField(r.wonAt || ''),
+          sanitizeCsvField(r.createdAt || ''),
         ].join(',')),
       ].join('\n');
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

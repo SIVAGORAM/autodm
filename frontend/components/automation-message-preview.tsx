@@ -12,7 +12,7 @@ import {
 
 type PreviewButton = { title: string; url?: string };
 
-function personalize(text: string, name: string, username: string) {
+function personalize(text: string, name: string, username: string, ticketNumber: number = 4182) {
   const displayName = name.trim();
   const handle = username.trim().replace(/^@/, '');
   const firstName = displayName ? displayName.split(/\s+/)[0] : '';
@@ -21,6 +21,8 @@ function personalize(text: string, name: string, username: string) {
     first_name: firstName || handle || 'there',
     firstname: firstName || handle || 'there',
     username: handle || 'there',
+    ticket_number: String(ticketNumber),
+    ticket: String(ticketNumber),
   };
   return text.replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (token, key: string) => {
     const normalized = key.toLowerCase();
