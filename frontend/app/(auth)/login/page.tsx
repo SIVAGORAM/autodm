@@ -166,6 +166,7 @@ export default function LoginPage() {
               <>
                 <div style={{ background: '#ffffff', border: `1px solid ${AC.line}`, borderRadius: 14, padding: 18, textAlign: 'center', boxShadow: '0 4px 14px rgba(0,0,0,0.04)' }}>
                   {qrCodeUrl ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
                     <img src={qrCodeUrl} alt="Scan QR code in Authenticator App" style={{ width: 190, height: 190, margin: '0 auto', display: 'block', borderRadius: 8 }} />
                   ) : (
                     <div style={{ width: 190, height: 190, margin: '0 auto', display: 'grid', placeItems: 'center', color: AC.muted, fontSize: 13 }}>
