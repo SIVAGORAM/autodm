@@ -404,5 +404,33 @@ describe('AutomationsService tracked follow-up links', () => {
         data: { status: 'ENTERED', wonAt: null },
       });
     });
+
+    it('exports giveaway entries sorted by ticket number', async () => {
+      const entries = [
+        {
+          ticketNumber: 1001,
+          igUsername: 'fan1',
+          contact: { name: 'Fan 1', username: 'fan1', email: 'fan1@example.com' },
+          status: 'ENTERED',
+          wonAt: null,
+          createdAt: new Date('2026-11-20T10:00:00Z'),
+        },
+      ];
+      const prisma: any = {
+        automation: { findUnique: jest.fn().mockResolvedValue({ id: 'auto-1', igAccount: { userId: 'user-1' } }) },
+        giveawayEntry: { findMany: jest.fn().mockResolvedValue(entries) },
+      };
+      const service = new AutomationsService(prisma, {} as any, {} as any, {} as any, {} as any);
+
+      const result = await service.exportGiveawayEntries('user-1', 'auto-1');
+      expect(result).toHaveLength(1);
+      expect(result[0].ticketNumber).toBe(1001);
+      expect(result[0].username).toBe('fan1');
+      expect(result[0].email).toBe('fan1@example.com');
+      expect(prisma.giveawayEntry.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { automationId: 'auto-1' },
+        orderBy: { ticketNumber: 'asc' },
+      }));
+    });
   });
 });
