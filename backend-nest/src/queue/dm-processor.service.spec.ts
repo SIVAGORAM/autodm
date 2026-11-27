@@ -506,4 +506,57 @@ describe('DmProcessorService delivery recovery', () => {
 
     expect(prisma.run.upsert).not.toHaveBeenCalled();
   });
+
+  it('triggers auto-like when autoLikeComment is enabled and tolerates like failure', async () => {
+    const automation = {
+      id: 'automation-1', status: 'LIVE', autoLikeComment: true, replyToComment: false,
+      publicReplies: [], askToFollow: false, collectEmail: false, trackClicks: false, trackedLinks: [],
+      dmBlocks: [{ type: 'text', text: 'Thanks!' }], followUps: [],
+      igAccount: {
+        id: 'account-1', userId: 'user-1', igUserId: 'ig-user-1', accessTokenEnc: 'encrypted-token',
+        loginMode: 'INSTAGRAM_LOGIN', isActive: true, user: { id: 'user-1', plan: 'PRO' },
+      },
+    };
+    const prisma: any = {
+      run: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn().mockResolvedValue({}) },
+      automation: { findUnique: jest.fn().mockResolvedValue(automation) },
+      igAccount: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'account-1' }]),
+        findUnique: jest.fn().mockResolvedValue({ isActive: true, user: { deletionRequestedAt: null } }),
+      },
+      contact: {
+        upsert: jest.fn().mockResolvedValue({ id: 'contact-1' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const meta: any = {
+      sendCommentDm: jest.fn().mockResolvedValue({ ok: true }),
+      likeComment: jest.fn().mockRejectedValue(new Error('Meta like rate limit')),
+    };
+    const encryption: any = { decrypt: jest.fn().mockReturnValue('decrypted-token') };
+    const quota: any = { consume: jest.fn().mockResolvedValue(true), settle: jest.fn() };
+    const queue: any = { client: { eval: jest.fn().mockResolvedValue(0) }, add: jest.fn() };
+    const config: any = { get: jest.fn().mockReturnValue('https://api.example'), getOrThrow: jest.fn() };
+    const dashboardEvents: any = { publish: jest.fn().mockResolvedValue(undefined) };
+    const service = new DmProcessorService(prisma, meta, encryption, config, quota, queue, dashboardEvents);
+
+    await service.process(
+      {
+        automationId: 'automation-1', igAccountId: 'account-1', triggerType: 'POST_COMMENT',
+        commentId: 'comment-123', commentCreatedAt: new Date().toISOString(), recipientIgsid: 'recipient-123',
+        text: 'Thanks!', triggerEventId: 'comment:123',
+      },
+      { id: 'job-1', token: 'token-1', data: { igAccountId: 'account-1' } } as any,
+    );
+
+    expect(meta.sendCommentDm).toHaveBeenCalledWith(
+      'ig-user-1', 'decrypted-token', 'comment-123', 'Thanks!', [], 'INSTAGRAM_LOGIN',
+    );
+    expect(meta.likeComment).toHaveBeenCalledWith(
+      'ig-user-1', 'decrypted-token', 'comment-123', 'INSTAGRAM_LOGIN',
+    );
+    expect(prisma.run.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({ status: 'SENT' }),
+    }));
+  });
 });

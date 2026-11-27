@@ -77,4 +77,38 @@ describe('MetaService', () => {
 
     expect(result).toMatchObject({ ok: false, retryable });
   });
+
+  it('posts likeComment to user likes endpoint with comment_id', async () => {
+    const post = jest.fn().mockResolvedValue({ data: { success: true } });
+    jest.spyOn(axios, 'create').mockReturnValue({ post } as any);
+    const service = new MetaService({ get: (key: string) => key === 'META_GRAPH_VERSION' ? 'v26.0' : undefined } as any);
+
+    const result = await service.likeComment('ig-account', 'token', 'comment-999', 'INSTAGRAM_LOGIN');
+
+    expect(result).toEqual({ ok: true, data: { success: true } });
+    expect(post).toHaveBeenCalledWith(
+      '/ig-account/likes',
+      { comment_id: 'comment-999' },
+      { params: { access_token: 'token' } },
+    );
+  });
+
+  it('falls back to graph.facebook.com if graph.instagram.com rejects likeComment', async () => {
+    const post = jest.fn()
+      .mockRejectedValueOnce({ response: { status: 404, data: { error: { code: 803, message: 'Not found' } } } })
+      .mockResolvedValueOnce({ data: { success: true } });
+    jest.spyOn(axios, 'create').mockReturnValue({ post } as any);
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const service = new MetaService({ get: (key: string) => key === 'META_GRAPH_VERSION' ? 'v26.0' : undefined } as any);
+
+    const result = await service.likeComment('ig-account', 'token', 'comment-999', 'INSTAGRAM_LOGIN');
+
+    expect(result).toEqual({ ok: true, data: { success: true } });
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post).toHaveBeenLastCalledWith(
+      'https://graph.facebook.com/v26.0/ig-account/likes',
+      { comment_id: 'comment-999' },
+      { params: { access_token: 'token' } },
+    );
+  });
 });

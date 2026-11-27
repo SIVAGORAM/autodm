@@ -64,7 +64,17 @@ export class MetaService {
 
   // Like an Instagram comment (Algorithm & Engagement Booster).
   async likeComment(igUserId: string, token: string, commentId: string, loginMode: InstagramLoginMode = 'INSTAGRAM_LOGIN') {
-    return this.post(`/${igUserId}/likes`, token, { comment_id: commentId }, loginMode);
+    const primary = await this.post(`/${igUserId}/likes`, token, { comment_id: commentId }, loginMode);
+    if (primary.ok) return primary;
+
+    // Fallback: If loginMode was INSTAGRAM_LOGIN and graph.instagram.com failed, attempt graph.facebook.com
+    // which is the canonical Meta Graph endpoint for User Likes.
+    if (loginMode === 'INSTAGRAM_LOGIN') {
+      const fallback = await this.post(`/${igUserId}/likes`, token, { comment_id: commentId }, 'UNIFIED_LOGIN');
+      if (fallback.ok) return fallback;
+    }
+
+    return primary;
   }
 
   async getFollowerInfo(igUserId: string, token: string, igsid: string, loginMode: InstagramLoginMode = 'INSTAGRAM_LOGIN'): Promise<{ isFollower: boolean }> {
