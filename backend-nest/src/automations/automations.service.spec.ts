@@ -189,7 +189,7 @@ describe('AutomationsService comment-only public replies', () => {
     const created = { id: 'automation-story' };
     const transaction = { automation: { create: jest.fn().mockResolvedValue(created) } };
     const prisma: any = {
-      igAccount: { findUnique: jest.fn().mockResolvedValue({ id: 'account-1', userId: 'user-1', webhookSubscribedAt: new Date() }) },
+      igAccount: { findUnique: jest.fn().mockResolvedValue({ id: 'account-1', userId: 'user-1', igUserId: 'ig-user-1', webhookSubscribedAt: new Date() }) },
       $transaction: jest.fn((callback: (tx: typeof transaction) => Promise<unknown>) => callback(transaction)),
     };
     const service = new AutomationsService(prisma, {} as any, {} as any, {} as any, {} as any);
@@ -239,7 +239,7 @@ describe('AutomationsService tracked follow-up links', () => {
       followUp: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     };
     const prisma: any = {
-      igAccount: { findUnique: jest.fn().mockResolvedValue({ id: 'account-1', userId: 'user-1', webhookSubscribedAt: new Date() }) },
+      igAccount: { findUnique: jest.fn().mockResolvedValue({ id: 'account-1', userId: 'user-1', igUserId: 'ig-user-1', webhookSubscribedAt: new Date() }) },
       $transaction: jest.fn((callback: (tx: typeof transaction) => Promise<unknown>) => callback(transaction)),
     };
     const service = new AutomationsService(prisma, {} as any, {} as any, {} as any, {} as any);
@@ -257,5 +257,44 @@ describe('AutomationsService tracked follow-up links', () => {
     expect(transaction.trackedLink.create.mock.calls.map(([call]) => call.data.targetUrl).sort()).toEqual([
       'https://creator.example/follow-up', 'https://creator.example/main',
     ]);
+  });
+
+  it('persists autoLikeComment for comment triggers and enforces false for message triggers', async () => {
+    const transaction = {
+      automation: { create: jest.fn().mockResolvedValue({ id: 'automation-1', trackClicks: false }) },
+    };
+    const prisma: any = {
+      igAccount: { findUnique: jest.fn().mockResolvedValue({ id: 'account-1', userId: 'user-1', igUserId: 'ig-user-1', webhookSubscribedAt: new Date() }) },
+      $transaction: jest.fn((callback: (tx: typeof transaction) => Promise<unknown>) => callback(transaction)),
+    };
+    const instagram: any = {
+      getMediaMetadata: jest.fn().mockResolvedValue({ id: 'media-1', media_type: 'IMAGE', ownerId: 'ig-user-1' }),
+    };
+    const encryption: any = { decrypt: jest.fn().mockReturnValue('token') };
+    const service = new AutomationsService(prisma, {} as any, {} as any, instagram, encryption);
+
+    // 1. Post comment trigger with autoLikeComment: true
+    await service.create('user-1', 'CREATOR', {
+      igAccountId: 'account-1', name: 'Post Comment with Like', triggerType: 'POST_COMMENT', mediaId: 'media-1',
+      matchMode: 'KEYWORDS', keywords: ['hello'], publicReplies: [], replyToComment: true, autoLikeComment: true,
+      askToFollow: false, collectEmail: false, trackClicks: false,
+      dmBlocks: [{ type: 'text', text: 'Hello' }], status: 'DRAFT', followUps: [],
+    });
+
+    expect(transaction.automation.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ autoLikeComment: true }),
+    }));
+
+    // 2. DM trigger ignores autoLikeComment (sets false)
+    await service.create('user-1', 'CREATOR', {
+      igAccountId: 'account-1', name: 'DM Trigger', triggerType: 'DM',
+      matchMode: 'KEYWORDS', keywords: ['hello'], publicReplies: [], replyToComment: false, autoLikeComment: true,
+      askToFollow: false, collectEmail: false, trackClicks: false,
+      dmBlocks: [{ type: 'text', text: 'Hello' }], status: 'DRAFT', followUps: [],
+    });
+
+    expect(transaction.automation.create).toHaveBeenLastCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ autoLikeComment: false }),
+    }));
   });
 });

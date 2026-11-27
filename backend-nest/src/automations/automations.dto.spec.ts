@@ -95,3 +95,27 @@ describe('automation update follow-up IDs', () => {
     expect(result.success).toBe(true);
   });
 });
+
+describe('automation auto-like comment validation', () => {
+  it('defaults autoLikeComment to false on create', () => {
+    const result = createAutomationSchema.safeParse(base);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.autoLikeComment).toBe(false);
+    }
+  });
+
+  it('accepts autoLikeComment as true on create and update', () => {
+    const createResult = createAutomationSchema.safeParse({ ...base, autoLikeComment: true });
+    expect(createResult.success).toBe(true);
+    if (createResult.success) {
+      expect(createResult.data.autoLikeComment).toBe(true);
+    }
+
+    const updateResult = updateAutomationSchema.safeParse({ autoLikeComment: true });
+    expect(updateResult.success).toBe(true);
+    if (updateResult.success) {
+      expect(updateResult.data.autoLikeComment).toBe(true);
+    }
+  });
+});
