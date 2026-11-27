@@ -163,7 +163,7 @@ describe('AutomationsService comment trigger selection', () => {
 });
 
 describe('AutomationsService webhook subscription requirements', () => {
-  it.each(['STORY_REPLY', 'DM'])('does not create a live %s automation without a confirmed message webhook', async (triggerType) => {
+  it.each(['STORY_REPLY', 'STORY_MENTION', 'DM'])('does not create a live %s automation without a confirmed message webhook', async (triggerType) => {
     const prisma: any = {
       igAccount: { findUnique: jest.fn().mockResolvedValue({
         id: 'account-1', userId: 'user-1', webhookSubscribedAt: null,
@@ -283,6 +283,18 @@ describe('AutomationsService tracked follow-up links', () => {
 
     expect(transaction.automation.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ autoLikeComment: true }),
+    }));
+
+    // 2. DM trigger ignores autoLikeComment (sets false)
+    await service.create('user-1', 'CREATOR', {
+      igAccountId: 'account-1', name: 'DM Trigger', triggerType: 'DM',
+      matchMode: 'KEYWORDS', keywords: ['hello'], publicReplies: [], replyToComment: false, autoLikeComment: true,
+      askToFollow: false, collectEmail: false, trackClicks: false,
+      dmBlocks: [{ type: 'text', text: 'Hello' }], status: 'DRAFT', followUps: [],
+    });
+
+    expect(transaction.automation.create).toHaveBeenLastCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ autoLikeComment: false }),
     }));
 
     // 3. STORY_MENTION trigger ignores autoLikeComment (sets false) and requires messages webhook
