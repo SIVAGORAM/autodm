@@ -6,6 +6,9 @@ import { useEffect, useState } from 'react';
 
 function PrewarmKeepAlive() {
   useEffect(() => {
+    // Only pre-warm in production; in local dev, avoid proxy error spam if backend isn't started yet
+    if (process.env.NODE_ENV !== 'production') return;
+
     // 1. Immediately ping the backend to pre-warm container and database pool
     const warm = () => {
       fetch('/api/version', { cache: 'no-store' }).catch(() => {});
