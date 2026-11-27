@@ -64,8 +64,8 @@ const superpowers = [
   },
   {
     badge: 'Follower Multiplier 👤',
-    badgeTone: '#17827E',
-    badgeBg: 'rgba(23, 130, 126, 0.12)',
+    badgeTone: '#10B981',
+    badgeBg: 'rgba(16, 185, 129, 0.12)',
     title: 'Follow-First Verification',
     description:
       'Verify if a commenter follows your account before delivering the secret resource or link. Prompts non-followers to follow first.',

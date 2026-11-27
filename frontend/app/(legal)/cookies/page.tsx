@@ -101,13 +101,13 @@ export default function CookiesPage() {
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 <td style={{ padding: '10px 12px', fontFamily: 'monospace' }}>heylaunch_theme</td>
                 <td style={{ padding: '10px 12px' }}>localStorage (Persistent)</td>
-                <td style={{ padding: '10px 12px', fontWeight: 600, color: '#17827E' }}>Preferences</td>
+                <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text)' }}>Preferences</td>
                 <td style={{ padding: '10px 12px' }}>Stores your selected dark or light appearance setting.</td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 <td style={{ padding: '10px 12px', fontFamily: 'monospace' }}>heylaunch_sidebar_collapsed</td>
                 <td style={{ padding: '10px 12px' }}>localStorage (Persistent)</td>
-                <td style={{ padding: '10px 12px', fontWeight: 600, color: '#17827E' }}>Preferences</td>
+                <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text)' }}>Preferences</td>
                 <td style={{ padding: '10px 12px' }}>Remembers whether your dashboard navigation rail is expanded or collapsed.</td>
               </tr>
               <tr>
