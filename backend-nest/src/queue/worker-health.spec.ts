@@ -96,8 +96,14 @@ describe('hasFreshWorkerHeartbeat', () => {
     recordLocalWorkerHeartbeat();
     const rejectedPromise = Promise.reject(new Error('redis quota exceeded'));
     rejectedPromise.catch(() => {}); // prevent unhandled rejection in node
-    const queue = { client: rejectedPromise } as any;
+    const queue = {
+      client: rejectedPromise,
+      getJobCounts: jest.fn().mockRejectedValue(new Error('redis quota exceeded')),
+      getWaiting: jest.fn().mockRejectedValue(new Error('redis quota exceeded')),
+      getDelayed: jest.fn().mockRejectedValue(new Error('redis quota exceeded')),
+    } as any;
     await expect(hasFreshWorkerHeartbeat(queue, Date.now())).resolves.toBe(true);
+    await expect(getWorkerHealth(queue, Date.now())).resolves.toMatchObject({ status: 'ok' });
     deactivateLocalWorker();
     expect(isLocalWorkerActive()).toBe(false);
   });

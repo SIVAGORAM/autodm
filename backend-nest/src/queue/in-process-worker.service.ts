@@ -50,7 +50,7 @@ export class InProcessWorkerService implements OnApplicationBootstrap, OnApplica
         WORKER_HEARTBEAT_TTL_SECONDS,
       );
     } catch (err) {
-      this.log.warn(`Heartbeat update failed: ${safeErrorLabel(err)}`);
+      this.log.debug?.(`Heartbeat update failed: ${safeErrorLabel(err)}`);
     }
   }
 
@@ -66,18 +66,28 @@ export class InProcessWorkerService implements OnApplicationBootstrap, OnApplica
       return;
     }
 
+    // Always start local in-memory worker heartbeat immediately
+    recordLocalWorkerHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      void this.refreshHeartbeat();
+    }, WORKER_HEARTBEAT_INTERVAL_MS);
+    this.heartbeatTimer.unref();
+
     try {
       const redisUrl = this.config.get<string>('REDIS_URL');
       if (!redisUrl) return;
 
       this.heartbeatConnection = createRedis(redisUrl);
+      this.heartbeatConnection.on('error', (err: any) => {
+        this.log.debug?.(`Heartbeat redis error: ${safeErrorLabel(err)}`);
+      });
+
       this.connection = createRedis(redisUrl);
+      this.connection.on('error', (err: any) => {
+        this.log.debug?.(`Worker redis error: ${safeErrorLabel(err)}`);
+      });
 
       await this.refreshHeartbeat();
-      this.heartbeatTimer = setInterval(() => {
-        void this.refreshHeartbeat();
-      }, WORKER_HEARTBEAT_INTERVAL_MS);
-      this.heartbeatTimer.unref();
 
       this.worker = new Worker(
         DM_QUEUE,
@@ -106,7 +116,7 @@ export class InProcessWorkerService implements OnApplicationBootstrap, OnApplica
 
       this.log.log('In-process delivery worker started successfully (concurrency: 2).');
     } catch (err) {
-      this.log.warn(`Could not start in-process delivery worker: ${safeErrorLabel(err)}`);
+      this.log.warn(`Could not start BullMQ delivery worker (in-process fallback active): ${safeErrorLabel(err)}`);
     }
   }
 

@@ -6,7 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from './prisma/prisma.service';
 import { DM_QUEUE_TOKEN } from './queue/queue.constants';
 import { hasNoevictionPolicy } from './queue/redis';
-import { getWorkerHealth } from './queue/worker-health';
+import { getWorkerHealth, isLocalWorkerActive } from './queue/worker-health';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { VerifiedEmailGuard } from './common/guards/verified-email.guard';
 import { AdminGuard } from './common/guards/admin.guard';
@@ -47,7 +47,10 @@ export class HealthController {
   async ready(@Res({ passthrough: true }) res: FastifyReply) {
     const [database, queue, throttling] = await Promise.all([
       this.probe(() => this.prisma.$queryRaw`SELECT 1`),
-      this.probe(() => this.dmQueue.getJobCounts()),
+      this.probe(async () => {
+        if (isLocalWorkerActive()) return true;
+        return this.dmQueue.getJobCounts();
+      }),
       this.probe(() => this.throttleStorage.ping()),
     ]);
     const redisQueuePolicyRequired = this.config.get<boolean>('REDIS_REQUIRE_NOEVICTION') === true ||
@@ -77,7 +80,14 @@ export class HealthController {
       const health = await getWorkerHealth(this.dmQueue);
       return { success: true, data: { status: health.status, lastHeartbeatAt: health.lastHeartbeatAt } };
     } catch {
-      return { success: true, data: { status: 'unavailable', lastHeartbeatAt: null } };
+      const localActive = isLocalWorkerActive();
+      return {
+        success: true,
+        data: {
+          status: localActive ? 'ok' : 'unavailable',
+          lastHeartbeatAt: localActive ? new Date().toISOString() : null,
+        },
+      };
     }
   }
 

@@ -35,6 +35,7 @@ export default function NotificationsPage() {
     queryFn: async () => (await healthApi.workerStatus()).data.data as WorkerStatus,
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
+    retry: 2,
   });
   const loading = autos.isLoading || igs.isLoading || worker.isLoading;
   const failed = autos.isError || igs.isError;

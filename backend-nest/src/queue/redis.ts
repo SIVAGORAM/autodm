@@ -2,7 +2,19 @@ import IORedis from 'ioredis';
 
 // One shared connection factory. BullMQ needs maxRetriesPerRequest: null.
 export function createRedis(url: string): IORedis {
-  return new IORedis(url, { maxRetriesPerRequest: null, enableReadyCheck: false });
+  return new IORedis(url, {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+    retryStrategy(times) {
+      return Math.min(times * 2000, 30_000);
+    },
+    reconnectOnError(err) {
+      if (err.message && err.message.includes('max requests limit exceeded')) {
+        return false;
+      }
+      return true;
+    },
+  });
 }
 
 /** BullMQ queues can lose jobs if Redis evicts their keys under memory pressure. */
