@@ -285,16 +285,38 @@ describe('AutomationsService tracked follow-up links', () => {
       data: expect.objectContaining({ autoLikeComment: true }),
     }));
 
-    // 2. DM trigger ignores autoLikeComment (sets false)
+    // 3. STORY_MENTION trigger ignores autoLikeComment (sets false) and requires messages webhook
     await service.create('user-1', 'CREATOR', {
-      igAccountId: 'account-1', name: 'DM Trigger', triggerType: 'DM',
-      matchMode: 'KEYWORDS', keywords: ['hello'], publicReplies: [], replyToComment: false, autoLikeComment: true,
+      igAccountId: 'account-1', name: 'Story Mention Trigger', triggerType: 'STORY_MENTION',
+      matchMode: 'ANY', keywords: [], publicReplies: [], replyToComment: false, autoLikeComment: true,
       askToFollow: false, collectEmail: false, trackClicks: false,
-      dmBlocks: [{ type: 'text', text: 'Hello' }], status: 'DRAFT', followUps: [],
+      dmBlocks: [{ type: 'text', text: 'Thank you for the story mention!' }], status: 'DRAFT', followUps: [],
     });
 
     expect(transaction.automation.create).toHaveBeenLastCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ autoLikeComment: false }),
+      data: expect.objectContaining({
+        triggerType: 'STORY_MENTION',
+        autoLikeComment: false,
+        replyToComment: false,
+      }),
     }));
+  });
+
+  it('rejects STORY_MENTION trigger creation for FREE tier users', async () => {
+    const transaction = {
+      automation: { create: jest.fn() },
+    };
+    const prisma: any = {
+      igAccount: { findUnique: jest.fn().mockResolvedValue({ id: 'account-1', userId: 'user-1', igUserId: 'ig-user-1', webhookSubscribedAt: new Date() }) },
+      $transaction: jest.fn((callback: (tx: typeof transaction) => Promise<unknown>) => callback(transaction)),
+    };
+    const service = new AutomationsService(prisma, {} as any, {} as any, {} as any, {} as any);
+
+    await expect(service.create('user-1', 'FREE', {
+      igAccountId: 'account-1', name: 'Story Mention Trigger', triggerType: 'STORY_MENTION',
+      matchMode: 'ANY', keywords: [], publicReplies: [], replyToComment: false, autoLikeComment: false,
+      askToFollow: false, collectEmail: false, trackClicks: false,
+      dmBlocks: [{ type: 'text', text: 'Thanks!' }], status: 'DRAFT', followUps: [],
+    })).rejects.toThrow('This trigger needs a higher plan.');
   });
 });
