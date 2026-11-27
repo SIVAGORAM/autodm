@@ -727,7 +727,7 @@ export default function SettingsPage() {
                     type="text"
                     inputMode="numeric"
                     maxLength={8}
-                    style={field}
+                    style={{ ...field, textAlign: 'center', fontSize: 20, letterSpacing: '4px', fontWeight: 700 }}
                     placeholder="000000"
                     value={regenCode}
                     onChange={(e) => setRegenCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
