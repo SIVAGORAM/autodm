@@ -68,7 +68,16 @@ export default function AutomationDetail({ params }: { params: Promise<{ id: str
         <>
           <header className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-semibold text-foreground">{a.data.name}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-semibold text-foreground">{a.data.name}</h1>
+                <Badge tone="primary" className="text-xs">
+                  {a.data.language === 'TENGLISH'
+                    ? 'Telugu (English letters)'
+                    : a.data.language === 'TELUGU_ENGLISH'
+                    ? 'Telugu-English Hybrid'
+                    : 'English'}
+                </Badge>
+              </div>
               {a.data.igAccount?.username && <p className="text-sm text-muted-foreground">@{a.data.igAccount.username}</p>}
             </div>
             <div className="flex flex-wrap gap-2">

@@ -9,6 +9,12 @@ import { CLICK_TO_DIRECT_AD_MESSAGE_WINDOW_MS, COMMENT_FOLLOWUP_REPLY_REQUIRED, 
 import { DM_QUEUE_TOKEN } from './queue.constants';
 import { extractButtons, applyTracking } from '../automations/dm-blocks';
 import { personalize } from '../automations/personalize';
+import {
+  getRandomFollowPrompt,
+  getFollowButtons,
+  getRandomEmailPrompt,
+  normalizeLanguage,
+} from '../automations/automation-templates';
 import { accountPlanRestriction, planFor } from '../common/plan.util';
 import { automationRestriction } from '../common/automation-entitlement';
 import { DmQuotaService } from '../common/dm-quota.service';
@@ -205,18 +211,9 @@ export class DmProcessorService {
       await this.prisma.contact.update({ where: { id: contact.id }, data: { follows: isFollower } });
       if (!isFollower) {
         const accountUsername = automation.igAccount.username;
-        const followDescriptions = [
-          `Oh no! 👀 It seems you're not following @${accountUsername} yet! Tap 'Visit Profile' below to follow, then tap 'I'm following' to get your link! 👇`,
-          `Wait a second! 🥺👀 You're not following @${accountUsername} yet! Please tap 'Visit Profile' below to follow, then tap 'I'm following' to unlock your resource! ✨`,
-          `Almost there! 🔍👀 We noticed you haven't followed @${accountUsername} yet. Hit 'Visit Profile' to follow us, then press 'I'm following' below! 🚀`,
-          `Hold on! 👀✨ It looks like you're not following @${accountUsername}. Tap 'Visit Profile' below to follow, then click 'I'm following' to receive your link! 🎁`,
-          `Oops! 🙈👀 You must follow @${accountUsername} to unlock this exclusive resource. Follow our profile and tap 'I'm following' right here! 👇`,
-        ];
-        const promptText = followDescriptions[Math.floor(Math.random() * followDescriptions.length)];
-        const followButtons: DmButton[] = [
-          { title: 'Visit Profile', url: `https://instagram.com/${accountUsername}`, type: 'web_url' },
-          { title: "I'm following", type: 'postback', payload: 'CONFIRM_FOLLOW' },
-        ];
+        const autoLang = normalizeLanguage(automation.language);
+        const promptText = getRandomFollowPrompt(autoLang, accountUsername, job.recipientUsername || contact.name);
+        const followButtons: DmButton[] = getFollowButtons(autoLang, accountUsername);
 
         const existingTags = contact.tags || [];
         const followTag = `pending_follow:${automation.id}`;
@@ -243,7 +240,8 @@ export class DmProcessorService {
     }
 
     if (!isConversationalGateStep && automation.collectEmail && !contact.email) {
-      const emailPromptText = `Hey ${job.recipientUsername || 'there'}! 🎉 Before I drop your link right here, what's your email address? Reply with your email below! 📩`;
+      const autoLang = normalizeLanguage(automation.language);
+      const emailPromptText = getRandomEmailPrompt(autoLang, job.recipientUsername || contact.name);
 
       const existingTags = contact.tags || [];
       const emailTag = `pending_email:${automation.id}`;

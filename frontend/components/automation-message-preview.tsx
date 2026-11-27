@@ -1,8 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { Eye, MessageCircle, UserCheck, Mail, ExternalLink, ShieldCheck } from 'lucide-react';
+import { Eye, MessageCircle, UserCheck, Mail, ExternalLink, ShieldCheck, Languages } from 'lucide-react';
 import { Badge, Card, Input, Label } from './ui/primitives';
+import {
+  AutomationLanguage,
+  getRandomFollowPrompt,
+  getRandomEmailPrompt,
+  getFollowButtons,
+} from '../lib/automation-templates';
 
 type PreviewButton = { title: string; url?: string };
 
@@ -29,6 +35,7 @@ export function AutomationMessagePreview({
   buttons,
   askToFollow = false,
   collectEmail = false,
+  language = 'ENGLISH',
 }: {
   accountUsername?: string;
   publicReply?: string;
@@ -36,12 +43,24 @@ export function AutomationMessagePreview({
   buttons: PreviewButton[];
   askToFollow?: boolean;
   collectEmail?: boolean;
+  language?: AutomationLanguage;
 }) {
-  const [sampleName, setSampleName] = useState('Asha Rao');
-  const [sampleUsername, setSampleUsername] = useState('asha_creator');
+  const [sampleName, setSampleName] = useState('Siva');
+  const [sampleUsername, setSampleUsername] = useState('siva_creator');
   const visibleButtons = buttons.filter((button) => button.title.trim());
   const renderedMessage = personalize(dmText, sampleName, sampleUsername);
   const cleanUsername = accountUsername?.replace(/^@/, '') || 'yourbrand';
+
+  const followPrompt = getRandomFollowPrompt(language, cleanUsername, sampleName);
+  const followButtons = getFollowButtons(language, cleanUsername);
+  const emailPrompt = getRandomEmailPrompt(language, sampleName);
+
+  const langBadgeText =
+    language === 'TENGLISH'
+      ? 'Telugu (English Letters)'
+      : language === 'TELUGU_ENGLISH'
+      ? 'Telugu-English Hybrid'
+      : 'English';
 
   return (
     <Card className="overflow-hidden border-border/80 shadow-md">
@@ -49,7 +68,12 @@ export function AutomationMessagePreview({
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <Eye className="h-4 w-4 text-primary" aria-hidden /> Live Preview
         </div>
-        <Badge tone="muted" className="text-[10px]">Instagram Simulation</Badge>
+        <div className="flex items-center gap-1.5">
+          <span className="flex items-center gap-1 rounded bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+            <Languages className="h-3 w-3" /> {langBadgeText}
+          </span>
+          <Badge tone="muted" className="text-[10px]">Instagram Simulation</Badge>
+        </div>
       </div>
 
       <div className="space-y-4 p-4">
@@ -109,20 +133,45 @@ export function AutomationMessagePreview({
             </div>
           )}
 
-          {/* Follow-First Notice (if enabled) */}
+          {/* Follow-First Gate Step (if enabled) */}
           {askToFollow && (
-            <div className="mb-2.5 flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-300">
-              <UserCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <div>
-                <span className="font-semibold">Follow Verification:</span> If commenter doesn&apos;t follow @{cleanUsername}, they are prompted to follow first.
+            <div className="mb-3 space-y-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-foreground">
+              <div className="flex items-center gap-1.5 font-semibold text-amber-700 dark:text-amber-300">
+                <UserCheck className="h-3.5 w-3.5" /> Follow-First Verification Prompt
               </div>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                &ldquo;{followPrompt}&rdquo;
+              </p>
+              <div className="mt-2 space-y-1">
+                {followButtons.map((btn, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-center gap-1 rounded-md border border-amber-500/30 bg-background/80 px-2 py-1 text-center text-[10px] font-semibold text-foreground shadow-2xs"
+                  >
+                    <span>{btn.title}</span>
+                    {btn.url && <ExternalLink className="h-2.5 w-2.5 opacity-60" />}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Email Collection Step (if enabled) */}
+          {collectEmail && (
+            <div className="mb-3 space-y-1.5 rounded-xl border border-sky-500/30 bg-sky-500/10 p-2.5 text-xs text-foreground">
+              <div className="flex items-center gap-1.5 font-semibold text-sky-700 dark:text-sky-300">
+                <Mail className="h-3.5 w-3.5" /> Email Capture Prompt
+              </div>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                &ldquo;{emailPrompt}&rdquo;
+              </p>
             </div>
           )}
 
           {/* Direct Message Bubble */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              <span>Direct Message</span>
+              <span>Main Direct Message</span>
               <span className="text-[9px] lowercase opacity-75">just now</span>
             </div>
             <div className="rounded-2xl rounded-bl-xs bg-primary px-3.5 py-2.5 text-xs leading-relaxed text-primary-foreground shadow-xs">
@@ -148,16 +197,6 @@ export function AutomationMessagePreview({
               )}
             </div>
           </div>
-
-          {/* Email Collection Prompt (if enabled) */}
-          {collectEmail && (
-            <div className="mt-2.5 flex items-start gap-2 rounded-lg border border-sky-500/20 bg-sky-500/10 p-2 text-xs text-sky-700 dark:text-sky-300">
-              <Mail className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <div>
-                <span className="font-semibold">Email Capture:</span> Asks for email address with consent before saving to Contacts.
-              </div>
-            </div>
-          )}
 
           <div className="mt-3 flex items-center justify-between border-t border-border/40 pt-2 text-[10px] text-muted-foreground">
             <span className="inline-flex items-center gap-1">

@@ -162,6 +162,7 @@ export class AutomationsService {
           replyToComment: supportsPublicCommentReply && dto.replyToComment,
           askToFollow: dto.askToFollow, collectEmail: dto.collectEmail,
           trackClicks: dto.trackClicks, dmBlocks: dto.dmBlocks as object, status: dto.status,
+          language: dto.language ?? 'ENGLISH',
         },
       });
       if (dto.followUps?.length) {

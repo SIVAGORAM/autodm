@@ -9,7 +9,14 @@ import { useAuthStore } from '../../../../../../store/authStore';
 import { InstagramPostSelector } from '../../../../../../components/instagram-post-selector';
 import { AutomationMessagePreview } from '../../../../../../components/automation-message-preview';
 import { Badge, Button, Card, Input, Label, TagInput, Textarea, Toggle } from '../../../../../../components/ui/primitives';
-import { ArrowLeft, Play, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Play, Plus, Save, Trash2, Sparkles, Languages, Check } from 'lucide-react';
+import {
+  AutomationLanguage,
+  LANGUAGE_OPTIONS,
+  PUBLIC_COMMENT_REPLIES,
+  DM_BODY_TEMPLATES,
+  normalizeLanguage,
+} from '../../../../../../lib/automation-templates';
 
 type FollowUp = { id?: string; condition: string; delayMinutes: number; text: string };
 type MessageButton = { title: string; url: string };
@@ -48,6 +55,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
   const [keywords, setKeywords] = useState<string[]>([]);
   const [excludedKeywords, setExcludedKeywords] = useState<string[]>([]);
   const [replyToComment, setReplyToComment] = useState(false);
+  const [language, setLanguage] = useState<AutomationLanguage>('TENGLISH');
   const [publicReplies, setPublicReplies] = useState<string[]>([]);
   const [askToFollow, setAskToFollow] = useState(false);
   const [collectEmail, setCollectEmail] = useState(false);
@@ -57,6 +65,13 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [error, setError] = useState('');
   const supportsPublicCommentReply = ['POST_COMMENT', 'ANY_POST'].includes(triggerType);
+
+  const handleLanguageChange = (newLang: AutomationLanguage) => {
+    setLanguage(newLang);
+    if (!publicReplies.length || publicReplies.every((r) => Object.values(PUBLIC_COMMENT_REPLIES).flat().includes(r))) {
+      setPublicReplies(PUBLIC_COMMENT_REPLIES[newLang].slice(0, 5));
+    }
+  };
 
   useEffect(() => {
     const current = automation.data;
@@ -68,6 +83,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
     setTriggerType(supportedTriggers.includes(current.triggerType) ? current.triggerType : 'POST_COMMENT');
     setMediaId(current.mediaId ?? '');
     setMatchMode(current.matchMode === 'ANY' ? 'ANY' : 'KEYWORDS');
+    setLanguage(normalizeLanguage(current.language));
     
     const rawKeywords = Array.isArray(current.keywords) ? current.keywords : [];
     const positive = rawKeywords.filter((k: string) => typeof k === 'string' && !k.startsWith('-'));
@@ -76,7 +92,11 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
     setExcludedKeywords(negative);
 
     setReplyToComment(!!current.replyToComment);
-    setPublicReplies(Array.isArray(current.publicReplies) && current.publicReplies.length > 0 ? current.publicReplies : ['Sent! Check your DMs 📩']);
+    setPublicReplies(
+      Array.isArray(current.publicReplies) && current.publicReplies.length > 0
+        ? current.publicReplies
+        : PUBLIC_COMMENT_REPLIES[normalizeLanguage(current.language)].slice(0, 5)
+    );
     setAskToFollow(Boolean(current.askToFollow));
     setCollectEmail(Boolean(current.collectEmail));
     setDmText(typeof textBlock?.text === 'string' ? textBlock.text : '');
@@ -115,11 +135,12 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
         mediaId: triggerType === 'POST_COMMENT' && mediaId.trim() ? mediaId.trim() : null,
         matchMode,
         keywords: formattedKeywords,
-        publicReplies: supportsPublicCommentReply && replyToComment ? publicReplies.filter((reply) => reply.trim()).slice(0, 10) : [],
+        publicReplies: supportsPublicCommentReply && replyToComment ? publicReplies.filter((reply) => reply.trim()).slice(0, 25) : [],
         replyToComment: supportsPublicCommentReply && replyToComment,
         askToFollow,
         collectEmail,
         trackClicks,
+        language,
         dmBlocks,
         followUps: followUps.map((item, index) => ({
           ...(item.id ? { id: item.id } : {}), order: index, condition: item.condition, delayMinutes: item.delayMinutes,
@@ -154,7 +175,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
     if (!isPaid && keywords.length > 1) return setError('Your plan allows one keyword per automation.');
     if (!dmText.trim()) return setError('Write the DM message.');
     if (buttons.filter((button) => button.title.trim() && button.url.trim()).length > 3) return setError('Instagram allows up to 3 message buttons.');
-    if (replyToComment && publicReplies.filter((reply) => reply.trim()).length > 10) return setError('Choose up to 10 public replies.');
+    if (replyToComment && publicReplies.filter((reply) => reply.trim()).length > 25) return setError('Choose up to 25 public replies.');
     if (buttons.some((button) => (button.title.trim() && !button.url.trim()) || (!button.title.trim() && button.url.trim()))) {
       return setError('Each button needs both a label and a URL.');
     }
@@ -237,6 +258,44 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
               </div>
             </div>
           )}
+
+          {/* Language Selection */}
+          <div className="border-t border-border/60 pt-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Languages className="h-4 w-4 text-primary" />
+                <Label className="text-sm font-semibold">Language & Tone</Label>
+              </div>
+              <span className="text-xs text-muted-foreground">Sets comment replies, DM & follow prompts</span>
+            </div>
+            <div className="mt-2.5 grid gap-2.5 sm:grid-cols-3">
+              {LANGUAGE_OPTIONS.map((lang) => {
+                const active = language === lang.value;
+                return (
+                  <button
+                    key={lang.value}
+                    type="button"
+                    onClick={() => handleLanguageChange(lang.value)}
+                    className={`flex flex-col text-left rounded-lg border p-3 transition-all ${
+                      active
+                        ? 'border-primary bg-primary/5 ring-2 ring-primary/20 shadow-xs'
+                        : 'border-border hover:bg-muted/40'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-xs text-foreground">{lang.label}</span>
+                      {active && <Check className="h-3.5 w-3.5 text-primary" />}
+                    </div>
+                    <span className="mt-1 text-[10px] text-primary font-medium">{lang.badge}</span>
+                    <p className="mt-1 text-[11px] text-muted-foreground leading-snug">{lang.description}</p>
+                    <div className="mt-2 rounded bg-muted/60 px-2 py-1 text-[10px] text-foreground font-mono truncate">
+                      &ldquo;{lang.previewExample}&rdquo;
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </section>
 
         {supportsPublicCommentReply && (
@@ -244,27 +303,103 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-medium text-foreground">Reply under the comment</p>
-                <p className="text-xs text-muted-foreground">Rotate up to 10 natural reply variations to prevent spam detection.</p>
+                <p className="text-xs text-muted-foreground">Rotate variations to prevent Instagram spam limits.</p>
               </div>
               <Toggle checked={replyToComment} onChange={setReplyToComment} label="Reply under the comment" />
             </div>
             {replyToComment && (
-              <div className="space-y-2">
-                {publicReplies.map((reply, index) => (
-                  <div key={index} className="flex gap-2">
-                    <Input aria-label={`Public reply ${index + 1}`} value={reply} maxLength={1000} onChange={(event) => setPublicReplies((items) => items.map((item, i) => i === index ? event.target.value : item))} placeholder={`Reply variation #${index + 1}`} />
-                    {publicReplies.length > 1 && (
-                      <button type="button" aria-label="Remove public reply" onClick={() => setPublicReplies((items) => items.filter((_, i) => i !== index))} className="rounded-md px-2 text-muted-foreground hover:bg-muted">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Variations ({publicReplies.length} of 25)
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-7 text-xs"
+                      onClick={() => setPublicReplies([...PUBLIC_COMMENT_REPLIES[language]])}
+                    >
+                      <Sparkles className="mr-1 h-3 w-3 text-primary" /> Select All 12 ({language === 'TENGLISH' ? 'Telugu' : language === 'TELUGU_ENGLISH' ? 'Telugu-Eng' : 'English'})
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-7 text-xs text-primary"
+                      onClick={() => setPublicReplies([...PUBLIC_COMMENT_REPLIES[language].slice(0, 5)])}
+                    >
+                      Load 5
+                    </Button>
                   </div>
-                ))}
-                {publicReplies.length < 10 && (
-                  <Button variant="ghost" onClick={() => setPublicReplies((items) => [...items, ''])}>
-                    <Plus className="h-4 w-4" /> Add reply variation ({publicReplies.length}/10)
-                  </Button>
-                )}
+                </div>
+
+                {/* Template Pills for Quick Toggle */}
+                <div className="rounded-lg border border-border/60 bg-muted/20 p-2.5">
+                  <p className="text-[11px] font-medium text-muted-foreground mb-1.5">
+                    Tap any {language === 'TENGLISH' ? 'Telugu (English letters)' : language === 'TELUGU_ENGLISH' ? 'Telugu-English hybrid' : 'English'} template to toggle:
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
+                    {PUBLIC_COMMENT_REPLIES[language].map((template, idx) => {
+                      const isSelected = publicReplies.includes(template);
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              if (publicReplies.length > 1) {
+                                setPublicReplies(publicReplies.filter((r) => r !== template));
+                              }
+                            } else {
+                              setPublicReplies([...publicReplies, template]);
+                            }
+                          }}
+                          className={`rounded-md px-2 py-1 text-[11px] transition-all text-left ${
+                            isSelected
+                              ? 'bg-primary/15 text-primary border border-primary/30 font-medium'
+                              : 'bg-background border border-border text-muted-foreground hover:bg-muted'
+                          }`}
+                        >
+                          {isSelected ? '✓ ' : '+ '}
+                          {template}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {publicReplies.map((reply, index) => (
+                    <div key={index} className="flex gap-2">
+                      <Input
+                        aria-label={`Public reply ${index + 1}`}
+                        value={reply}
+                        maxLength={1000}
+                        onChange={(event) =>
+                          setPublicReplies((items) =>
+                            items.map((item, i) => (i === index ? event.target.value : item))
+                          )
+                        }
+                        placeholder={`Reply variation #${index + 1}`}
+                      />
+                      {publicReplies.length > 1 && (
+                        <button
+                          type="button"
+                          aria-label="Remove public reply"
+                          onClick={() => setPublicReplies((items) => items.filter((_, i) => i !== index))}
+                          className="rounded-md px-2 text-muted-foreground hover:bg-muted"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {publicReplies.length < 25 && (
+                    <Button variant="ghost" onClick={() => setPublicReplies((items) => [...items, ''])}>
+                      <Plus className="h-4 w-4" /> Add reply variation ({publicReplies.length}/25)
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
           </section>
@@ -272,7 +407,43 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
 
         <section className="space-y-4 border-t border-border pt-5">
           <h2 className="text-base font-semibold text-foreground">Direct message</h2>
-          <div><Label htmlFor="edit-dm">Message</Label><Textarea id="edit-dm" value={dmText} maxLength={1000} onChange={(event) => setDmText(event.target.value)} className="mt-1.5" /></div>
+          <div>
+            <Label htmlFor="edit-dm">Message</Label>
+            <Textarea id="edit-dm" value={dmText} maxLength={1000} onChange={(event) => setDmText(event.target.value)} className="mt-1.5" />
+            
+            {/* 1-Click Casual Templates */}
+            <div className="mt-3 rounded-lg border border-border/80 bg-muted/20 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  1-Click {language === 'TENGLISH' ? 'Telugu (English letters)' : language === 'TELUGU_ENGLISH' ? 'Telugu-English Hybrid' : 'English'} Templates
+                </span>
+                <span className="text-[10px] text-muted-foreground">Tap to replace message</span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {DM_BODY_TEMPLATES[language].map((tpl, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setDmText(tpl.text)}
+                    className={`rounded-lg border p-2.5 text-left text-xs transition-all ${
+                      dmText === tpl.text
+                        ? 'border-primary bg-primary/10 text-primary font-medium ring-1 ring-primary/30'
+                        : 'border-border bg-background text-foreground hover:bg-muted/60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-[11px] font-semibold">
+                      <span>{tpl.title}</span>
+                      {dmText === tpl.text && <Check className="h-3 w-3 text-primary" />}
+                    </div>
+                    <p className="mt-1 text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">
+                      {tpl.text}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
           <div>
             <div className="mb-2 flex items-center gap-2"><Label>Buttons</Label><Badge tone="muted">Up to 3</Badge></div>
             <div className="space-y-2">
@@ -360,6 +531,7 @@ export default function EditAutomationPage({ params }: { params: Promise<{ id: s
           buttons={buttons}
           askToFollow={askToFollow}
           collectEmail={collectEmail}
+          language={language}
         />
       </aside>
     </div>

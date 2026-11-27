@@ -38,11 +38,12 @@ export const createAutomationSchema = z.object({
   // an automation mode that cannot be executed.
   matchMode: z.enum(['KEYWORDS', 'ANY']).default('KEYWORDS'),
   keywords: z.array(z.string().min(1)).default([]),
-  publicReplies: z.array(z.string().min(1)).max(10).default([]),
+  publicReplies: z.array(z.string().min(1)).max(25).default([]),
   replyToComment: z.boolean().default(false),
   askToFollow: z.boolean().default(false),
   collectEmail: z.boolean().default(false),
   trackClicks: z.boolean().default(true),
+  language: z.enum(['ENGLISH', 'TENGLISH', 'TELUGU_ENGLISH']).optional().default('ENGLISH'),
   dmBlocks: z.array(blockSchema).min(1),
   status: z.enum(['DRAFT', 'LIVE', 'PAUSED']).default('DRAFT'),
   followUps: z.array(followUpSchema).max(3).default([]),
@@ -58,5 +59,7 @@ const updateFollowUpSchema = followUpSchema.extend({
 export const updateAutomationSchema = createAutomationSchema.partial().omit({ igAccountId: true }).extend({
   followUps: z.array(updateFollowUpSchema).max(3).optional(),
 });
-export type CreateAutomationDto = z.infer<typeof createAutomationSchema>;
+export type CreateAutomationDto = Omit<z.infer<typeof createAutomationSchema>, 'language'> & {
+  language?: 'ENGLISH' | 'TENGLISH' | 'TELUGU_ENGLISH';
+};
 export type UpdateAutomationDto = z.infer<typeof updateAutomationSchema>;

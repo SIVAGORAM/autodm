@@ -166,6 +166,7 @@ model Automation {
   trackClicks       Boolean          @default(true)
   dmBlocks          Json // ordered message blocks (text/image/video/buttons/card)
   status            AutomationStatus @default(DRAFT)
+  language          AutomationLanguage @default(ENGLISH)
   dailyLimit        Int              @default(200)
   dailyCount        Int              @default(0)
   dailyCountResetAt DateTime?
@@ -570,6 +571,12 @@ enum AutomationStatus {
   DRAFT
   LIVE
   PAUSED
+}
+
+enum AutomationLanguage {
+  ENGLISH
+  TENGLISH
+  TELUGU_ENGLISH
 }
 
 enum FollowCond {

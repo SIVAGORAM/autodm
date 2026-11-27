@@ -13,8 +13,14 @@ import {
 } from '../../../../../components/ui/primitives';
 import {
   ArrowLeft, ArrowRight, MessageCircle, Film, Mail, Plus, Trash2, Check,
-  UserCheck, AtSign, ShieldAlert, Sparkles,
+  UserCheck, AtSign, ShieldAlert, Sparkles, Languages,
 } from 'lucide-react';
+import {
+  AutomationLanguage,
+  LANGUAGE_OPTIONS,
+  PUBLIC_COMMENT_REPLIES,
+  DM_BODY_TEMPLATES,
+} from '../../../../../lib/automation-templates';
 
 const STEPS = ['Trigger & Media', 'Keywords & Replies', 'Direct Message'];
 
@@ -27,14 +33,6 @@ const triggerOptions = [
   { value: 'STORY_REPLY', label: 'Story reply', icon: Film, paid: true },
   { value: 'LIVE_COMMENT', label: 'Comment during a live broadcast', icon: MessageCircle, paid: true },
   { value: 'DM', label: 'Incoming direct message', icon: Mail, paid: true },
-];
-
-const DEFAULT_SUGGESTED_REPLIES = [
-  'Sent! Check your DMs 📩',
-  'Just sent you a DM with the link! ✨',
-  'Check your inbox, it is waiting for you! 🚀',
-  'Sent to your DMs! Let me know if you got it 🔥',
-  'Done! Check your direct messages 📬',
 ];
 
 export default function NewAutomationPage() {
@@ -57,13 +55,23 @@ export default function NewAutomationPage() {
   const [keywords, setKeywords] = useState<string[]>([]);
   const [excludedKeywords, setExcludedKeywords] = useState<string[]>([]);
   const [replyToComment, setReplyToComment] = useState(true);
-  const [publicReplies, setPublicReplies] = useState<string[]>(DEFAULT_SUGGESTED_REPLIES);
-  const [dmText, setDmText] = useState('');
+  const [language, setLanguage] = useState<AutomationLanguage>('TENGLISH');
+  const [publicReplies, setPublicReplies] = useState<string[]>(PUBLIC_COMMENT_REPLIES.TENGLISH.slice(0, 5));
+  const [dmText, setDmText] = useState(DM_BODY_TEMPLATES.TENGLISH[0].text);
   const [buttons, setButtons] = useState<Btn[]>([{ title: '', url: '' }]);
   const [askToFollow, setAskToFollow] = useState(false);
   const [collectEmail, setCollectEmail] = useState(false);
   const [trackClicks, setTrackClicks] = useState(true);
   const [followUps, setFollowUps] = useState<{ condition: string; delayMinutes: number; text: string }[]>([]);
+
+  const handleLanguageChange = (newLang: AutomationLanguage) => {
+    setLanguage(newLang);
+    setPublicReplies(PUBLIC_COMMENT_REPLIES[newLang].slice(0, 5));
+    const currentIsDefault = !dmText || Object.values(DM_BODY_TEMPLATES).some((list) => list.some((t) => t.text === dmText));
+    if (currentIsDefault) {
+      setDmText(DM_BODY_TEMPLATES[newLang][0].text);
+    }
+  };
 
   const accountsQ = useQuery({
     queryKey: ['ig-accounts'],
@@ -116,12 +124,13 @@ export default function NewAutomationPage() {
         matchMode,
         keywords: formattedKeywords,
         publicReplies: supportsPublicCommentReply && replyToComment
-          ? publicReplies.map((r) => r.trim()).filter(Boolean).slice(0, 10)
+          ? publicReplies.map((r) => r.trim()).filter(Boolean).slice(0, 25)
           : [],
         replyToComment: supportsPublicCommentReply && replyToComment,
         askToFollow,
         collectEmail,
         trackClicks,
+        language,
         dmBlocks,
         status,
         followUps: followUps
@@ -312,6 +321,44 @@ export default function NewAutomationPage() {
                   </p>
                 </div>
               )}
+
+              {/* Language Selection */}
+              <div className="pt-2 border-t border-border/60">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Languages className="h-4 w-4 text-primary" />
+                    <Label className="text-sm font-semibold">Language & Tone</Label>
+                  </div>
+                  <span className="text-[11px] text-muted-foreground">Sets comment replies, DM & follow prompts</span>
+                </div>
+                <div className="mt-2.5 grid gap-2.5 sm:grid-cols-3">
+                  {LANGUAGE_OPTIONS.map((lang) => {
+                    const active = language === lang.value;
+                    return (
+                      <button
+                        key={lang.value}
+                        type="button"
+                        onClick={() => handleLanguageChange(lang.value)}
+                        className={`flex flex-col text-left rounded-lg border p-3 transition-all ${
+                          active
+                            ? 'border-primary bg-primary/5 ring-2 ring-primary/20 shadow-xs'
+                            : 'border-border hover:bg-muted/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-xs text-foreground">{lang.label}</span>
+                          {active && <Check className="h-3.5 w-3.5 text-primary" />}
+                        </div>
+                        <span className="mt-1 text-[10px] text-primary font-medium">{lang.badge}</span>
+                        <p className="mt-1 text-[11px] text-muted-foreground leading-snug">{lang.description}</p>
+                        <div className="mt-2 rounded bg-muted/60 px-2 py-1 text-[10px] text-foreground font-mono truncate">
+                          &ldquo;{lang.previewExample}&rdquo;
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
 
@@ -412,18 +459,63 @@ export default function NewAutomationPage() {
 
                   {replyToComment && (
                     <div className="space-y-3 pt-2">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="text-xs font-medium text-muted-foreground">
-                          Variations ({publicReplies.length} of 10)
+                          Variations ({publicReplies.length} of 25)
                         </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          className="h-7 text-xs text-primary"
-                          onClick={() => setPublicReplies([...DEFAULT_SUGGESTED_REPLIES])}
-                        >
-                          <Sparkles className="mr-1 h-3 w-3" /> Load 5 Suggested
-                        </Button>
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="h-7 text-xs"
+                            onClick={() => setPublicReplies([...PUBLIC_COMMENT_REPLIES[language]])}
+                          >
+                            <Sparkles className="mr-1 h-3 w-3 text-primary" /> Select All 12 ({language === 'TENGLISH' ? 'Telugu' : language === 'TELUGU_ENGLISH' ? 'Telugu-Eng' : 'English'})
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="h-7 text-xs text-primary"
+                            onClick={() => setPublicReplies([...PUBLIC_COMMENT_REPLIES[language].slice(0, 5)])}
+                          >
+                            Load 5
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Template Pills for Quick Selection */}
+                      <div className="rounded-lg border border-border/60 bg-muted/20 p-2.5">
+                        <p className="text-[11px] font-medium text-muted-foreground mb-1.5">
+                          Tap any {language === 'TENGLISH' ? 'Telugu (English letters)' : language === 'TELUGU_ENGLISH' ? 'Telugu-English hybrid' : 'English'} template to toggle:
+                        </p>
+                        <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
+                          {PUBLIC_COMMENT_REPLIES[language].map((template, idx) => {
+                            const isSelected = publicReplies.includes(template);
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => {
+                                  if (isSelected) {
+                                    if (publicReplies.length > 1) {
+                                      setPublicReplies(publicReplies.filter((r) => r !== template));
+                                    }
+                                  } else {
+                                    setPublicReplies([...publicReplies, template]);
+                                  }
+                                }}
+                                className={`rounded-md px-2 py-1 text-[11px] transition-all text-left ${
+                                  isSelected
+                                    ? 'bg-primary/15 text-primary border border-primary/30 font-medium'
+                                    : 'bg-background border border-border text-muted-foreground hover:bg-muted'
+                                }`}
+                              >
+                                {isSelected ? '✓ ' : '+ '}
+                                {template}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
 
                       <div className="space-y-2">
@@ -450,7 +542,7 @@ export default function NewAutomationPage() {
                           </div>
                         ))}
 
-                        {publicReplies.length < 10 && (
+                        {publicReplies.length < 25 && (
                           <Button
                             type="button"
                             variant="ghost"
@@ -495,6 +587,39 @@ export default function NewAutomationPage() {
                       {tag}
                     </button>
                   ))}
+                </div>
+
+                {/* 1-Click Casual Templates */}
+                <div className="mt-3.5 rounded-lg border border-border/80 bg-muted/20 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-primary" />
+                      1-Click {language === 'TENGLISH' ? 'Telugu (English letters)' : language === 'TELUGU_ENGLISH' ? 'Telugu-English Hybrid' : 'English'} Message Templates
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">Tap to apply</span>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {DM_BODY_TEMPLATES[language].map((tpl, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setDmText(tpl.text)}
+                        className={`rounded-lg border p-2.5 text-left text-xs transition-all ${
+                          dmText === tpl.text
+                            ? 'border-primary bg-primary/10 text-primary font-medium ring-1 ring-primary/30'
+                            : 'border-border bg-background text-foreground hover:bg-muted/60'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-[11px] font-semibold">
+                          <span>{tpl.title}</span>
+                          {dmText === tpl.text && <Check className="h-3 w-3 text-primary" />}
+                        </div>
+                        <p className="mt-1 text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">
+                          {tpl.text}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -677,10 +802,8 @@ export default function NewAutomationPage() {
                 {excludedKeywords.length > 0 && (
                   <ReviewItem label="Excluded" value={excludedKeywords.join(', ')} />
                 )}
-                <ReviewItem
-                  label="Buttons"
-                  value={buttons.filter((b) => b.title && b.url).map((b) => b.title).join(', ') || 'None'}
-                />
+                <ReviewItem label="Buttons" value={buttons.filter((b) => b.title && b.url).map((b) => b.title).join(', ') || 'None'} />
+                <ReviewItem label="Language" value={LANGUAGE_OPTIONS.find((l) => l.value === language)?.label ?? language} />
                 <ReviewItem label="Follow-First" value={askToFollow ? 'Enabled ✅' : 'Disabled'} />
                 <ReviewItem label="Collect Email" value={collectEmail ? 'Enabled ✉️' : 'Disabled'} />
                 {supportsPublicCommentReply && replyToComment && (
@@ -734,6 +857,7 @@ export default function NewAutomationPage() {
             buttons={buttons.filter((b) => b.title.trim())}
             askToFollow={askToFollow}
             collectEmail={collectEmail}
+            language={language}
           />
         </div>
       </div>

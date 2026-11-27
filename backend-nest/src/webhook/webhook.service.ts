@@ -14,6 +14,13 @@ import { DashboardEventsService } from '../queue/dashboard-events.service';
 import { InstagramService } from '../instagram/instagram.service';
 import { EncryptionService } from '../common/encryption.service';
 import { DmProcessorService } from '../queue/dm-processor.service';
+import {
+  getFollowButtons,
+  getRandomFollowRetryPrompt,
+  getRandomEmailRetryPrompt,
+  getFollowVerifiedEmailPrompt,
+  normalizeLanguage,
+} from '../automations/automation-templates';
 
 function commentValues(value: unknown): unknown[] {
   if (Array.isArray(value)) return value;
@@ -530,10 +537,11 @@ export class WebhookService {
       const targetAutoId = pendingFollowTag.replace('pending_follow:', '');
       const targetAuto = await this.prisma.automation.findUnique({
         where: { id: targetAutoId },
-        select: { id: true, name: true, status: true, collectEmail: true, dmBlocks: true, igAccount: { select: { username: true } } },
+        select: { id: true, name: true, status: true, collectEmail: true, dmBlocks: true, language: true, igAccount: { select: { username: true } } },
       });
 
       if (targetAuto && targetAuto.status === 'LIVE') {
+        const autoLang = normalizeLanguage(targetAuto.language);
         const token = this.encryption.decrypt(account.accessTokenEnc);
         const isFollower = await this.instagram.checkFollowerStatus(token, senderId, account.loginMode);
 
@@ -549,7 +557,7 @@ export class WebhookService {
               where: { id: contact.id },
               data: { tags: [...remainingTags, `pending_email:${targetAuto.id}`] },
             });
-            const emailPrompt = `Awesome, thanks for following @${targetAuto.igAccount.username}! 🎉 Before I drop your link right here, what's your email address? Reply with your email below! 📩`;
+            const emailPrompt = getFollowVerifiedEmailPrompt(autoLang, targetAuto.igAccount.username);
             await this.enqueue({
               automationId: targetAuto.id,
               igAccountId: account.id,
@@ -586,17 +594,8 @@ export class WebhookService {
           });
 
           const accountUsername = targetAuto.igAccount.username;
-          const retryDescriptions = [
-            `Hmm, it looks like you haven't followed yet! 🔍👀 Please tap 'Visit Profile' below, hit Follow, and then tap 'I'm following'! ✨`,
-            `Still not seeing that follow! 👀 Don't worry, tap 'Visit Profile' below to follow @${accountUsername}, then tap 'I'm following' right here! 🚀`,
-            `We checked, but you're not following @${accountUsername} yet! 🥺👀 Please tap 'Visit Profile' and follow us, then press 'I'm following'! 👇`,
-            `Almost! 👀 You need to hit Follow on @${accountUsername}'s profile first. Tap 'Visit Profile' below, then tap 'I'm following'! 💫`,
-          ];
-          const followReminder = retryDescriptions[Math.floor(Math.random() * retryDescriptions.length)];
-          const followButtons = [
-            { title: 'Visit Profile', url: `https://instagram.com/${accountUsername}`, type: 'web_url' as const },
-            { title: "I'm following", type: 'postback' as const, payload: 'CONFIRM_FOLLOW' },
-          ];
+          const followReminder = getRandomFollowRetryPrompt(autoLang, accountUsername);
+          const followButtons = getFollowButtons(autoLang, accountUsername);
           await this.enqueue({
             automationId: targetAuto.id,
             igAccountId: account.id,
@@ -616,15 +615,16 @@ export class WebhookService {
       const targetAutoId = pendingEmailTag.replace('pending_email:', '');
       const targetAuto = await this.prisma.automation.findUnique({
         where: { id: targetAutoId },
-        select: { id: true, name: true, status: true, dmBlocks: true, igAccount: { select: { username: true } } },
+        select: { id: true, name: true, status: true, dmBlocks: true, language: true, igAccount: { select: { username: true } } },
       });
 
       if (targetAuto && targetAuto.status === 'LIVE') {
+        const autoLang = normalizeLanguage(targetAuto.language);
         const trimmed = text.trim();
         const remainingTags = currentTags.filter((t) => t !== pendingEmailTag && !t.startsWith('last_reminder_at:'));
 
-        if (trimmed === 'CONFIRM_FOLLOW' || trimmed.toLowerCase() === "i'm following" || trimmed.toLowerCase() === 'following') {
-          const emailPrompt = `Awesome, you're already following @${targetAuto.igAccount.username}! 🎉 Before I drop your link right here, what's your email address? Reply with your email below! 📩`;
+        if (trimmed === 'CONFIRM_FOLLOW' || trimmed.toLowerCase() === "i'm following" || trimmed.toLowerCase() === 'following' || trimmed.toLowerCase() === 'follow ayanu') {
+          const emailPrompt = getFollowVerifiedEmailPrompt(autoLang, targetAuto.igAccount.username);
           await this.enqueue({
             automationId: targetAuto.id,
             igAccountId: account.id,
@@ -682,7 +682,7 @@ export class WebhookService {
         }
 
         if (trimmed.length >= 3) {
-          const retryPrompt = `Oops, that doesn't look like a valid email address! ✉️ Please reply with your email (e.g. name@example.com) to get your link right here! ✨`;
+          const retryPrompt = getRandomEmailRetryPrompt(autoLang);
           await this.enqueue({
             automationId: targetAuto.id,
             igAccountId: account.id,
