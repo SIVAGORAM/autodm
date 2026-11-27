@@ -35,6 +35,8 @@ export default function AdminBillingPage() {
   const query = useQuery({
     queryKey: ['admin', 'billing-ledger', { search, plan, currency, from, to, page }],
     enabled: isSuperAdmin,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
     queryFn: async () => (await adminApi.paymentLedger({
       page, pageSize: 25, search: search.trim() || undefined,
       plan: (plan || undefined) as 'FREE' | 'CREATOR' | 'PRO' | 'AGENCY' | undefined,

@@ -35,6 +35,8 @@ export default function AdminCustomersPage() {
   const query = useQuery({
     queryKey: ['admin', 'customers', page, search, status, plan],
     enabled: isSuperAdmin,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
     queryFn: async () => (await adminApi.customers({ page, pageSize: 25, search: search || undefined, status: status || undefined, plan: plan || undefined })).data.data as CustomerPage,
   });
   const lifecycle = useMutation({

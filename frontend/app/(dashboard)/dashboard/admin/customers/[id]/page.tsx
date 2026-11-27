@@ -28,6 +28,8 @@ export default function AdminCustomerDetailPage() {
   const query = useQuery({
     queryKey: ['admin', 'customer', id],
     enabled: isSuperAdmin && !!id,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
     queryFn: async () => (await adminApi.customer(id)).data.data as CustomerDetail,
   });
   const lifecycle = useMutation({

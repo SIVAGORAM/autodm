@@ -57,13 +57,10 @@ const crumbs: Record<string, string> = {
 
 const eventQueryKeys: Record<string, string[]> = {
   automation: ['automations', 'automation', 'automation-stats', 'automation-runs'],
-  delivery: ['automations', 'automation-stats', 'automation-runs', 'runs', 'contacts', 'subscription', 'creator-worker-status'],
-  // A comment webhook can create a pending run/contact before the delivery
-  // worker finishes. Refresh those views immediately on webhook completion;
-  // the later `delivery` event refreshes final provider outcomes.
+  delivery: ['automations', 'automation-stats', 'automation-runs', 'runs', 'contacts', 'subscription', 'creator-worker-status', 'admin'],
   instagram: ['ig-accounts', 'automations', 'automation-stats', 'automation-runs', 'runs', 'contacts', 'creator-worker-status'],
-  billing: ['subscription'],
-  contacts: ['contacts'],
+  billing: ['subscription', 'admin'],
+  contacts: ['contacts', 'admin'],
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

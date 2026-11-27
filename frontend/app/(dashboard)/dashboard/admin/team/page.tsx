@@ -33,11 +33,15 @@ export default function AdminTeamPage() {
   const query = useQuery({
     queryKey: ['admin', 'team'],
     enabled: isSuperAdmin,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
     queryFn: async () => (await adminApi.team()).data.data as TeamMember[],
   });
   const invitations = useQuery({
     queryKey: ['admin', 'team', 'invitations'],
     enabled: isSuperAdmin,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
     queryFn: async () => (await adminApi.adminInvitations()).data.data as Array<{
       id: string; email: string; permissions: AdminPermission[]; createdAt: string; expiresAt: string;
       invitedBy: { id: string; name: string; email: string };
