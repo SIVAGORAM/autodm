@@ -78,16 +78,16 @@ export function CookieConsentBanner() {
       className="heylaunch-cookie-banner"
       style={{
         position: 'fixed',
-        bottom: 20,
+        bottom: 24,
         left: '50%',
         transform: 'translateX(-50%)',
-        width: 'min(1120px, calc(100vw - 32px))',
+        width: 'min(1060px, calc(100vw - 36px))',
         zIndex: 99999,
         background: 'var(--surface)',
         border: '1px solid var(--border)',
-        borderRadius: 16,
-        padding: showDetails ? '20px 24px' : '12px 20px',
-        boxShadow: '0 20px 48px -12px rgba(0, 0, 0, 0.24), 0 0 0 1px var(--border)',
+        borderRadius: 20,
+        padding: '24px 28px',
+        boxShadow: '0 24px 54px -12px rgba(0, 0, 0, 0.28), 0 0 0 1px var(--border)',
         color: 'var(--text)',
         fontFamily: 'var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         backdropFilter: 'blur(24px)',
@@ -98,19 +98,20 @@ export function CookieConsentBanner() {
     >
       <style>{`
         @keyframes heylaunchSlideUp {
-          from { opacity: 0; transform: translate(-50%, 20px) scale(0.98); }
+          from { opacity: 0; transform: translate(-50%, 24px) scale(0.98); }
           to { opacity: 1; transform: translate(-50%, 0) scale(1); }
         }
-        @media (max-width: 900px) {
+        @media (max-width: 960px) {
           .heylaunch-cookie-banner {
             bottom: 12px !important;
-            padding: 14px 16px !important;
+            padding: 18px 20px !important;
             width: calc(100vw - 20px) !important;
+            border-radius: 16px !important;
           }
-          .heylaunch-cookie-row {
+          .heylaunch-cookie-main-row {
             flex-direction: column !important;
             align-items: stretch !important;
-            gap: 12px !important;
+            gap: 16px !important;
           }
           .heylaunch-cookie-actions {
             width: 100% !important;
@@ -119,6 +120,7 @@ export function CookieConsentBanner() {
           }
           .heylaunch-cookie-btn {
             flex: 1 1 auto !important;
+            height: 42px !important;
             text-align: center !important;
             justify-content: center !important;
           }
@@ -126,23 +128,23 @@ export function CookieConsentBanner() {
       `}</style>
 
       {!showDetails ? (
-        /* ─── Compact Horizontal "Long & Thin" Bar ─── */
+        /* ─── Comfortable, Premium Height Horizontal Bar ─── */
         <div
-          className="heylaunch-cookie-row"
+          className="heylaunch-cookie-main-row"
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 16,
+            gap: 24,
           }}
         >
           {/* Left info cluster */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: '1 1 560px', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flex: '1 1 540px', minWidth: 0 }}>
             <div
               style={{
-                width: 34,
-                height: 34,
-                borderRadius: 10,
+                width: 44,
+                height: 44,
+                borderRadius: 12,
                 background: 'var(--card-hover)',
                 border: '1px solid var(--border)',
                 color: 'var(--lime)',
@@ -150,26 +152,47 @@ export function CookieConsentBanner() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
+                marginTop: 2,
               }}
             >
-              <Cookie size={17} />
+              <Cookie size={22} />
             </div>
 
-            <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: 'var(--text-muted)' }}>
-              <strong style={{ color: 'var(--text)', fontWeight: 650 }}>We Value Your Privacy.</strong> HeyLaunch uses
-              strictly necessary cookies to keep you signed in securely and optional performance cookies to optimize your automations. See our{' '}
-              <Link
-                href="/cookies"
-                style={{
-                  color: 'var(--text)',
-                  fontWeight: 650,
-                  textDecoration: 'underline',
-                  textUnderlineOffset: 3,
-                }}
-              >
-                Cookie Policy
-              </Link>.
-            </p>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <h4 style={{ margin: 0, fontSize: 16, fontWeight: 750, letterSpacing: '-0.3px', color: 'var(--text)' }}>
+                  We Value Your Privacy &amp; Data Transparency
+                </h4>
+                <span
+                  style={{
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    color: 'var(--success)',
+                    background: 'var(--success-soft)',
+                    padding: '2px 8px',
+                    borderRadius: 999,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  DPDP &amp; GDPR Compliant
+                </span>
+              </div>
+              <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6, color: 'var(--text-muted)' }}>
+                HeyLaunch uses strictly necessary cookies to keep you signed in securely and optional performance cookies to optimize your automations. See our{' '}
+                <Link
+                  href="/cookies"
+                  style={{
+                    color: 'var(--text)',
+                    fontWeight: 650,
+                    textDecoration: 'underline',
+                    textUnderlineOffset: 3,
+                  }}
+                >
+                  Cookie Policy &rarr;
+                </Link>
+              </p>
+            </div>
           </div>
 
           {/* Right action buttons cluster */}
@@ -178,7 +201,7 @@ export function CookieConsentBanner() {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
+              gap: 10,
               flexShrink: 0,
             }}
           >
@@ -187,22 +210,22 @@ export function CookieConsentBanner() {
               onClick={() => setShowDetails(true)}
               className="heylaunch-cookie-btn"
               style={{
-                height: 36,
-                padding: '0 12px',
-                borderRadius: 9,
+                height: 44,
+                padding: '0 16px',
+                borderRadius: 11,
                 border: '1px solid var(--border)',
                 background: 'var(--card-hover)',
                 color: 'var(--text)',
-                fontSize: 12.5,
+                fontSize: 13.5,
                 fontWeight: 600,
                 cursor: 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 5,
-                transition: 'background 0.15s ease',
+                gap: 6,
+                transition: 'all 0.15s ease',
               }}
             >
-              <SlidersHorizontal size={13} /> Preferences
+              <SlidersHorizontal size={15} /> Preferences
             </button>
 
             <button
@@ -210,18 +233,18 @@ export function CookieConsentBanner() {
               onClick={handleRejectAll}
               className="heylaunch-cookie-btn"
               style={{
-                height: 36,
-                padding: '0 12px',
-                borderRadius: 9,
+                height: 44,
+                padding: '0 16px',
+                borderRadius: 11,
                 border: '1px solid var(--border)',
-                background: 'transparent',
+                background: 'var(--surface)',
                 color: 'var(--text-muted)',
-                fontSize: 12.5,
+                fontSize: 13.5,
                 fontWeight: 600,
                 cursor: 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
-                transition: 'color 0.15s ease',
+                transition: 'all 0.15s ease',
               }}
             >
               Reject Optional
@@ -232,22 +255,23 @@ export function CookieConsentBanner() {
               onClick={handleAcceptAll}
               className="heylaunch-cookie-btn"
               style={{
-                height: 36,
-                padding: '0 16px',
-                borderRadius: 9,
+                height: 44,
+                padding: '0 20px',
+                borderRadius: 11,
                 border: 'none',
                 background: 'var(--btn-primary)',
                 color: 'var(--btn-primary-text)',
-                fontSize: 12.5,
-                fontWeight: 650,
+                fontSize: 13.5,
+                fontWeight: 700,
                 cursor: 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 6,
+                gap: 7,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
                 transition: 'opacity 0.15s ease',
               }}
             >
-              <Check size={14} /> Accept All
+              <Check size={16} /> Accept All
             </button>
 
             <button
@@ -255,33 +279,33 @@ export function CookieConsentBanner() {
               aria-label="Dismiss banner"
               onClick={() => setVisible(false)}
               style={{
-                width: 32,
-                height: 32,
+                width: 36,
+                height: 36,
                 background: 'none',
                 border: 'none',
                 color: 'var(--text-muted)',
                 cursor: 'pointer',
-                borderRadius: 8,
+                borderRadius: 9,
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 marginLeft: 2,
               }}
             >
-              <X size={15} />
+              <X size={17} />
             </button>
           </div>
         </div>
       ) : (
-        /* ─── Expanded Preferences Panel (Smooth Accordion / Grid) ─── */
+        /* ─── Expanded Preferences Panel (Spacious, Premium Height) ─── */
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div
                 style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 10,
+                  width: 42,
+                  height: 42,
+                  borderRadius: 12,
                   background: 'var(--card-hover)',
                   border: '1px solid var(--border)',
                   color: 'var(--lime)',
@@ -290,14 +314,14 @@ export function CookieConsentBanner() {
                   justifyContent: 'center',
                 }}
               >
-                <ShieldCheck size={18} />
+                <ShieldCheck size={21} />
               </div>
               <div>
-                <h4 style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: 'var(--text)' }}>
+                <h4 style={{ margin: 0, fontSize: 16, fontWeight: 750, color: 'var(--text)' }}>
                   Manage Cookie Preferences
                 </h4>
-                <p style={{ margin: 0, fontSize: 11.5, color: 'var(--text-muted)' }}>
-                  Choose which cookie categories you want enabled while using HeyLaunch.
+                <p style={{ margin: '2px 0 0', fontSize: 12.5, color: 'var(--text-muted)' }}>
+                  Choose which cookie categories you want enabled while using the HeyLaunch platform.
                 </p>
               </div>
             </div>
@@ -311,66 +335,67 @@ export function CookieConsentBanner() {
                 border: 'none',
                 color: 'var(--text-muted)',
                 cursor: 'pointer',
-                padding: 4,
+                padding: 6,
+                borderRadius: 8,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <X size={16} />
+              <X size={18} />
             </button>
           </div>
 
-          {/* 3 Horizontal Cards */}
+          {/* 3 Spacious Category Cards */}
           <div
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: 12,
-              marginBottom: 16,
+              gap: 14,
+              marginBottom: 20,
             }}
           >
             {/* Category 1: Strictly Necessary */}
             <div
               style={{
-                padding: '12px 14px',
+                padding: '16px 18px',
                 background: 'var(--card-hover)',
-                borderRadius: 12,
+                borderRadius: 14,
                 border: '1px solid var(--border)',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Strictly Necessary</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Strictly Necessary</span>
                 <span
                   style={{
-                    fontSize: 10.5,
+                    fontSize: 11,
                     fontWeight: 750,
                     color: 'var(--success)',
                     background: 'var(--success-soft)',
-                    padding: '2px 8px',
+                    padding: '3px 9px',
                     borderRadius: 999,
                   }}
                 >
                   Always Active
                 </span>
               </div>
-              <p style={{ margin: 0, fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.45 }}>
-                Authentication tokens, CSRF protection, and session security essential for platform operations.
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.55 }}>
+                Cryptographically signed auth tokens, CSRF protection, and session security essential for platform operations.
               </p>
             </div>
 
             {/* Category 2: Preferences */}
             <div
               style={{
-                padding: '12px 14px',
+                padding: '16px 18px',
                 background: 'var(--card-hover)',
-                borderRadius: 12,
+                borderRadius: 14,
                 border: '1px solid var(--border)',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Preferences &amp; UI</span>
-                <label style={{ position: 'relative', display: 'inline-block', width: 36, height: 20, cursor: 'pointer' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Preferences &amp; UI</span>
+                <label style={{ position: 'relative', display: 'inline-block', width: 40, height: 22, cursor: 'pointer' }}>
                   <input
                     type="checkbox"
                     checked={functional}
@@ -385,16 +410,16 @@ export function CookieConsentBanner() {
                       right: 0,
                       bottom: 0,
                       backgroundColor: functional ? 'var(--btn-primary)' : 'var(--border)',
-                      borderRadius: 20,
+                      borderRadius: 22,
                       transition: '0.2s',
                     }}
                   >
                     <span
                       style={{
                         position: 'absolute',
-                        height: 14,
-                        width: 14,
-                        left: functional ? 19 : 3,
+                        height: 16,
+                        width: 16,
+                        left: functional ? 21 : 3,
                         bottom: 3,
                         backgroundColor: functional ? 'var(--lime)' : 'var(--text-muted)',
                         borderRadius: '50%',
@@ -404,23 +429,23 @@ export function CookieConsentBanner() {
                   </span>
                 </label>
               </div>
-              <p style={{ margin: 0, fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.45 }}>
-                Appearance themes (dark/light), sidebar states, and regional language preferences.
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.55 }}>
+                Appearance settings (dark/light themes), collapsed navigation state, and regional language preferences.
               </p>
             </div>
 
             {/* Category 3: Analytics */}
             <div
               style={{
-                padding: '12px 14px',
+                padding: '16px 18px',
                 background: 'var(--card-hover)',
-                borderRadius: 12,
+                borderRadius: 14,
                 border: '1px solid var(--border)',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Analytics &amp; Speed</span>
-                <label style={{ position: 'relative', display: 'inline-block', width: 36, height: 20, cursor: 'pointer' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Analytics &amp; Speed</span>
+                <label style={{ position: 'relative', display: 'inline-block', width: 40, height: 22, cursor: 'pointer' }}>
                   <input
                     type="checkbox"
                     checked={analytics}
@@ -435,16 +460,16 @@ export function CookieConsentBanner() {
                       right: 0,
                       bottom: 0,
                       backgroundColor: analytics ? 'var(--btn-primary)' : 'var(--border)',
-                      borderRadius: 20,
+                      borderRadius: 22,
                       transition: '0.2s',
                     }}
                   >
                     <span
                       style={{
                         position: 'absolute',
-                        height: 14,
-                        width: 14,
-                        left: analytics ? 19 : 3,
+                        height: 16,
+                        width: 16,
+                        left: analytics ? 21 : 3,
                         bottom: 3,
                         backgroundColor: analytics ? 'var(--lime)' : 'var(--text-muted)',
                         borderRadius: '50%',
@@ -454,33 +479,33 @@ export function CookieConsentBanner() {
                   </span>
                 </label>
               </div>
-              <p style={{ margin: 0, fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.45 }}>
-                Aggregated, anonymized performance metrics to measure platform latency and page reliability.
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.55 }}>
+                Aggregated, anonymized performance telemetry measuring platform latencies and server delivery reliability.
               </p>
             </div>
           </div>
 
           {/* Footer actions */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              Full transparency on our{' '}
-              <Link href="/cookies" style={{ color: 'var(--text)', fontWeight: 600, textDecoration: 'underline' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+              Full policy and cookie list on our{' '}
+              <Link href="/cookies" style={{ color: 'var(--text)', fontWeight: 650, textDecoration: 'underline' }}>
                 Cookie Documentation &rarr;
               </Link>
             </div>
 
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 10 }}>
               <button
                 type="button"
                 onClick={() => setShowDetails(false)}
                 style={{
-                  height: 36,
-                  padding: '0 14px',
-                  borderRadius: 9,
+                  height: 42,
+                  padding: '0 16px',
+                  borderRadius: 10,
                   border: '1px solid var(--border)',
                   background: 'var(--surface)',
                   color: 'var(--text)',
-                  fontSize: 12.5,
+                  fontSize: 13,
                   fontWeight: 600,
                   cursor: 'pointer',
                 }}
@@ -491,21 +516,21 @@ export function CookieConsentBanner() {
                 type="button"
                 onClick={handleSaveCustom}
                 style={{
-                  height: 36,
-                  padding: '0 18px',
-                  borderRadius: 9,
+                  height: 42,
+                  padding: '0 20px',
+                  borderRadius: 10,
                   border: 'none',
                   background: 'var(--btn-primary)',
                   color: 'var(--btn-primary-text)',
-                  fontSize: 12.5,
+                  fontSize: 13,
                   fontWeight: 650,
                   cursor: 'pointer',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 6,
+                  gap: 7,
                 }}
               >
-                <Check size={14} /> Save Preferences
+                <Check size={15} /> Save Preferences
               </button>
             </div>
           </div>
