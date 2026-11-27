@@ -4,6 +4,7 @@ import { Queue } from 'bullmq';
 import { DelayedError, Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { MetaService, DmButton } from '../meta/meta.service';
+import type { InstagramLoginMode } from '../instagram/instagram.service';
 import { EncryptionService } from '../common/encryption.service';
 import { CLICK_TO_DIRECT_AD_MESSAGE_WINDOW_MS, COMMENT_FOLLOWUP_REPLY_REQUIRED, commentPrivateReplyWindowState, DmJob, dmQueueJobId, messageWindowState, MessageWindowType, runEventId, STANDARD_MESSAGE_WINDOW_MS } from './queue.constants';
 import { DM_QUEUE_TOKEN } from './queue.constants';
@@ -234,6 +235,9 @@ export class DmProcessorService {
           return;
         }
 
+        // Auto-Like user's comment immediately on comment trigger, even if follow gate is active
+        await this.tryAutoLikeComment(automation, igUserId, token, job.commentId, loginMode);
+
         await this.recordRun(job, contact.id, 'SENT', 'Follow-first verification prompt sent to user.');
         return;
       }
@@ -261,6 +265,9 @@ export class DmProcessorService {
         await this.recordRun(job, contact.id, 'FAILED', emailPromptResult.error);
         return;
       }
+
+      // Auto-Like user's comment immediately on comment trigger, even if email capture is active
+      await this.tryAutoLikeComment(automation, igUserId, token, job.commentId, loginMode);
 
       await this.recordRun(job, contact.id, 'SENT', 'Voluntary email collection prompt sent.');
       return;
@@ -314,13 +321,7 @@ export class DmProcessorService {
     }
 
     // 2. Auto-Like the user's comment if configured (Algorithm & Dopamine Booster).
-    if (automation.autoLikeComment && job.commentId) {
-      try {
-        await this.meta.likeComment(igUserId, token, job.commentId, loginMode);
-      } catch (likeErr) {
-        this.log.warn(`Auto-like failed for comment ${job.commentId}: ${safeErrorLabel(likeErr)}`);
-      }
-    }
+    await this.tryAutoLikeComment(automation, igUserId, token, job.commentId, loginMode);
 
     // 3. Only after Private Reply succeeds, post rotated public comment reply if configured.
     if (automation.replyToComment && job.commentId && automation.publicReplies.length && !existing?.publicReplyAttemptedAt) {
@@ -551,6 +552,22 @@ export class DmProcessorService {
       case 'FORM_NOT_SUBMITTED':
       default:
         return false;
+    }
+  }
+
+  private async tryAutoLikeComment(
+    automation: { autoLikeComment?: boolean },
+    igUserId: string,
+    token: string,
+    commentId?: string,
+    loginMode: InstagramLoginMode = 'INSTAGRAM_LOGIN',
+  ): Promise<void> {
+    if (automation.autoLikeComment && commentId) {
+      try {
+        await this.meta.likeComment(igUserId, token, commentId, loginMode);
+      } catch (likeErr) {
+        this.log.warn(`Auto-like failed for comment ${commentId}: ${safeErrorLabel(likeErr)}`);
+      }
     }
   }
 

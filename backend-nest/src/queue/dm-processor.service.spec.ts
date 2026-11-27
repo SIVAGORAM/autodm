@@ -559,4 +559,53 @@ describe('DmProcessorService delivery recovery', () => {
       create: expect.objectContaining({ status: 'SENT' }),
     }));
   });
+
+  it('triggers auto-like on comment even when follow-first gate prompt is sent', async () => {
+    const automation = {
+      id: 'automation-1', status: 'LIVE', autoLikeComment: true, replyToComment: false,
+      publicReplies: [], askToFollow: true, collectEmail: false, trackClicks: false, trackedLinks: [],
+      dmBlocks: [{ type: 'text', text: 'Thanks!' }], followUps: [], language: 'ENGLISH',
+      igAccount: {
+        id: 'account-1', userId: 'user-1', igUserId: 'ig-user-1', accessTokenEnc: 'encrypted-token',
+        loginMode: 'INSTAGRAM_LOGIN', isActive: true, username: 'testcreator', user: { id: 'user-1', plan: 'PRO' },
+      },
+    };
+    const prisma: any = {
+      run: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn().mockResolvedValue({}) },
+      automation: { findUnique: jest.fn().mockResolvedValue(automation) },
+      igAccount: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'account-1' }]),
+        findUnique: jest.fn().mockResolvedValue({ isActive: true, user: { deletionRequestedAt: null } }),
+      },
+      contact: {
+        upsert: jest.fn().mockResolvedValue({ id: 'contact-1', follows: false }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const meta: any = {
+      getFollowerInfo: jest.fn().mockResolvedValue({ isFollower: false }),
+      sendCommentDm: jest.fn().mockResolvedValue({ ok: true }),
+      likeComment: jest.fn().mockResolvedValue({ ok: true, data: { success: true } }),
+    };
+    const encryption: any = { decrypt: jest.fn().mockReturnValue('decrypted-token') };
+    const quota: any = { consume: jest.fn().mockResolvedValue(true), settle: jest.fn() };
+    const queue: any = { client: { eval: jest.fn().mockResolvedValue(0) }, add: jest.fn() };
+    const config: any = { get: jest.fn().mockReturnValue('https://api.example'), getOrThrow: jest.fn() };
+    const dashboardEvents: any = { publish: jest.fn().mockResolvedValue(undefined) };
+    const service = new DmProcessorService(prisma, meta, encryption, config, quota, queue, dashboardEvents);
+
+    await service.process(
+      {
+        automationId: 'automation-1', igAccountId: 'account-1', triggerType: 'POST_COMMENT',
+        commentId: 'comment-456', commentCreatedAt: new Date().toISOString(), recipientIgsid: 'recipient-456',
+        text: 'Thanks!', triggerEventId: 'comment:456',
+      },
+      { id: 'job-2', token: 'token-2', data: { igAccountId: 'account-1' } } as any,
+    );
+
+    expect(meta.sendCommentDm).toHaveBeenCalled();
+    expect(meta.likeComment).toHaveBeenCalledWith(
+      'ig-user-1', 'decrypted-token', 'comment-456', 'INSTAGRAM_LOGIN',
+    );
+  });
 });
