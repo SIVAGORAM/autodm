@@ -65,10 +65,10 @@ export function CookiePreferencesManager() {
       style={{
         margin: '28px 0',
         padding: '24px',
-        borderRadius: '16px',
+        borderRadius: 'var(--radius-dialog, 16px)',
         border: '1px solid var(--border)',
         background: 'var(--bg)',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
+        boxShadow: 'var(--shadow-sm, 0 1px 2px rgba(16, 24, 40, 0.05))',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, borderBottom: '1px solid var(--border)', paddingBottom: 16 }}>
@@ -78,8 +78,9 @@ export function CookiePreferencesManager() {
               width: 40,
               height: 40,
               borderRadius: 10,
-              background: 'rgba(23, 130, 126, 0.12)',
-              color: '#17827E',
+              background: 'var(--card-hover)',
+              border: '1px solid var(--border)',
+              color: 'var(--lime)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -106,9 +107,9 @@ export function CookiePreferencesManager() {
             style={{
               padding: '8px 14px',
               borderRadius: 8,
-              border: '1px solid #17827E',
-              background: '#17827E',
-              color: '#ffffff',
+              border: 'none',
+              background: 'var(--btn-primary)',
+              color: 'var(--btn-primary-text)',
               fontSize: 13,
               fontWeight: 650,
               cursor: 'pointer',
@@ -161,12 +162,12 @@ export function CookiePreferencesManager() {
               <span
                 style={{
                   fontSize: 11,
-                  fontWeight: 700,
+                  fontWeight: 750,
                   textTransform: 'uppercase',
                   padding: '2px 8px',
                   borderRadius: 999,
-                  background: 'rgba(34, 197, 94, 0.12)',
-                  color: '#16a34a',
+                  background: 'var(--success-soft)',
+                  color: 'var(--success)',
                 }}
               >
                 Always Active
@@ -176,7 +177,7 @@ export function CookiePreferencesManager() {
               Required for basic website navigation, secure authentication, session persistence, CSRF protection, and fraud prevention. The platform cannot function properly without these cookies.
             </p>
           </div>
-          <div style={{ opacity: 0.6, fontSize: 12, fontWeight: 700, color: '#16a34a', whiteSpace: 'nowrap' }}>
+          <div style={{ opacity: 0.7, fontSize: 12, fontWeight: 700, color: 'var(--success)', whiteSpace: 'nowrap' }}>
             Locked
           </div>
         </div>
@@ -204,8 +205,9 @@ export function CookiePreferencesManager() {
                   textTransform: 'uppercase',
                   padding: '2px 8px',
                   borderRadius: 999,
-                  background: functional ? 'rgba(23, 130, 126, 0.12)' : 'rgba(100, 116, 139, 0.12)',
-                  color: functional ? '#17827E' : 'var(--text-muted)',
+                  background: functional ? 'var(--card-hover)' : 'var(--bg)',
+                  border: '1px solid var(--border)',
+                  color: functional ? 'var(--text)' : 'var(--text-muted)',
                 }}
               >
                 {functional ? 'Enabled' : 'Disabled'}
@@ -229,7 +231,7 @@ export function CookiePreferencesManager() {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                backgroundColor: functional ? '#17827E' : 'rgba(100, 116, 139, 0.3)',
+                backgroundColor: functional ? 'var(--btn-primary)' : 'var(--border)',
                 borderRadius: 24,
                 transition: '0.2s',
               }}
@@ -242,7 +244,7 @@ export function CookiePreferencesManager() {
                   width: 18,
                   left: functional ? 22 : 3,
                   bottom: 3,
-                  backgroundColor: 'white',
+                  backgroundColor: functional ? 'var(--lime)' : 'var(--text-muted)',
                   borderRadius: '50%',
                   transition: '0.2s',
                 }}
@@ -274,8 +276,9 @@ export function CookiePreferencesManager() {
                   textTransform: 'uppercase',
                   padding: '2px 8px',
                   borderRadius: 999,
-                  background: analytics ? 'rgba(23, 130, 126, 0.12)' : 'rgba(100, 116, 139, 0.12)',
-                  color: analytics ? '#17827E' : 'var(--text-muted)',
+                  background: analytics ? 'var(--card-hover)' : 'var(--bg)',
+                  border: '1px solid var(--border)',
+                  color: analytics ? 'var(--text)' : 'var(--text-muted)',
                 }}
               >
                 {analytics ? 'Enabled' : 'Disabled'}
@@ -299,7 +302,7 @@ export function CookiePreferencesManager() {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                backgroundColor: analytics ? '#17827E' : 'rgba(100, 116, 139, 0.3)',
+                backgroundColor: analytics ? 'var(--btn-primary)' : 'var(--border)',
                 borderRadius: 24,
                 transition: '0.2s',
               }}
@@ -312,7 +315,7 @@ export function CookiePreferencesManager() {
                   width: 18,
                   left: analytics ? 22 : 3,
                   bottom: 3,
-                  backgroundColor: 'white',
+                  backgroundColor: analytics ? 'var(--lime)' : 'var(--text-muted)',
                   borderRadius: '50%',
                   transition: '0.2s',
                 }}
@@ -330,12 +333,12 @@ export function CookiePreferencesManager() {
             padding: '10px 20px',
             borderRadius: 10,
             border: 'none',
-            background: '#17827E',
-            color: '#ffffff',
+            background: 'var(--btn-primary)',
+            color: 'var(--btn-primary-text)',
             fontSize: 14,
             fontWeight: 700,
             cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(23, 130, 126, 0.25)',
+            boxShadow: 'var(--shadow-sm, 0 1px 2px rgba(16, 24, 40, 0.05))',
           }}
         >
           Save Custom Preferences
@@ -347,7 +350,7 @@ export function CookiePreferencesManager() {
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              color: '#16a34a',
+              color: 'var(--success)',
               fontSize: 13,
               fontWeight: 650,
             }}
